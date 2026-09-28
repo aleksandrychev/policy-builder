@@ -87,16 +87,16 @@ wheels = [
 
 [[package]]
 name = "cfbs"
-version = "5.6.4"
+version = "5.7.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9d/59/d380a9eb9b049051d31ff70a6cb37361036ca05e63ad827f0873365640aa/cfbs-5.6.4.tar.gz", hash = "sha256:5e034a3c7dfee057bc6ded8088e76e0ef6b91aeb6094a48bca0f97ca59a68311", size = 133687, upload-time = "2026-07-16T11:32:55.901Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/4c/d2954484845c2d20a723d4d06a42b3b194cbc5bc026082900aea7a85bf47/cfbs-5.7.0.tar.gz", hash = "sha256:91f7c84e3d419640bf288f25a2c7aafd57d4272c98c5264deb6602ddcd17e288", size = 145847, upload-time = "2026-08-10T14:24:27.252Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ce/d7/e674e5b5f98c069af9d0c1e2cac5c1936ce0aa4b81d77da7904c02b0a397/cfbs-5.6.4-py3-none-any.whl", hash = "sha256:139bbde23713d5923fe584618272ddd025ac199a847c9580572e969ff5309849", size = 86440, upload-time = "2026-07-16T11:32:54.587Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/aa/f09bd4eb53ecf8b20f5b535cbcae4da62fc910f77e0ef5ba5869287457db/cfbs-5.7.0-py3-none-any.whl", hash = "sha256:853fca3584001269cc8e2e1654d1a518eafbb400b04de476d69e07da838686cb", size = 89184, upload-time = "2026-08-10T14:24:26.03Z" },
 ]
 
 [[package]]
 name = "cfengine"
-version = "0.22.0"
+version = "0.23.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cf-remote" },
@@ -107,9 +107,9 @@ dependencies = [
     { name = "tree-sitter" },
     { name = "tree-sitter-cfengine" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f8/5a/41ecfed9cb3fdb4fc62e89e9c1f9f645287573ab98d47170608d2fcaef60/cfengine-0.22.0.tar.gz", hash = "sha256:51039e2db459136bc99080cd268ef63f93ad292f5db7c1170b6a90890e37c904", size = 211385, upload-time = "2026-08-12T21:40:31.98Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/5a/b47fc44b576a97079008bfd1ba7c8022e793f9b10c3bc16f2ea6f5977a48/cfengine-0.23.1.tar.gz", hash = "sha256:bc6e710c6d6721debc0a4c2b94cf15fae3387a3a5a8e7516bd83bed68e3ec989", size = 225640, upload-time = "2026-08-28T14:57:50.684Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/0e/14076b172a7341c61933b073b654404fa7568f91e15165d45d02329215bc/cfengine-0.22.0-py3-none-any.whl", hash = "sha256:e2d1caec2e665d010e2eb1d6420fe324a78d0361061b822f6b7008109db46d3f", size = 119172, upload-time = "2026-08-12T21:40:30.517Z" },
+    { url = "https://files.pythonhosted.org/packages/80/16/f79d38742777f38e472e7a54c4abfb61de0e9f9d5947e805f999b41184dc/cfengine-0.23.1-py3-none-any.whl", hash = "sha256:4bffa2d0367bd11ee8d74ad34378d35d67bfd27f44a7be796b2d6e92663e6b05", size = 119337, upload-time = "2026-08-28T14:57:48.962Z" },
 ]
 
 [[package]]
