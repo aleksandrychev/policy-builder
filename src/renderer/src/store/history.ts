@@ -19,8 +19,8 @@ export function inOneStep(dispatch: Dispatch, run: () => void) {
 }
 
 const LIMIT = 100;
-const UNDOABLE_KEYS = ['canvas', 'derivedNodes', 'edges', 'files', 'groups'] as const;
-type UndoableKey = (typeof UNDOABLE_KEYS)[number];
+export const UNDOABLE_KEYS = ['canvas', 'derivedNodes', 'edges', 'files', 'groups'] as const;
+export type UndoableKey = (typeof UNDOABLE_KEYS)[number];
 
 // Text edits dispatch per keystroke: consecutive ones to the same field merge
 // into one step. The value is the payload field being typed into.

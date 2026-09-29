@@ -14,6 +14,7 @@ export interface ShortcutHandlers {
   onGroup: () => void;
   onPaste: () => boolean;
   onRedo: () => void;
+  onSave: () => void;
   onUndo: () => void;
   onUngroup: () => void;
   zoomControlsRef: RefObject<ZoomControls | null>;
@@ -35,7 +36,7 @@ function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null) {
   zoomAction();
 }
 
-// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, copy/cut/paste.
+// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, copy/cut/paste (⌘S is handled before the text-field check).
 function handleCommandKey(event: KeyboardEvent, handlers: ShortcutHandlers) {
   const key = event.key.toLowerCase();
   const run = (action: () => unknown) => {
@@ -64,6 +65,11 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       // A dialog, menu or popover (all MUI modals) takes priority, even with focus on its own buttons.
       if (document.querySelector('[role="dialog"], .MuiModal-root:not(.MuiModal-hidden)')) return;
       if (event.key === 'Escape') return current.onEscape();
+      // ⌘S saves even while typing in a field.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        return current.onSave();
+      }
       // Never hijack typing, or native copy/paste of actual text (TextFields, CodeMirror…).
       if (isEditableTarget(document.activeElement)) return;
       if (event.ctrlKey || event.metaKey) return handleCommandKey(event, current);

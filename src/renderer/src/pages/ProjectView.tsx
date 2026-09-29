@@ -21,6 +21,7 @@ import { BlockPalette } from '../components/BlockPalette';
 import { CANVAS_DROPPABLE_ID, type CanvasEdge, type CanvasNode, FlowCanvas, type NodeSizes, type ZoomControls } from '../components/FlowCanvas';
 import { GroupPanel } from '../components/GroupPanel';
 import { PolicyFileExplorer } from '../components/PolicyFileExplorer';
+import { ProjectStatusLabel } from '../components/ProjectStatusLabel';
 import { FileSettingsPanel, PropertiesPanel } from '../components/PropertiesPanel';
 import type { NewClassDefinition } from '../components/PropertiesPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
@@ -198,12 +199,14 @@ function DragPreviewCard({ badge, label }: DragPreview) {
   );
 }
 
-/**
- * The open project. `cfbs.json` persistence (schema_version, conditions,
- * disk writes) isn't wired up — see architecture-plan.md open issues #3-#5
- * — so block instances only live in the in-memory canvas slice for now.
- */
-export default function ProjectView() {
+interface ProjectViewProps {
+  // Unsaved changes since the last save (see project/useProjectSession.ts).
+  dirty: boolean;
+  onSave: () => void;
+}
+
+/** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
+export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -643,6 +646,7 @@ export default function ProjectView() {
     canvasActive: activeTab === 0,
     zoomControlsRef,
     onEscape: handleEscape,
+    onSave,
     onDelete: handleDeleteKey,
     onUndo: () => handleHistoryKey(false),
     onRedo: () => handleHistoryKey(true),
@@ -813,6 +817,8 @@ export default function ProjectView() {
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
         <TopBar
           projectName={project.name}
+          dirty={dirty}
+          masterfiles={project.masterfiles}
           namespace={currentFile?.namespace ?? ''}
           fileGate={describeFileCondition(currentFile?.condition)}
           blockCount={instances.length}
@@ -1055,7 +1061,7 @@ export default function ProjectView() {
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusMessage ?? 'Ready'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Project: {project.name}</Typography>
+              <ProjectStatusLabel project={project} />
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>File: {currentFile ? `${currentFile.name}.cf` : '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>

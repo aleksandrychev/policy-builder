@@ -5,6 +5,14 @@ import { basename, join } from 'path';
 import { pathToFileURL } from 'url';
 
 import { formatPolicy } from './backend';
+import { registerProjectHandlers } from './project';
+
+const APP_TITLE = 'CFEngine Policy Builder';
+const MAX_TITLE_LENGTH = 200;
+
+// Per window: unsaved changes (from window:set-document), and whether the user already agreed to lose them.
+const documentState = new WeakMap<BrowserWindow, { closeConfirmed: boolean; edited: boolean; quitAfterClose: boolean }>();
+let quitting = false;
 
 // Sidebar/palette resize state the renderer asks us to persist across
 // launches — kept as its own small file rather than folded into a future
@@ -78,6 +86,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
       submenu: [
         { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: send('menu:new-project') },
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: send('menu:open-project') },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
         { type: 'separator' },
@@ -100,7 +109,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    title: 'CFEngine Policy Builder',
+    title: APP_TITLE,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#21262A' : '#ffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -110,6 +119,17 @@ function createWindow(): void {
   });
 
   Menu.setApplicationMenu(buildApplicationMenu(mainWindow));
+  documentState.set(mainWindow, { closeConfirmed: false, edited: false, quitAfterClose: false });
+
+  // With unsaved changes the renderer asks Save / Don't Save / Cancel, then confirms via window:close-confirmed.
+  mainWindow.on('close', event => {
+    const state = documentState.get(mainWindow);
+    if (!state?.edited || state.closeConfirmed) return;
+    event.preventDefault();
+    state.quitAfterClose = quitting;
+    quitting = false;
+    mainWindow.webContents.send('window:close-requested');
+  });
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
@@ -150,6 +170,30 @@ app.whenReady().then(() => {
     if (!isTrustedFrame(event.senderFrame)) return false;
     return nativeTheme.shouldUseDarkColors;
   });
+
+  ipcMain.handle('window:set-document', (event, document: { edited?: unknown; title?: unknown }) => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const state = window && documentState.get(window);
+    if (!window || !state) return;
+    const { edited, title } = document ?? {};
+    if (typeof edited !== 'boolean' || (title !== null && typeof title !== 'string')) throw new Error('invalid document state');
+    state.edited = edited;
+    window.setTitle(title ? `${title.slice(0, MAX_TITLE_LENGTH)} — ${APP_TITLE}` : APP_TITLE);
+    if (process.platform === 'darwin') window.setDocumentEdited(edited);
+  });
+
+  ipcMain.handle('window:close-confirmed', event => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const state = window && documentState.get(window);
+    if (!window || !state) return;
+    state.closeConfirmed = true;
+    if (state.quitAfterClose) app.quit();
+    else window.close();
+  });
+
+  registerProjectHandlers(isTrustedFrame);
 
   ipcMain.handle('policy:format', (event, source: unknown) => {
     if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
@@ -201,6 +245,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// A quit (⌘Q) goes through each window's 'close'; if one asks first, quit again once it is confirmed.
+app.on('before-quit', () => {
+  quitting = true;
 });
 
 app.on('window-all-closed', () => {

@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, TargetCheck } from './api';
+
 // Everything the renderer can ask the main process to do goes through this
 // typed bridge (see api.d.ts — the filename is load-bearing, see the note
 // there). Keep it minimal and explicit.
@@ -20,12 +22,15 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-export type MenuAction = 'new-project' | 'open-project' | 'try-demo';
+export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'save' | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:new-project': 'new-project',
   'menu:open-project': 'open-project',
-  'menu:try-demo': 'try-demo'
+  'menu:save': 'save',
+  'menu:try-demo': 'try-demo',
+  // Not a menu item: main asking whether a window with unsaved changes may close.
+  'window:close-requested': 'close-requested'
 };
 
 // Menu clicks fire in the main process (see main/index.ts's
@@ -47,8 +52,35 @@ const api = {
   /** Returns whether the OS currently prefers a dark color scheme. */
   shouldUseDarkColors: (): Promise<boolean> => invoke('theme:should-use-dark'),
 
-  /** Subscribes to native File-menu clicks (New/Open/Try Demo); call the returned function to unsubscribe. */
+  /** Subscribes to native menu clicks and window-close requests; call the returned function to unsubscribe. */
   onMenuAction,
+
+  /** Sets the window title (null: no project) and the unsaved-changes state. */
+  setDocument: (document: { edited: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
+
+  /** Tells main the user agreed to close the window despite unsaved changes. */
+  confirmWindowClose: (): Promise<void> => invoke('window:close-confirmed'),
+
+  /** The folder new projects go in by default: the last one used, else ~/Documents. */
+  getDefaultProjectParent: (): Promise<string> => invoke('project:default-parent'),
+
+  /** Opens a native folder picker, or null if cancelled. */
+  pickDirectory: (defaultPath?: string): Promise<string | null> => invoke('project:pick-directory', defaultPath),
+
+  /** Newest 3.27.x and 3.24.x masterfiles releases (built-in fallback when offline). */
+  getMasterfilesVersions: (): Promise<MasterfilesVersions> => invoke('project:masterfiles-versions'),
+
+  /** Checks whether a project folder can be created at parent/folderName. */
+  checkProjectTarget: (parent: string, folderName: string): Promise<TargetCheck> => invoke('project:check-target', { parent, folderName }),
+
+  /** Runs `cfbs init` into parent/folderName, then writes the builder's content into its cfbs.json. */
+  createProject: (request: CreateProjectRequest): Promise<OperationResult<{ masterfiles: string | null; path: string }>> => invoke('project:create', request),
+
+  /** Merges the builder's content into the project's cfbs.json. */
+  saveProject: (path: string, content: ProjectContent): Promise<OperationResult<object>> => invoke('project:save', { path, ...content }),
+
+  /** Shows the project's cfbs.json in the OS file manager. */
+  revealProject: (path: string): Promise<void> => invoke('project:reveal', path),
 
   /** Formats CFEngine policy text with the bundled `cfengine format` engine. */
   formatPolicy: (source: string): Promise<string> => invoke('policy:format', source),
