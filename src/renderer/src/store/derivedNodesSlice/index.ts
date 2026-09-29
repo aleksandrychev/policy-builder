@@ -33,8 +33,9 @@ const derivedNodesSlice = createSlice({
   },
   extraReducers: builder => {
     // Chain keys are `${fileId}|data|${instanceId}|${entryId}` (canvas/dataChains.ts).
-    const dropMatching = (state: Record<string, Position>, part: string) => {
-      for (const key of Object.keys(state)) if (key.includes(part)) delete state[key];
+    // `end`: the key ends at `part` (a whole entry id), or merely continues after it (a block's chains).
+    const dropMatching = (state: Record<string, Position>, part: string, end = false) => {
+      for (const key of Object.keys(state)) if (end ? key.endsWith(part) : key.includes(part)) delete state[key];
     };
     builder
       .addCase(projectCreated, () => ({}))
@@ -42,8 +43,8 @@ const derivedNodesSlice = createSlice({
         for (const key of Object.keys(state)) if (key.startsWith(`${action.payload.fileId}|`)) delete state[key];
       })
       .addCase(blockRemoved, (state, action) => dropMatching(state, `|data|${action.payload.instanceId}|`))
-      .addCase(entryRemoved, (state, action) => dropMatching(state, `|data|${action.payload.instanceId}|${action.payload.entryId}`))
-      .addCase(dataChainRemoved, (state, action) => dropMatching(state, `|data|${action.payload.instanceId}|${action.payload.entryId}`));
+      .addCase(entryRemoved, (state, action) => dropMatching(state, `|data|${action.payload.instanceId}|${action.payload.entryId}`, true))
+      .addCase(dataChainRemoved, (state, action) => dropMatching(state, `|data|${action.payload.instanceId}|${action.payload.entryId}`, true));
   }
 });
 

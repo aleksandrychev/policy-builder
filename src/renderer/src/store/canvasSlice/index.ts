@@ -155,6 +155,8 @@ const canvasSlice = createSlice({
       const subject = findSubject(state, action.payload);
       if (!subject?.decorators) return;
       const { fromIndex, toIndex } = action.payload;
+      const inRange = (index: number) => index >= 0 && index < subject.decorators!.length;
+      if (!inRange(fromIndex) || !inRange(toIndex)) return;
       const [moved] = subject.decorators.splice(fromIndex, 1);
       subject.decorators.splice(toIndex, 0, moved);
     },
