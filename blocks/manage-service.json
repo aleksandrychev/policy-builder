@@ -1,0 +1,63 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "manage-service",
+  "version": 1,
+  "name": "Manage Service",
+  "category": "Services",
+  "description": "Starts, stops, reloads or restarts a service, or sets whether it starts at boot.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "services",
+      "promiser": "{{service_name}}",
+      "attributes": {
+        "service_policy": "{{action}}"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "service_name",
+      "label": "Service name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "action",
+      "label": "Action",
+      "type": "string",
+      "required": true,
+      "default": "start",
+      "options": [
+        {
+          "value": "start",
+          "label": "Running (and enabled at boot)"
+        },
+        {
+          "value": "stop",
+          "label": "Stopped (and disabled at boot)"
+        },
+        {
+          "value": "enable",
+          "label": "Enabled at boot (not started now)"
+        },
+        {
+          "value": "disable",
+          "label": "Disabled at boot (not stopped now)"
+        },
+        {
+          "value": "reload",
+          "label": "Reload",
+          "help": "Reloads it every time this block runs — put it behind a \"repaired\" arrow (e.g. after Render Template) or a condition."
+        },
+        {
+          "value": "restart",
+          "label": "Restart",
+          "help": "Restarts it every time this block runs — put it behind a \"repaired\" arrow (e.g. after Render Template) or a condition."
+        }
+      ],
+      "help": "Reload and Restart act every time this block runs: connect them with a \"repaired\" arrow so they only run after a change."
+    }
+  ]
+}

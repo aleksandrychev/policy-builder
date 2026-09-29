@@ -1,0 +1,33 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "remove-file",
+  "version": 1,
+  "name": "Remove File",
+  "category": "Files",
+  "description": "Ensures one or more files are absent.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "delete": {
+          "body": "tidy"
+        },
+        "pathtype": "literal"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One absolute path per line. Taken literally, not as a pattern.",
+      "path": "absolute"
+    }
+  ]
+}

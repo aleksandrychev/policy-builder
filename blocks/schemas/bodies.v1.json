@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfengine.com/policy-builder/schemas/bodies.v1.json",
+  "title": "Builder bodies",
+  "description": "Bodies the blocks need that masterfiles' stdlib doesn't have. The compiler writes each one a file uses into that file (its namespace), once; blocks reference them as {\"body\": name, \"lib\": \"builder\"}. See blocks/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bodies"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "bodies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/body"
+      }
+    }
+  },
+  "$defs": {
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name",
+        "parameters",
+        "attributes"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z_]*$",
+          "description": "CFEngine body type, e.g. perms, mount."
+        },
+        "name": {
+          "$ref": "common.v1.json#/$defs/identifier"
+        },
+        "help": {
+          "type": "string",
+          "description": "Why it exists; written above the body as a comment."
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "common.v1.json#/$defs/identifier"
+          },
+          "description": "The body's own parameters, referenced in attribute values as $(name) — CFEngine syntax, not {{placeholders}}."
+        },
+        "attributes": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "common.v1.json#/$defs/expression"
+          }
+        }
+      }
+    }
+  }
+}

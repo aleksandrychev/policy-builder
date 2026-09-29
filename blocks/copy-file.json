@@ -1,0 +1,70 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "copy-file",
+  "version": 1,
+  "name": "Copy File",
+  "category": "Files",
+  "description": "Copies a file from a source path known to the agent, enforcing permissions.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{destination}}",
+      "attributes": {
+        "copy_from": {
+          "body": "local_cp",
+          "args": [
+            "{{source}}"
+          ]
+        },
+        "perms": {
+          "body": "mog",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "destination",
+      "label": "Destination path",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "source",
+      "label": "Source path",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "644",
+      "allowed_chars": "0-7"
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

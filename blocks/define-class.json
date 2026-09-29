@@ -1,0 +1,403 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "define-class",
+  "version": 1,
+  "name": "Define Class",
+  "category": "Variables & Classes",
+  "description": "Defines one or more classes from conditions, for other blocks to use.",
+  "compile_target": "file_vars",
+  "entries": {
+    "name_param": "class_name",
+    "noun": "class",
+    "noun_plural": "classes"
+  },
+  "parameters": [
+    {
+      "name": "class_name",
+      "label": "Class name",
+      "type": "string",
+      "required": true,
+      "allowed_chars": "a-zA-Z0-9_",
+      "help": "Letters, numbers, and underscores only — and not the name of a built-in class like linux."
+    }
+  ],
+  "value_source_label": "Condition type",
+  "value_sources": [
+    {
+      "id": "always-true",
+      "label": "Always true",
+      "badge": "any",
+      "group": "Always",
+      "parameters": [],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": "any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "always-false",
+      "label": "Always false",
+      "badge": "!any",
+      "group": "Always",
+      "parameters": [],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": "!any"
+          }
+        }
+      ]
+    },
+    {
+      "id": "combine-and",
+      "label": "All of these classes (AND)",
+      "badge": "and =>",
+      "group": "Combine other classes",
+      "help": "Pick at least one class below, under \"Classes in this combination\".",
+      "parameters": [],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "and": {
+              "class_refs": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "combine-or",
+      "label": "Any of these classes (OR)",
+      "badge": "or =>",
+      "group": "Combine other classes",
+      "help": "Pick at least one class below, under \"Classes in this combination\".",
+      "parameters": [],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "or": {
+              "class_refs": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-file-exists",
+      "label": "File exists",
+      "badge": "fileexists()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "File path",
+          "type": "string",
+          "required": true,
+          "path": "absolute"
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "fileexists",
+              "args": [
+                "{{path}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-dir-exists",
+      "label": "Directory exists",
+      "badge": "isdir()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "Directory path",
+          "type": "string",
+          "required": true,
+          "path": "absolute"
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "isdir",
+              "args": [
+                "{{path}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-variable-defined",
+      "label": "Variable is defined",
+      "badge": "isvariable()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "variable_name",
+          "label": "Variable name",
+          "type": "string",
+          "required": true,
+          "references": "variable",
+          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "isvariable",
+              "args": [
+                {
+                  "variable": "{{variable_name}}",
+                  "as": "name"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-matches-pattern",
+      "label": "Value matches pattern (regex)",
+      "badge": "regcmp()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "pattern",
+          "label": "Pattern (regex)",
+          "type": "string",
+          "required": true,
+          "help": "Must match the whole value (anchored)."
+        },
+        {
+          "name": "value",
+          "label": "Value to match",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "regcmp",
+              "args": [
+                "{{pattern}}",
+                "{{value}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-values-equal",
+      "label": "Values are equal",
+      "badge": "strcmp()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "value_a",
+          "label": "First value",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "value_b",
+          "label": "Second value",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "strcmp",
+              "args": [
+                "{{value_a}}",
+                "{{value_b}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-greater-than",
+      "label": "Value is greater than",
+      "badge": "isgreaterthan()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "value",
+          "label": "Value",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "threshold",
+          "label": "Is greater than",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "isgreaterthan",
+              "args": [
+                "{{value}}",
+                "{{threshold}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-less-than",
+      "label": "Value is less than",
+      "badge": "islessthan()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "value",
+          "label": "Value",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "threshold",
+          "label": "Is less than",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "islessthan",
+              "args": [
+                "{{value}}",
+                "{{threshold}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "check-command-succeeds",
+      "label": "Command succeeds",
+      "badge": "returnszero()",
+      "group": "Check a condition",
+      "parameters": [
+        {
+          "name": "command",
+          "label": "Command",
+          "type": "string",
+          "required": true,
+          "help": "Start with an absolute path. Runs every time the agent evaluates this file."
+        },
+        {
+          "name": "shell_mode",
+          "label": "Shell mode",
+          "type": "string",
+          "required": true,
+          "default": "noshell",
+          "options": [
+            {
+              "value": "noshell",
+              "label": "No shell"
+            },
+            {
+              "value": "useshell",
+              "label": "Through the shell"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "call": "returnszero",
+              "args": [
+                "{{command}}",
+                "{{shell_mode}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "custom",
+      "label": "Custom expression",
+      "group": "Custom",
+      "help": "Raw CFEngine class expression, for anything the other condition types can't express.",
+      "parameters": [
+        {
+          "name": "condition",
+          "label": "Condition expression",
+          "type": "text",
+          "required": true,
+          "help": "E.g. linux.!debian, or a function call like not(fileexists(\"/path\"))."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "classes",
+          "promiser": "{{class_name}}",
+          "attributes": {
+            "expression": {
+              "class_expression": "{{condition}}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

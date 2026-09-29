@@ -1,0 +1,78 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "signal-process",
+  "version": 1,
+  "name": "Signal Process",
+  "category": "Processes",
+  "description": "Sends a signal to processes matching a pattern.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "processes",
+      "promiser": "{{process_pattern}}",
+      "attributes": {
+        "signals": {
+          "list": [
+            "{{signal}}"
+          ]
+        },
+        "action": {
+          "if_set": "run_interval",
+          "value": {
+            "body": "if_elapsed",
+            "args": [
+              "{{run_interval}}"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "process_pattern",
+      "label": "Process pattern",
+      "type": "string",
+      "required": true,
+      "help": "A regular expression matched anywhere in the process's command line, not just its name — \"nginx\" also matches \"vim nginx.conf\". Anchor it (e.g. ^/usr/sbin/nginx) to be precise."
+    },
+    {
+      "name": "signal",
+      "label": "Signal",
+      "type": "string",
+      "required": true,
+      "default": "hup",
+      "options": [
+        "hup",
+        "term",
+        "kill",
+        "int",
+        "cont",
+        "stop"
+      ]
+    },
+    {
+      "name": "run_interval",
+      "label": "How often",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "Every agent run"
+        },
+        {
+          "value": "60",
+          "label": "At most once an hour"
+        },
+        {
+          "value": "1440",
+          "label": "At most once a day"
+        }
+      ],
+      "help": "Every matching process gets the signal each time this runs."
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "copy-directory",
+  "version": 1,
+  "name": "Copy Directory",
+  "category": "Files",
+  "description": "Recursively copies a directory tree and enforces permissions on every file.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{destination}}/.",
+      "attributes": {
+        "create": "true",
+        "copy_from": {
+          "body": "local_cp",
+          "args": [
+            "{{source}}"
+          ]
+        },
+        "depth_search": {
+          "body": "recurse",
+          "args": [
+            "{{depth}}"
+          ]
+        },
+        "perms": {
+          "body": "mog_dirs",
+          "lib": "builder",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "destination",
+      "label": "Destination directory",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "source",
+      "label": "Source directory",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "depth",
+      "label": "Recursion depth",
+      "type": "string",
+      "required": true,
+      "default": "inf",
+      "help": "How many levels deep to copy — \"inf\" for the whole tree, or a number like \"1\" for just its immediate contents."
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "644",
+      "allowed_chars": "0-7",
+      "help": "Applied to every file; directories also keep their execute bits, so they stay enterable."
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "remove-package",
+  "version": 1,
+  "name": "Remove Package",
+  "category": "Packages",
+  "description": "Ensures one or more packages are absent.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "packages",
+      "promiser": "{{package_name}}",
+      "attributes": {
+        "policy": "absent"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "package_name",
+      "label": "Package name",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One package per line."
+    }
+  ]
+}

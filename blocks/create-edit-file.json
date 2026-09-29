@@ -1,0 +1,66 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "create-edit-file",
+  "version": 1,
+  "name": "Create/Edit File",
+  "category": "Files",
+  "description": "Ensures a file exists with exactly the given content and permissions.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "create": "true",
+        "content": "{{content}}",
+        "perms": {
+          "body": "mog",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "content",
+      "label": "Content",
+      "type": "text",
+      "required": true,
+      "help": "The whole file: anything else in it is replaced. $(name) references are expanded by CFEngine."
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "644",
+      "allowed_chars": "0-7"
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

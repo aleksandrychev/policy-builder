@@ -1,0 +1,53 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "manage-users",
+  "version": 1,
+  "name": "Manage Users",
+  "category": "Users",
+  "description": "Ensures a user account is present, locked, or absent.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "users",
+      "promiser": "{{username}}",
+      "attributes": {
+        "policy": "{{state}}"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "username",
+      "label": "Username",
+      "type": "string",
+      "required": true,
+      "allowed_chars": "a-z0-9_-",
+      "help": "Lowercase letters, numbers, underscore, and hyphen."
+    },
+    {
+      "name": "state",
+      "label": "State",
+      "type": "string",
+      "required": true,
+      "default": "present",
+      "options": [
+        {
+          "value": "present",
+          "label": "Present",
+          "help": "Creates the account if it doesn't exist."
+        },
+        {
+          "value": "locked",
+          "label": "Locked",
+          "help": "Keeps the account but prevents logging in."
+        },
+        {
+          "value": "absent",
+          "label": "Absent",
+          "help": "Deletes the account if it exists."
+        }
+      ]
+    }
+  ]
+}

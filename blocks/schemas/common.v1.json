@@ -1,0 +1,298 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfengine.com/policy-builder/schemas/common.v1.json",
+  "title": "Shared definitions for block and decorator descriptors",
+  "description": "Parameters and value expressions, shared by block-descriptor.v1.json and decorator.v1.json. The compiler contract (how each expression becomes CFEngine) is written down in blocks/README.md.",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "template": {
+      "type": "string",
+      "description": "Text with {{parameter}} placeholders. As an expression it compiles to one double-quoted CFEngine string: the template's own text is written as-is, substituted values are escaped (\\ -> \\\\, \" -> \\\"). $(...) references are left for CFEngine to expand."
+    },
+    "option": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "label"
+          ],
+          "properties": {
+            "value": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "help": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "required"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier",
+          "description": "Referenced in templates as {{name}}. \"value\" is reserved (decorators' incoming value)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Form field label; falls back to name."
+        },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "boolean",
+            "text"
+          ],
+          "description": "\"text\" is a multiline \"string\". Values are stored as strings; booleans as \"true\"/\"false\"."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "The value must be non-empty. An optional parameter's attribute is usually wrapped in if_set, so an empty value leaves it out."
+        },
+        "default": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ],
+          "description": "Must match `type`, and be one of `options` if those are given."
+        },
+        "help": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "description": "A fixed choice (select). Plain strings are value and label at once."
+        },
+        "allowed_chars": {
+          "type": "string",
+          "description": "Character-class fragment (as inside [...]) allowed while typing; anything else is stripped."
+        },
+        "references": {
+          "const": "variable",
+          "description": "The value names an existing variable (autocomplete). Use it through a {\"variable\": ...} expression, so the compiler namespace-qualifies it."
+        },
+        "mustache": {
+          "type": "boolean",
+          "description": "Only on \"text\": the value is a Mustache template body (its editor inserts {{{vars.<ns>:vars.<name>}}} and {{#classes.<ns>:<name>}})."
+        },
+        "allow_list": {
+          "type": "boolean",
+          "description": "Only on \"text\": one value per line. Used in a promiser, the compiler emits an slist var and iterates the promise over it ($(list)); used in an expression, only through {\"list_param\": name}."
+        },
+        "integer": {
+          "type": "boolean",
+          "description": "Only on \"number\": whole numbers only."
+        },
+        "minimum": {
+          "type": "number",
+          "description": "Only on \"number\"."
+        },
+        "path": {
+          "const": "absolute",
+          "description": "The value must be an absolute path (CFEngine rejects relative ones, some fatally)."
+        }
+      }
+    },
+    "expression": {
+      "description": "A value in compiled policy. A plain string is a quoted CFEngine string (see `template`); the objects below are everything else.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/template"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "call"
+          ],
+          "description": "A function call, e.g. readfile(\"/etc/x\", \"4096\"). Numbers go in as quoted strings (CFEngine converts them; unquoted negatives don't parse).",
+          "properties": {
+            "call": {
+              "$ref": "#/$defs/identifier"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "body"
+          ],
+          "description": "A body reference, e.g. mog(\"644\", \"root\", \"root\"). lib \"stdlib\" (masterfiles lib/, the default) compiles as default:<body>, \"builder\" as <file namespace>:<body>, from blocks/lib/bodies.json (the compiler writes it into the file).",
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/identifier"
+            },
+            "lib": {
+              "enum": [
+                "stdlib",
+                "builder"
+              ]
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "list"
+          ],
+          "description": "A list literal: { \"a\", \"b\" }.",
+          "properties": {
+            "list": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "list_param"
+          ],
+          "description": "A list literal from a one-value-per-line parameter (blank lines dropped).",
+          "properties": {
+            "list_param": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "class_refs"
+          ],
+          "description": "The entry's picked classes as a list of class expressions: { \"a\", \"!b\" } (negated refs get \"!\"; cross-file names stay namespace-qualified). Needs at least one — and => { } is true.",
+          "properties": {
+            "class_refs": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "class_expression"
+          ],
+          "description": "A user-written class expression: quoted when it's plain (linux.!debian), emitted as-is when it's a function call (not(fileexists(\"/x\"))).",
+          "properties": {
+            "class_expression": {
+              "$ref": "#/$defs/template"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bundle"
+          ],
+          "description": "A bundle to call (usebundle): qualified with default: when it names no namespace.",
+          "properties": {
+            "bundle": {
+              "$ref": "#/$defs/template"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "variable",
+            "as"
+          ],
+          "description": "A reference to a user-picked variable, namespace-qualified by the compiler (unqualified @() and name arguments don't resolve in a namespaced file): scalar \"$(ns:vars.x)\", list { @(ns:vars.x) }, name \"ns:vars.x\" (for isvariable(), grep() ...).",
+          "properties": {
+            "variable": {
+              "$ref": "#/$defs/template"
+            },
+            "as": {
+              "enum": [
+                "scalar",
+                "list",
+                "name"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "previous"
+          ],
+          "description": "Decorators only: the incoming value — the previous step's expression, nested inline. A literal list arrives as inline JSON ('[\"a\",\"b\"]'), a list variable as its qualified name.",
+          "properties": {
+            "previous": {
+              "const": "value"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "if_set",
+            "value"
+          ],
+          "description": "Attributes only: the attribute is left out when the parameter is empty (e.g. report_to_file => \"\" is a hard error).",
+          "properties": {
+            "if_set": {
+              "$ref": "#/$defs/identifier"
+            },
+            "value": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

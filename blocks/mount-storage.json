@@ -1,0 +1,66 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "mount-storage",
+  "version": 1,
+  "name": "Mount Storage",
+  "category": "Storage",
+  "description": "Ensures a network filesystem is mounted, and in the filesystem table.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "storage",
+      "promiser": "{{mount_point}}",
+      "attributes": {
+        "mount": {
+          "body": "remote_mount",
+          "lib": "builder",
+          "args": [
+            "{{fs_type}}",
+            "{{server}}",
+            "{{remote_path}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "mount_point",
+      "label": "Mount point",
+      "type": "string",
+      "required": true,
+      "path": "absolute"
+    },
+    {
+      "name": "server",
+      "label": "Server",
+      "type": "string",
+      "required": true,
+      "help": "Hostname or IP of the file server."
+    },
+    {
+      "name": "remote_path",
+      "label": "Remote path",
+      "type": "string",
+      "required": true,
+      "help": "The exported path on the server, e.g. /export/data.",
+      "path": "absolute"
+    },
+    {
+      "name": "fs_type",
+      "label": "Filesystem type",
+      "type": "string",
+      "required": true,
+      "default": "nfs",
+      "options": [
+        "nfs",
+        "nfs2",
+        "nfs3",
+        "nfs4",
+        "panfs",
+        "cifs"
+      ]
+    }
+  ]
+}

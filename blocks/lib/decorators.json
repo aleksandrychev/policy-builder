@@ -1,0 +1,532 @@
+{
+  "$schema": "../schemas/decorator.v1.json",
+  "schema_version": 1,
+  "decorators": [
+    {
+      "id": "regex-replace",
+      "label": "Extract / replace with regex",
+      "badge": "regex_replace()",
+      "help": "To extract rather than replace, use a capture group in the pattern and \"$1\" (etc.) as the replacement.",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "pattern",
+          "label": "Pattern",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "replacement",
+          "label": "Replacement",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "options",
+          "label": "Options",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "help": "sed/Perl-style flags, e.g. \"g\" for global, \"i\" for case-insensitive."
+        }
+      ],
+      "expression": {
+        "call": "regex_replace",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{pattern}}",
+          "{{replacement}}",
+          "{{options}}"
+        ]
+      }
+    },
+    {
+      "id": "string-head",
+      "label": "First N characters",
+      "badge": "string_head()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "length",
+          "label": "Max characters",
+          "type": "number",
+          "required": true,
+          "default": 9,
+          "integer": true
+        }
+      ],
+      "help": "A negative number drops that many characters from the end instead.",
+      "expression": {
+        "call": "string_head",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{length}}"
+        ]
+      }
+    },
+    {
+      "id": "string-tail",
+      "label": "Last N characters",
+      "badge": "string_tail()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "length",
+          "label": "Max characters",
+          "type": "number",
+          "required": true,
+          "default": 9,
+          "integer": true
+        }
+      ],
+      "help": "A negative number drops that many characters from the start instead.",
+      "expression": {
+        "call": "string_tail",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{length}}"
+        ]
+      }
+    },
+    {
+      "id": "string-trim",
+      "label": "Trim whitespace",
+      "badge": "string_trim()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [],
+      "expression": {
+        "call": "string_trim",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "string-downcase",
+      "label": "Lowercase",
+      "badge": "string_downcase()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [],
+      "expression": {
+        "call": "string_downcase",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "string-upcase",
+      "label": "Uppercase",
+      "badge": "string_upcase()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [],
+      "expression": {
+        "call": "string_upcase",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "string-reverse",
+      "label": "Reverse",
+      "badge": "string_reverse()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [],
+      "expression": {
+        "call": "string_reverse",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "string-replace",
+      "label": "Replace literal text",
+      "badge": "string_replace()",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "find",
+          "label": "Find",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "replacement",
+          "label": "Replacement",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "expression": {
+        "call": "string_replace",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{find}}",
+          "{{replacement}}"
+        ]
+      }
+    },
+    {
+      "id": "format",
+      "label": "Format into a template string",
+      "badge": "format()",
+      "help": "CFEngine format string; %s is replaced with the value from the previous step.",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "format_string",
+          "label": "Format string",
+          "type": "string",
+          "required": true,
+          "default": "%s"
+        }
+      ],
+      "expression": {
+        "call": "format",
+        "args": [
+          "{{format_string}}",
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "lastnode",
+      "label": "Last path/link segment",
+      "badge": "lastnode()",
+      "help": "The separator is a regex (escape a literal . as \\.), e.g. lastnode(\"/etc/init.d/nginx\", \"/\") -> \"nginx\". A value ending in the separator gives \"\".",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "separator",
+          "label": "Separator",
+          "type": "string",
+          "required": true,
+          "default": "/"
+        }
+      ],
+      "expression": {
+        "call": "lastnode",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{separator}}"
+        ]
+      }
+    },
+    {
+      "id": "split-list",
+      "label": "Split into a list",
+      "badge": "string_split()",
+      "input_type": "string",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "delimiter",
+          "label": "Split on (regex)",
+          "type": "string",
+          "required": true,
+          "default": "\\n"
+        },
+        {
+          "name": "max_pieces",
+          "label": "Max pieces",
+          "type": "number",
+          "required": true,
+          "default": 1000,
+          "integer": true,
+          "minimum": 1,
+          "help": "The last piece keeps the rest of the string."
+        }
+      ],
+      "expression": {
+        "call": "string_split",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{delimiter}}",
+          "{{max_pieces}}"
+        ]
+      }
+    },
+    {
+      "id": "grep",
+      "label": "Keep matching entries (grep)",
+      "badge": "grep()",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "pattern",
+          "label": "Regex pattern",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "help": "Keeps entries the regex matches entirely (anchored): \"a\" keeps \"a\" but not \"ab\".",
+      "expression": {
+        "call": "grep",
+        "args": [
+          "{{pattern}}",
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "filter",
+      "label": "Filter entries",
+      "badge": "filter()",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "pattern",
+          "label": "Pattern",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "is_regex",
+          "label": "Match as regex",
+          "type": "boolean",
+          "required": false,
+          "default": true
+        },
+        {
+          "name": "invert",
+          "label": "Invert match",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "max_results",
+          "label": "Max results",
+          "type": "number",
+          "required": true,
+          "default": 1000,
+          "integer": true,
+          "minimum": 0,
+          "help": "0 keeps nothing."
+        }
+      ],
+      "expression": {
+        "call": "filter",
+        "args": [
+          "{{pattern}}",
+          {
+            "previous": "value"
+          },
+          "{{is_regex}}",
+          "{{invert}}",
+          "{{max_results}}"
+        ]
+      }
+    },
+    {
+      "id": "maplist",
+      "label": "Transform each entry",
+      "badge": "maplist()",
+      "help": "Use $(this) to reference each entry.",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "pattern",
+          "label": "Pattern",
+          "type": "string",
+          "required": true,
+          "default": "$(this)"
+        }
+      ],
+      "expression": {
+        "call": "maplist",
+        "args": [
+          "{{pattern}}",
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sort",
+      "label": "Sort",
+      "badge": "sort()",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "method",
+          "label": "Method",
+          "type": "string",
+          "required": true,
+          "default": "lex",
+          "options": [
+            "lex",
+            "int",
+            "real",
+            "IP",
+            "ip",
+            "MAC",
+            "mac"
+          ]
+        }
+      ],
+      "help": "lex sorts by byte order (A-Z before a-z).",
+      "expression": {
+        "call": "sort",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{method}}"
+        ]
+      }
+    },
+    {
+      "id": "unique",
+      "label": "Remove duplicates",
+      "badge": "unique()",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [],
+      "expression": {
+        "call": "unique",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "join",
+      "label": "Join into a string",
+      "badge": "join()",
+      "input_type": "slist",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "glue",
+          "label": "Glue",
+          "type": "string",
+          "required": true,
+          "default": ", "
+        }
+      ],
+      "expression": {
+        "call": "join",
+        "args": [
+          "{{glue}}",
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "nth",
+      "label": "Pick entry by index",
+      "badge": "nth()",
+      "input_type": "slist",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "index",
+          "label": "Index",
+          "type": "string",
+          "required": true,
+          "default": "0"
+        }
+      ],
+      "help": "0 is the first entry, -1 the last. Out of range leaves the variable undefined.",
+      "expression": {
+        "call": "nth",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{index}}"
+        ]
+      }
+    },
+    {
+      "id": "length",
+      "label": "Count entries",
+      "badge": "length()",
+      "input_type": "slist",
+      "output_type": "int",
+      "parameters": [],
+      "expression": {
+        "call": "length",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "default-if-empty",
+      "label": "Default if empty",
+      "badge": "isvariable()",
+      "help": "Uses the fallback when the value is undefined (e.g. its file is missing) or equals the trigger.",
+      "input_type": "string",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "trigger",
+          "label": "Treat this as \"unset\"",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "help": "Also fall back when the value equals this (e.g. 0). Leave blank to fall back only when it's undefined or empty."
+        },
+        {
+          "name": "fallback",
+          "label": "Fallback value",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "fallback": {
+        "trigger": "{{trigger}}",
+        "value": "{{fallback}}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "install-package",
+  "version": 1,
+  "name": "Install Package",
+  "category": "Packages",
+  "description": "Ensures one or more packages are present.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "packages",
+      "promiser": "{{package_name}}",
+      "attributes": {
+        "policy": "present"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "package_name",
+      "label": "Package name",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One package per line."
+    }
+  ]
+}

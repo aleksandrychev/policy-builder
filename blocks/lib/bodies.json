@@ -1,0 +1,46 @@
+{
+  "$schema": "../schemas/bodies.v1.json",
+  "schema_version": 1,
+  "bodies": [
+    {
+      "type": "perms",
+      "name": "mog_dirs",
+      "help": "The stdlib's mog() with rxdirs => \"true\": since 3.20 mog() sets it false, so a mode like 644 applied to a directory tree makes the directories impossible to enter.",
+      "parameters": [
+        "mode",
+        "user",
+        "group"
+      ],
+      "attributes": {
+        "owners": {
+          "list": [
+            "$(user)"
+          ]
+        },
+        "groups": {
+          "list": [
+            "$(group)"
+          ]
+        },
+        "mode": "$(mode)",
+        "rxdirs": "true"
+      }
+    },
+    {
+      "type": "mount",
+      "name": "remote_mount",
+      "help": "A network filesystem of any supported type — the stdlib's nfs() and nfs_p() are NFS only.",
+      "parameters": [
+        "type",
+        "server",
+        "source"
+      ],
+      "attributes": {
+        "mount_type": "$(type)",
+        "mount_server": "$(server)",
+        "mount_source": "$(source)",
+        "edit_fstab": "true"
+      }
+    }
+  ]
+}

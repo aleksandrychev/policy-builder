@@ -1,0 +1,69 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "report-message",
+  "version": 1,
+  "name": "Report Message",
+  "category": "Reports",
+  "description": "Prints a message (prefixed \"R:\") to the agent's output, or appends it to a file.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "reports",
+      "promiser": "{{message}}",
+      "attributes": {
+        "report_to_file": {
+          "if_set": "report_to_file",
+          "value": "{{report_to_file}}"
+        },
+        "action": {
+          "if_set": "run_interval",
+          "value": {
+            "body": "if_elapsed",
+            "args": [
+              "{{run_interval}}"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "message",
+      "label": "Message",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "report_to_file",
+      "label": "Report to file",
+      "type": "string",
+      "required": false,
+      "help": "Absolute path to append this message to, instead of printing it. Leave blank to print.",
+      "path": "absolute"
+    },
+    {
+      "name": "run_interval",
+      "label": "How often",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "Every agent run"
+        },
+        {
+          "value": "60",
+          "label": "At most once an hour"
+        },
+        {
+          "value": "1440",
+          "label": "At most once a day"
+        }
+      ],
+      "help": "Appending to a file every run grows it without limit."
+    }
+  ]
+}
