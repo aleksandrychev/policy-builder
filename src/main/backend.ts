@@ -5,10 +5,12 @@ import { join } from 'path';
 
 /**
  * Runs the bundled Python sidecar (see `python/`): one short-lived process per
- * action, policy in on stdin, formatted policy out on stdout.
+ * action, input on stdin, result on stdout, diagnostics on stderr.
  */
 
-const TIMEOUT_MS = 30_000;
+const FORMAT_TIMEOUT_MS = 30_000;
+// Downloading masterfiles on a slow network can take a while.
+const INIT_TIMEOUT_MS = 120_000;
 
 const isWindows = process.platform === 'win32';
 const executableName = isWindows ? 'cfpb-backend.exe' : 'cfpb-backend';
@@ -40,9 +42,9 @@ function resolveCommand(): { command: string; commandArgs: string[] } {
   return { command: venvPython, commandArgs: ['-m', 'cfpb_backend'] };
 }
 
-// Spawns the sidecar, feeds `input` on stdin, and resolves with the raw
-// outcome; rejects only when the process cannot be spawned at all.
-function runSidecar(input: string): Promise<SidecarResult> {
+// Spawns the sidecar with `args`, feeds `input` on stdin, and resolves with the
+// raw outcome; rejects only when the process cannot be spawned at all.
+function runSidecar(args: string[], input: string, timeoutMs: number): Promise<SidecarResult> {
   const { command, commandArgs } = resolveCommand();
   if (!existsSync(command)) {
     return Promise.reject(new Error(`Python backend not found at ${command} — run \`npm run backend:build\` (or \`npm run backend:sync\` for development)`));
@@ -51,7 +53,7 @@ function runSidecar(input: string): Promise<SidecarResult> {
   return new Promise<SidecarResult>((resolve, reject) => {
     // `timeout` SIGTERMs a hung child, surfacing as 'close' with that signal.
     // No guard flag: settling an already-settled promise is a no-op.
-    const child = spawn(command, commandArgs, { windowsHide: true, timeout: TIMEOUT_MS });
+    const child = spawn(command, [...commandArgs, ...args], { windowsHide: true, timeout: timeoutMs });
     let stdout = '';
     let stderr = '';
 
@@ -78,21 +80,62 @@ function runSidecar(input: string): Promise<SidecarResult> {
   });
 }
 
-// Maps a failed sidecar outcome to the message the UI shows the user.
-function sidecarError(code: number | null, signal: NodeJS.Signals | null, stderr: string): Error {
+// Maps a failed sidecar outcome to an Error: the last stderr line as the
+// message (the sidecar's summary), the whole stderr as `details`.
+function sidecarError({ code, signal, stderr }: SidecarResult, timeoutMs: number): Error & { details: string } {
+  const details = stderr.trim();
+  const lastLine = details
+    .split(/\r?\n/)
+    .filter(line => line.trim())
+    .pop();
+  let message: string;
   // SIGTERM only ever comes from the spawn timeout
-  if (signal === 'SIGTERM') return new Error(`Process timed out after ${TIMEOUT_MS}ms`);
-  if (signal) return new Error(stderr || `Process was killed by ${signal}`);
-  return new Error(stderr || `Process failed (exit ${code})`);
+  if (signal === 'SIGTERM') message = `Process timed out after ${timeoutMs}ms`;
+  else message = lastLine ?? (signal ? `Process was killed by ${signal}` : `Process failed (exit ${code})`);
+  return Object.assign(new Error(message), { details });
+}
+
+// Forward diagnostics so sidecar warnings show in the Electron console.
+function logStderr(stderr: string) {
+  if (stderr.trim()) console.error(`[cfpb-backend] ${stderr.trim()}`);
 }
 
 /**
  * Formats CFEngine policy, resolving with the formatted text
  */
 export async function formatPolicy(source: string): Promise<string> {
-  const { code, signal, stdout, stderr } = await runSidecar(source);
-  // Forward diagnostics so sidecar warnings show in the Electron console.
-  if (stderr.trim()) console.error(`[cfpb-backend] ${stderr.trim()}`);
-  if (code === 0) return stdout;
-  throw sidecarError(code, signal, stderr.trim());
+  const result = await runSidecar(['format'], source, FORMAT_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code === 0) return result.stdout;
+  throw sidecarError(result, FORMAT_TIMEOUT_MS);
+}
+
+export type InitCfbsProjectOptions = {
+  // The builder's own cfbs.json content, written before the initial commit.
+  content?: { meta: Record<string, unknown>; modules: unknown[] };
+  description: string;
+  directory: string;
+  git: boolean;
+  masterfiles: string;
+  name: string;
+};
+
+export type InitCfbsProjectResult = {
+  masterfiles: Record<string, unknown> | null;
+  path: string;
+};
+
+/**
+ * Creates a cfbs project in `directory` (absent or empty). Rejects with the
+ * sidecar's one-line summary as the message and its full stderr as `details`.
+ */
+export async function initCfbsProject(options: InitCfbsProjectOptions): Promise<InitCfbsProjectResult> {
+  const result = await runSidecar(['init'], JSON.stringify(options), INIT_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, INIT_TIMEOUT_MS);
+  try {
+    return JSON.parse(result.stdout) as InitCfbsProjectResult;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable init result'), { details: result.stdout });
+  }
 }

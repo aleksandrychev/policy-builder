@@ -1,15 +1,30 @@
 # cfpb-backend
 
 Python sidecar hosting the CFEngine toolchain. Electron spawns it once per
-action: policy in on stdin, formatted policy out on stdout, errors on stderr
-with a non-zero exit.
+action: input on stdin, result on stdout, diagnostics on stderr with a
+non-zero exit.
+
+| Subcommand | stdin | stdout | exit codes |
+| --- | --- | --- | --- |
+| `format` (also the default with no subcommand) | policy | formatted policy | 1 syntax error, 2 other |
+| `init` | `{"directory", "name", "description", "masterfiles", "git"}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
+
+`init` runs `cfbs init` in-process (non-interactive, `--git=no`) in `directory`,
+which must be absent or empty, with an existing parent. `masterfiles` is an
+exact version (`3.27.1`), `master`, or `no`; cfbs 5.7.0 mishandles branch names
+like `3.24.x`, so they are refused. It then writes `name`/`description` into
+`cfbs.json` via `cfbs.pretty`, and with `git` makes one commit (falling back to
+cfbs's `cfbs <cfbs@hostname>` identity if git has none). The result's
+`masterfiles` is the build entry cfbs wrote, or `null`. All cfbs output goes to
+stderr; the last stderr line is a one-line summary for the UI. Any failure
+removes what init created.
 
 Managed with [uv](https://docs.astral.sh/uv/), which also fetches the
 interpreter pinned in `.python-version`.
 
 ```sh
 uv sync                                                    # .venv + deps
-uv run pytest
+uv run pytest                                              # CFPB_NETWORK_TESTS=1 adds masterfiles downloads
 uv run black .                                             # no linter here
 uv run pyinstaller --clean --noconfirm cfpb-backend.spec   # → dist/cfpb-backend/
 ```
