@@ -101,8 +101,9 @@ function applyRegexReplace(input: string, pattern: string, replacement: string, 
   if (options.includes('s')) flags += 's';
   if (options.includes('i')) flags += 'i';
 
-  // CFEngine takes \1..\9 backreferences as well as $1; JS only knows the latter.
-  return input.replace(compilePattern(pattern, flags), replacement.replace(/\\(\d)/g, '$$$1'));
+  // CFEngine takes \1..\9 backreferences as well as $1, and $0 / \0 for the whole match; JS spells that $&.
+  const jsReplacement = replacement.replace(/\\(\d)/g, '$$$1').replace(/\$0/g, '$$&');
+  return input.replace(compilePattern(pattern, flags), jsReplacement);
 }
 
 // Only %s (with an optional width, %5s / %-5s) and %% — not full printf.
@@ -124,7 +125,9 @@ const byteOrder = (a: string, b: string) => (a < b ? -1 : Number(a > b));
 function applySort(list: string[], method: string): string[] {
   const sorted = [...list];
   if (method === 'int' || method === 'real') {
-    sorted.sort((a, b) => Number(a) - Number(b));
+    // Non-numbers first (byte order among themselves), then numbers ascending.
+    const isNumber = (value: string) => value.trim() !== '' && Number.isFinite(Number(value));
+    sorted.sort((a, b) => Number(isNumber(a)) - Number(isNumber(b)) || (isNumber(a) ? Number(a) - Number(b) : byteOrder(a, b)));
   } else {
     sorted.sort(byteOrder);
   }
