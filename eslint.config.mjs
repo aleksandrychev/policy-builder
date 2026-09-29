@@ -7,7 +7,7 @@ export default [
   },
   ...ntReactConfig,
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'electron.vite.config.ts'],
+    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'electron.vite.config.ts', 'e2e/**/*.ts'],
     languageOptions: {
       globals: { ...globals.node }
     }

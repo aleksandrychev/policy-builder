@@ -29,10 +29,11 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -60,6 +61,7 @@
   "devDependencies": {
     "@northern.tech/eslint-config": "^0.7.1",
     "@northern.tech/prettier-config": "^0.2.1",
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.2",
