@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { blockRemoved, blocksRemovedForFile, dataChainRemoved, entryRemoved } from '../canvasSlice';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 
 type Position = { x: number; y: number };
 
@@ -39,6 +39,7 @@ const derivedNodesSlice = createSlice({
     };
     builder
       .addCase(projectCreated, () => ({}))
+      .addCase(projectLoaded, (_state, action) => action.payload.content.derivedNodes)
       .addCase(blocksRemovedForFile, (state, action) => {
         for (const key of Object.keys(state)) if (key.startsWith(`${action.payload.fileId}|`)) delete state[key];
       })

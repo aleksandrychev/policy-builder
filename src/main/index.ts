@@ -4,8 +4,9 @@ import { promises as fs } from 'fs';
 import { basename, join } from 'path';
 import { pathToFileURL } from 'url';
 
+import type { RecentProject } from '../preload/api';
 import { formatPolicy } from './backend';
-import { registerProjectHandlers } from './project';
+import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 
 const APP_TITLE = 'CFEngine Policy Builder';
 const MAX_TITLE_LENGTH = 200;
@@ -13,6 +14,8 @@ const MAX_TITLE_LENGTH = 200;
 // Per window: unsaved changes (from window:set-document), and whether the user already agreed to lose them.
 const documentState = new WeakMap<BrowserWindow, { closeConfirmed: boolean; edited: boolean; quitAfterClose: boolean }>();
 let quitting = false;
+// The window the application menu talks to.
+let menuWindow: BrowserWindow | null = null;
 
 // Sidebar/palette resize state the renderer asks us to persist across
 // launches — kept as its own small file rather than folded into a future
@@ -75,9 +78,20 @@ function isTrustedFrame(frame: WebFrameMain | null): boolean {
 // demo builder); this just forwards a "you chose X" signal down the same
 // window's preload bridge, since a Menu click handler runs in the main
 // process and has no access to renderer state.
-function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
+function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[]): Menu {
   const isMac = process.platform === 'darwin';
-  const send = (channel: string) => () => mainWindow.webContents.send(channel);
+  const send = (channel: string, argument?: string) => () => mainWindow.webContents.send(channel, argument);
+  const openRecent: MenuItemConstructorOptions[] = [
+    ...recents.map(recent => ({
+      label: recent.name,
+      sublabel: recent.path,
+      toolTip: recent.path,
+      enabled: recent.exists,
+      click: send('menu:open-recent', recent.path)
+    })),
+    ...(recents.length ? [{ type: 'separator' as const }] : []),
+    { label: 'Clear Recent', enabled: recents.length > 0, click: () => void clearRecentProjects() }
+  ];
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : []),
@@ -86,6 +100,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
       submenu: [
         { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: send('menu:new-project') },
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: send('menu:open-project') },
+        { label: 'Open Recent', submenu: openRecent },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
@@ -99,6 +114,13 @@ function buildApplicationMenu(mainWindow: BrowserWindow): Menu {
   ];
 
   return Menu.buildFromTemplate(template);
+}
+
+async function refreshMenu(): Promise<void> {
+  if (!menuWindow || menuWindow.isDestroyed()) return;
+  const window = menuWindow;
+  const recents = await getRecentProjects().catch(() => []);
+  if (window === menuWindow && !window.isDestroyed()) Menu.setApplicationMenu(buildApplicationMenu(window, recents));
 }
 
 function createWindow(): void {
@@ -118,7 +140,11 @@ function createWindow(): void {
     }
   });
 
-  Menu.setApplicationMenu(buildApplicationMenu(mainWindow));
+  menuWindow = mainWindow;
+  Menu.setApplicationMenu(buildApplicationMenu(mainWindow, []));
+  void refreshMenu();
+  // A recent project's folder may have gone (or come back) meanwhile.
+  mainWindow.on('focus', () => void refreshMenu());
   documentState.set(mainWindow, { closeConfirmed: false, edited: false, quitAfterClose: false });
 
   // With unsaved changes the renderer asks Save / Don't Save / Cancel, then confirms via window:close-confirmed.
@@ -194,6 +220,11 @@ app.whenReady().then(() => {
   });
 
   registerProjectHandlers(isTrustedFrame);
+  // The File menu and the start screen both list recent projects.
+  onRecentsChanged(() => {
+    void refreshMenu();
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('window:recents-changed');
+  });
 
   ipcMain.handle('policy:format', (event, source: unknown) => {
     if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
@@ -245,6 +276,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+// macOS: a recent project picked from the Dock menu (or a folder dropped on the Dock icon).
+app.on('open-file', (event, path) => {
+  event.preventDefault();
+  if (menuWindow && !menuWindow.isDestroyed()) menuWindow.webContents.send('menu:open-recent', path);
 });
 
 // A quit (⌘Q) goes through each window's 'close'; if one asks first, quit again once it is confirmed.

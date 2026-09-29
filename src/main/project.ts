@@ -1,14 +1,15 @@
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
 import type { IpcMainInvokeEvent, OpenDialogOptions, WebFrameMain } from 'electron';
 import { constants, promises as fs } from 'fs';
-import { dirname, isAbsolute, join, normalize } from 'path';
+import { basename, dirname, isAbsolute, join, normalize, resolve } from 'path';
 
-import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, TargetCheck } from '../preload/api';
+import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, RecentProject, TargetCheck } from '../preload/api';
 import { initCfbsProject } from './backend';
 
 /**
  * The project:* IPC channels: creating a cfbs project on disk (via the Python
- * sidecar) and saving the builder's state into its cfbs.json.
+ * sidecar), opening one, saving the builder's state into its cfbs.json, and
+ * the recent-projects list.
  */
 
 const ADDED_BY = 'policy builder';
@@ -19,8 +20,10 @@ const FOLDER_NAME = /^[a-z0-9][a-z0-9_-]{0,99}$/;
 const MASTERFILES = /^(\d+\.\d+\.\d+(-\d+)?|master|no)$/;
 const MAX_PATH_LENGTH = 4096;
 const MAX_CONTENT_BYTES = 50_000_000;
+const MAX_CFBS_JSON_BYTES = 10_000_000;
+const MAX_RECENTS = 5;
 
-// Project folders this session created; saves may only write into these.
+// Project folders this session created or opened; saves may only write into these.
 const knownProjects = new Set<string>();
 
 let versionsRequest: Promise<MasterfilesVersions> | null = null;
@@ -29,7 +32,10 @@ class InvalidRequest extends Error {}
 
 interface AppSettings {
   lastProjectParent?: string;
+  recentProjects?: { name: string; path: string }[];
 }
+
+let recentsListener: (() => void) | null = null;
 
 const settingsPath = () => join(app.getPath('userData'), 'app-settings.json');
 
@@ -42,8 +48,13 @@ async function readSettings(): Promise<AppSettings> {
   }
 }
 
-async function writeSettings(patch: AppSettings): Promise<void> {
-  await writeFileAtomic(settingsPath(), JSON.stringify({ ...(await readSettings()), ...patch }, null, 2));
+// Queued, so concurrent read-modify-writes can't drop each other's changes.
+let settingsWrite: Promise<void> = Promise.resolve();
+
+function writeSettings(patch: AppSettings): Promise<void> {
+  const write = settingsWrite.then(async () => writeFileAtomic(settingsPath(), JSON.stringify({ ...(await readSettings()), ...patch }, null, 2)));
+  settingsWrite = write.catch(() => {});
+  return write;
 }
 
 async function writeFileAtomic(path: string, content: string): Promise<void> {
@@ -169,6 +180,106 @@ const failure = (error: unknown): OperationResult<never> => ({
   details: typeof (error as { details?: unknown })?.details === 'string' ? (error as { details: string }).details : ''
 });
 
+async function defaultParent(): Promise<string> {
+  const { lastProjectParent } = await readSettings();
+  if (typeof lastProjectParent === 'string' && isAbsolute(lastProjectParent) && (await isDirectory(lastProjectParent))) return lastProjectParent;
+  return app.getPath('documents');
+}
+
+async function readRecents(): Promise<{ name: string; path: string }[]> {
+  const { recentProjects } = await readSettings();
+  if (!Array.isArray(recentProjects)) return [];
+  return recentProjects.filter(entry => typeof entry?.name === 'string' && typeof entry.path === 'string' && isAbsolute(entry.path)).slice(0, MAX_RECENTS);
+}
+
+async function updateRecents(update: (recents: { name: string; path: string }[]) => { name: string; path: string }[]): Promise<void> {
+  try {
+    await writeSettings({ recentProjects: update(await readRecents()).slice(0, MAX_RECENTS) });
+    recentsListener?.();
+  } catch (error) {
+    console.error(`[project] recent projects not saved: ${error}`);
+  }
+}
+
+async function rememberRecent(path: string, name: string): Promise<void> {
+  if (process.platform === 'darwin') app.addRecentDocument(path);
+  await updateRecents(recents => [{ name, path }, ...recents.filter(entry => entry.path !== path)]);
+}
+
+/** The recent projects, most recent first; `exists` is false once the folder or its cfbs.json is gone. */
+export async function getRecentProjects(): Promise<RecentProject[]> {
+  const exists = (path: string) =>
+    fs.stat(join(path, 'cfbs.json')).then(
+      stats => stats.isFile(),
+      () => false
+    );
+  return Promise.all((await readRecents()).map(async entry => ({ ...entry, exists: await exists(entry.path) })));
+}
+
+export const forgetRecentProject = (path: string) => updateRecents(recents => recents.filter(entry => entry.path !== path));
+
+export function clearRecentProjects(): Promise<void> {
+  if (process.platform === 'darwin') app.clearRecentDocuments();
+  return updateRecents(() => []);
+}
+
+/** Called whenever the recent-projects list changes (the File menu rebuilds). */
+export function onRecentsChanged(listener: () => void): void {
+  recentsListener = listener;
+}
+
+// A picked/dropped path → the project folder: the folder itself, or a cfbs.json's.
+async function projectFolderOf(picked: string): Promise<string> {
+  const stats = await fs.stat(picked).catch(() => null);
+  if (!stats) throw new InvalidRequest(`${picked} doesn't exist`);
+  if (stats.isDirectory()) return picked;
+  if (stats.isFile() && basename(picked) === 'cfbs.json') return dirname(picked);
+  throw new InvalidRequest('Choose a project folder or its cfbs.json file.');
+}
+
+async function readCfbsJson(folder: string): Promise<Record<string, unknown>> {
+  const cfbsPath = join(folder, 'cfbs.json');
+  const stats = await fs.stat(cfbsPath).catch(() => null);
+  if (!stats?.isFile()) throw new InvalidRequest(`${folder} isn't a cfbs project: it has no cfbs.json.`);
+  if (stats.size > MAX_CFBS_JSON_BYTES) throw new InvalidRequest(`cfbs.json is too large (max ${MAX_CFBS_JSON_BYTES / 1_000_000} MB).`);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
+  } catch (error) {
+    throw new InvalidRequest(`cfbs.json isn't valid JSON: ${error instanceof Error ? error.message : error}`);
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new InvalidRequest('cfbs.json is not a JSON object.');
+  const json = parsed as Record<string, unknown>;
+  if (json.type !== undefined && json.type !== 'policy-set')
+    throw new InvalidRequest(`This cfbs.json is a cfbs ${String(json.type)}, not a policy set project.`);
+  if (json.type === undefined && typeof json.name !== 'string' && !Array.isArray(json.build)) throw new InvalidRequest('This doesn’t look like a cfbs.json.');
+  return json;
+}
+
+async function pickProject(event: IpcMainInvokeEvent): Promise<string | null> {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  // Only macOS can pick a file or a folder in one dialog; elsewhere a cfbs.json can be dropped instead.
+  const options: OpenDialogOptions = {
+    title: 'Open Project',
+    buttonLabel: 'Open',
+    message: 'Choose a cfbs project folder or its cfbs.json',
+    properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openDirectory'],
+    defaultPath: await defaultParent()
+  };
+  const result = await (window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options));
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+}
+
+async function openProject(event: IpcMainInvokeEvent, request: { path?: unknown }) {
+  const picked = request?.path === undefined ? await pickProject(event) : checkedAbsolutePath(request.path, 'project path');
+  if (picked === null) return null;
+  const path = await projectFolderOf(resolve(picked));
+  const cfbs = await readCfbsJson(path);
+  knownProjects.add(path);
+  await rememberRecent(path, typeof cfbs.name === 'string' && cfbs.name.trim() ? cfbs.name.trim() : basename(path));
+  return { ok: true as const, cfbs, path };
+}
+
 async function createProject(request: CreateProjectRequest) {
   const parent = checkedAbsolutePath(request?.parent, 'location');
   const folderName = checkedFolderName(request.folderName);
@@ -185,6 +296,7 @@ async function createProject(request: CreateProjectRequest) {
   const result = await initCfbsProject({ content, description, directory: join(parent, folderName), git: request.git, masterfiles: request.masterfiles, name });
   knownProjects.add(result.path);
   await writeSettings({ lastProjectParent: parent }).catch(error => console.error(`[project] settings not saved: ${error}`));
+  await rememberRecent(result.path, name);
   const version = result.masterfiles?.version;
   const masterfiles = request.masterfiles === 'no' ? null : typeof version === 'string' ? version : request.masterfiles;
   return { ok: true as const, masterfiles, path: result.path };
@@ -200,11 +312,7 @@ export function registerProjectHandlers(isTrustedFrame: (frame: WebFrameMain | n
 
   ipcMain.handle(
     'project:default-parent',
-    trusted(async () => {
-      const { lastProjectParent } = await readSettings();
-      if (typeof lastProjectParent === 'string' && isAbsolute(lastProjectParent) && (await isDirectory(lastProjectParent))) return lastProjectParent;
-      return app.getPath('documents');
-    })
+    trusted(() => defaultParent())
   );
 
   ipcMain.handle(
@@ -235,6 +343,18 @@ export function registerProjectHandlers(isTrustedFrame: (frame: WebFrameMain | n
   ipcMain.handle(
     'project:create',
     trusted((_event, request: CreateProjectRequest) => createProject(request).catch(failure))
+  );
+
+  ipcMain.handle(
+    'project:open',
+    trusted((event, request: { path?: unknown }) => openProject(event, request).catch(failure))
+  );
+
+  ipcMain.handle('project:recents', trusted(getRecentProjects));
+
+  ipcMain.handle(
+    'project:forget-recent',
+    trusted((_event, request: { path?: unknown }) => forgetRecentProject(checkedAbsolutePath(request?.path, 'project path')))
   );
 
   ipcMain.handle(

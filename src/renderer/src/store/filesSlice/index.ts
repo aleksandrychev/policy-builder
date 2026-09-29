@@ -1,5 +1,6 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
+import { projectLoaded } from '../projectSlice';
 import { deriveNamespace } from './deriveNamespace';
 import { collectFolderDescendants, sanitizeFileSystemName, uniqueSiblingName } from './fileTree';
 import type { PolicyFile, PolicyFolder } from './types';
@@ -124,6 +125,9 @@ const filesSlice = createSlice({
         state.currentFileId = state.files[0]?.id ?? null;
       }
     }
+  },
+  extraReducers: builder => {
+    builder.addCase(projectLoaded, (_state, action) => action.payload.content.files);
   }
 });
 

@@ -6,9 +6,9 @@ import { createNginxDemoProject } from '../demo/nginxDemoProject';
 import { type RootState, createAppStore, useAppDispatch, useAppSelector } from '../store';
 import { projectFilesInitialized } from '../store/filesSlice';
 import { UNDOABLE_KEYS, historyCleared } from '../store/history';
-import { projectCreated, projectLocated } from '../store/projectSlice';
+import { projectCreated, projectLoaded, projectLocated } from '../store/projectSlice';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
-import { type ProjectData, toCfbsProject } from './cfbsProject';
+import { type ProjectData, loadCfbsProject, toCfbsProject } from './cfbsProject';
 
 const snapshotOf = (state: RootState): ProjectData => ({
   canvas: state.canvas,
@@ -19,6 +19,7 @@ const snapshotOf = (state: RootState): ProjectData => ({
 });
 
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+const folderNameOf = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
 /**
  * The open project's life cycle: creating it (on disk via cfbs, or in memory),
@@ -33,7 +34,7 @@ export function useProjectSession() {
   const dirty = useAppSelector(state => baseline !== null && UNDOABLE_KEYS.some(key => state[key] !== baseline[key]));
   const [projectDialog, setProjectDialog] = useState<'new' | 'saveAs' | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const saving = useRef(false);
   // Resolves the save a "Save Project As" dialog was opened for.
   const saveAsDone = useRef<((saved: boolean) => void) | null>(null);
@@ -107,10 +108,26 @@ export function useProjectSession() {
       markSaved(data);
       return true;
     } catch (cause) {
-      setSaveError(`Couldn’t save the project: ${errorMessage(cause)}`);
+      setError(`Couldn’t save the project: ${errorMessage(cause)}`);
       return false;
     } finally {
       saving.current = false;
+    }
+  };
+
+  // No path: the native picker asks. The current project stays as is unless the new one loads.
+  const openProject = async (path?: string) => {
+    if (!window.api) return;
+    try {
+      const result = await window.api.openProject(path ? { path } : {});
+      if (!result) return;
+      if (!result.ok) throw new Error(result.message);
+      const { data, description, masterfiles, name } = loadCfbsProject(result.cfbs, folderNameOf(result.path));
+      dispatch(projectLoaded({ description, masterfiles, name, path: result.path }, data));
+      dispatch(historyCleared());
+      markSaved();
+    } catch (cause) {
+      setError(`Couldn’t open the project: ${errorMessage(cause)}`);
     }
   };
 
@@ -135,13 +152,14 @@ export function useProjectSession() {
   return {
     closeProjectDialog,
     dirty,
-    dismissSaveError: () => setSaveError(null),
+    dismissError: () => setError(null),
+    error,
     newProject: () => guarded(() => setProjectDialog('new')),
+    openProject: (path?: string) => guarded(() => void openProject(path)),
     project,
     projectDialog,
     requestClose: () => guarded(() => window.api?.confirmWindowClose()),
     save,
-    saveError,
     startDemo: () =>
       guarded(() => {
         createNginxDemoProject(dispatch);
