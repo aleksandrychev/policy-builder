@@ -3,6 +3,7 @@ import { executionOrder } from '../canvas/executionOrder';
 import type { RootState } from '../store';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
+import filesReducer, { projectFilesInitialized } from '../store/filesSlice';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
@@ -162,8 +163,13 @@ const builderMetaOf = (entry: unknown): Record<string, unknown> | undefined => {
 const listOf = <T>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
 
 function checkSchemaVersion(version: unknown) {
-  if (typeof version !== 'number' || version > SCHEMA_VERSION) {
-    throw new Error(`Unsupported project schema version ${version}; this app supports up to ${SCHEMA_VERSION}`);
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new Error('The project’s builder data is corrupt (no valid schema version)');
+  }
+  if (version > SCHEMA_VERSION) {
+    throw new Error(
+      `This project was made with a newer version of CFEngine Policy Builder (schema version ${version}; this app supports up to ${SCHEMA_VERSION}). Update the app to open it.`
+    );
   }
 }
 
@@ -209,6 +215,40 @@ export function fromCfbsProject(json: unknown): ProjectData {
     files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
     groups: perFile(file => (isObject(file.layout) ? file.layout.groups : undefined))
   };
+}
+
+export interface LoadedProject {
+  data: ProjectData;
+  description: string;
+  masterfiles: string | null;
+  name: string;
+}
+
+// The masterfiles build entry's release, "master" for a branch/URL one, null without.
+function masterfilesOf(build: unknown[]): string | null {
+  const entry = build.find(item => isObject(item) && typeof item.name === 'string' && /(^|\/)masterfiles$/.test(item.name)) as
+    Record<string, unknown> | undefined;
+  if (!entry) return null;
+  if (typeof entry.version === 'string' && /^\d+\.\d+\.\d+(-\d+)?$/.test(entry.version)) return entry.version;
+  return typeof entry.url === 'string' || typeof entry.branch === 'string' ? 'master' : typeof entry.version === 'string' ? entry.version : null;
+}
+
+/**
+ * An opened project's cfbs.json → what goes into the store. A cfbs project
+ * without builder data opens with one empty policy file named after it.
+ */
+export function loadCfbsProject(json: unknown, folderName: string): LoadedProject {
+  if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
+  const name = (typeof json.name === 'string' && json.name.trim()) || folderName;
+  const description = typeof json.description === 'string' ? json.description : '';
+  const masterfiles = masterfilesOf(Array.isArray(json.build) ? json.build : []);
+  if (isObject(json.meta) && json.meta[META_KEY] !== undefined && !isObject(json.meta[META_KEY])) {
+    throw new Error(`The project’s builder data is corrupt ("meta"."${META_KEY}" is not an object)`);
+  }
+  const data = builderMetaOf(json) ? fromCfbsProject(json) : null;
+  if (data && data.files.files.length > 0) return { data, description, masterfiles, name };
+  const files = filesReducer(undefined, projectFilesInitialized(name));
+  return { data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [] }, description, masterfiles, name };
 }
 
 /** The project folder's name for a project name: "Web Server Hardening" → "web-server-hardening". */

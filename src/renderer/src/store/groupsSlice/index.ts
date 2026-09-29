@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { blocksRemovedForFile } from '../canvasSlice';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 import { groupCreated, groupRemoved } from './actions';
 import type { BlockGroup, GroupColor } from './types';
 
@@ -29,6 +29,7 @@ const groupsSlice = createSlice({
   extraReducers: builder => {
     builder
       .addCase(projectCreated, () => [])
+      .addCase(projectLoaded, (_state, action) => action.payload.content.groups)
       .addCase(groupCreated, (state, action) => {
         const { color, fileId, id, name } = action.payload;
         state.push({ color, fileId, id, name });

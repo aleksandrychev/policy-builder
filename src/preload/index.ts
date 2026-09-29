@@ -1,6 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
-import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, TargetCheck } from './api';
+import type { CreateProjectRequest, MasterfilesVersions, OpenedProject, OperationResult, ProjectContent, RecentProject, TargetCheck } from './api';
 
 // Everything the renderer can ask the main process to do goes through this
 // typed bridge (see api.d.ts — the filename is load-bearing, see the note
@@ -22,24 +22,27 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'save' | 'try-demo';
+export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'recents-changed' | 'save' | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:new-project': 'new-project',
   'menu:open-project': 'open-project',
+  // Carries the project path.
+  'menu:open-recent': 'open-recent',
   'menu:save': 'save',
   'menu:try-demo': 'try-demo',
   // Not a menu item: main asking whether a window with unsaved changes may close.
-  'window:close-requested': 'close-requested'
+  'window:close-requested': 'close-requested',
+  'window:recents-changed': 'recents-changed'
 };
 
 // Menu clicks fire in the main process (see main/index.ts's
 // buildApplicationMenu), so the renderer hears about them as events rather
 // than a request/response — unlike everything else in `api`, which the
 // renderer calls to ask main to do something.
-function onMenuAction(callback: (action: MenuAction) => void): () => void {
+function onMenuAction(callback: (action: MenuAction, path?: string) => void): () => void {
   const listeners = Object.entries(MENU_CHANNELS).map(([channel, action]) => {
-    const listener = () => callback(action);
+    const listener = (_event: unknown, path?: unknown) => callback(action, typeof path === 'string' ? path : undefined);
     ipcRenderer.on(channel, listener);
     return { channel, listener };
   });
@@ -52,7 +55,7 @@ const api = {
   /** Returns whether the OS currently prefers a dark color scheme. */
   shouldUseDarkColors: (): Promise<boolean> => invoke('theme:should-use-dark'),
 
-  /** Subscribes to native menu clicks and window-close requests; call the returned function to unsubscribe. */
+  /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
   onMenuAction,
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */
@@ -75,6 +78,18 @@ const api = {
 
   /** Runs `cfbs init` into parent/folderName, then writes the builder's content into its cfbs.json. */
   createProject: (request: CreateProjectRequest): Promise<OperationResult<{ masterfiles: string | null; path: string }>> => invoke('project:create', request),
+
+  /** Reads a project's cfbs.json: `path` is its folder or the cfbs.json; without one, a native picker asks (null: cancelled). */
+  openProject: (request: { path?: string } = {}): Promise<OperationResult<OpenedProject> | null> => invoke('project:open', request),
+
+  /** The last few opened/created projects, most recent first. */
+  getRecentProjects: (): Promise<RecentProject[]> => invoke('project:recents'),
+
+  /** Removes a project from the recent-projects list. */
+  forgetRecentProject: (path: string): Promise<void> => invoke('project:forget-recent', { path }),
+
+  /** The file-system path of a File dropped onto the window. */
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   /** Merges the builder's content into the project's cfbs.json. */
   saveProject: (path: string, content: ProjectContent): Promise<OperationResult<object>> => invoke('project:save', { path, ...content }),

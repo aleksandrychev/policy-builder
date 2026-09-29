@@ -5,7 +5,7 @@ import type { Project } from '../store/projectSlice/types';
 const MAX_PATH_CHARS = 48;
 
 // Keeps both ends of a long path: "/Users/me/…/policies/web".
-function middleTruncate(text: string, max = MAX_PATH_CHARS): string {
+export function middleTruncate(text: string, max = MAX_PATH_CHARS): string {
   if (text.length <= max) return text;
   const head = Math.ceil((max - 1) / 2);
   return `${text.slice(0, head)}…${text.slice(text.length - (max - 1 - head))}`;

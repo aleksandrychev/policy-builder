@@ -5,7 +5,7 @@ import { derivedNodeMoved } from '../store/derivedNodesSlice';
 import { fileAdded, fileConditionClassNameChanged, fileConditionEnabled, folderAdded } from '../store/filesSlice';
 import { groupCreated } from '../store/groupsSlice';
 import { addBlock, makeStore } from '../store/test/storeTestUtils';
-import { META_KEY, SCHEMA_VERSION, fromCfbsProject, toCfbsProject } from './cfbsProject';
+import { META_KEY, SCHEMA_VERSION, fromCfbsProject, loadCfbsProject, toCfbsProject } from './cfbsProject';
 
 function buildProject() {
   const store = makeStore();
@@ -92,5 +92,57 @@ describe('cfbsProject', () => {
     const content = toCfbsProject(state);
     content.meta[META_KEY].schema_version = SCHEMA_VERSION + 1;
     expect(() => fromCfbsProject(asCfbsJson(content))).toThrow(/schema version/);
+  });
+});
+
+describe('loadCfbsProject', () => {
+  it('loads a builder project with its name, description and masterfiles version', () => {
+    const { state } = buildProject();
+    const json = asCfbsJson(toCfbsProject(state), { name: 'Web', description: 'Hardening', type: 'policy-set' });
+
+    const loaded = loadCfbsProject(json, 'web');
+
+    expect(loaded).toMatchObject({ name: 'Web', description: 'Hardening', masterfiles: '3.27.1' });
+    expect(loaded.data.files).toEqual(state.files);
+    expect(loaded.data.edges).toEqual(state.edges);
+  });
+
+  it('opens a cfbs project without builder data with one empty file named after it', () => {
+    const json = { name: 'Plain', type: 'policy-set', build: [{ name: 'masterfiles', url: 'https://github.com/cfengine/masterfiles', branch: 'master' }] };
+
+    const { data, masterfiles: version, name } = loadCfbsProject(json, 'plain');
+
+    expect(name).toBe('Plain');
+    expect(version).toBe('master');
+    expect(data.files.files).toHaveLength(1);
+    expect(data.files.files[0]).toMatchObject({ name: 'Plain', parentId: null });
+    expect(data.files.currentFileId).toBe(data.files.files[0].id);
+    expect(data).toMatchObject({ canvas: [], edges: [], groups: [], derivedNodes: {} });
+  });
+
+  it('falls back to the folder name, and no masterfiles', () => {
+    const loaded = loadCfbsProject({ build: [] }, 'my-policy');
+    expect(loaded).toMatchObject({ name: 'my-policy', description: '', masterfiles: null });
+  });
+
+  it('refuses a project made by a newer builder', () => {
+    const json = { name: 'x', build: [], meta: { [META_KEY]: { schema_version: SCHEMA_VERSION + 1 } } };
+    expect(() => loadCfbsProject(json, 'x')).toThrow(/newer version of CFEngine Policy Builder/);
+  });
+
+  it.each([
+    ['not an object', [1, 2]],
+    ['null', null],
+    ['non-object builder meta', { name: 'x', meta: { [META_KEY]: 'yes' } }],
+    ['builder meta without a schema version', { name: 'x', meta: { [META_KEY]: {} } }]
+  ])('refuses %s', (_what, json) => {
+    expect(() => loadCfbsProject(json, 'x')).toThrow();
+  });
+
+  it('tolerates corrupt per-file lists', () => {
+    const file = { id: 'f1', name: 'A', namespace: 'a', path: './policy/a.cf', blocks: 'oops', layout: 'oops' };
+    const { data } = loadCfbsProject({ build: [], meta: { [META_KEY]: { schema_version: SCHEMA_VERSION, files: [file] } } }, 'x');
+    expect(data.canvas).toEqual([]);
+    expect(data.files.files).toEqual([{ id: 'f1', name: 'A', namespace: 'a', parentId: null }]);
   });
 });

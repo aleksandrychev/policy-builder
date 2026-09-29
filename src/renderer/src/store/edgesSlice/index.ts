@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { blockRemoved, blocksRemovedForFile } from '../canvasSlice';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 import type { BlockEdge, BlockOutcome } from './types';
 
 const edgesSlice = createSlice({
@@ -31,6 +31,7 @@ const edgesSlice = createSlice({
   extraReducers: builder => {
     builder
       .addCase(projectCreated, () => [])
+      .addCase(projectLoaded, (_state, action) => action.payload.content.edges)
       .addCase(blockRemoved, (state, action) => state.filter(edge => edge.source !== action.payload.instanceId && edge.target !== action.payload.instanceId))
       .addCase(blocksRemovedForFile, (state, action) => state.filter(edge => edge.fileId !== action.payload.fileId));
   }

@@ -1,6 +1,6 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
-import type { Project } from './types';
+import type { Project, ProjectContentState } from './types';
 
 type NewProject = Pick<Project, 'name'> & Partial<Omit<Project, 'id' | 'name'>>;
 
@@ -17,6 +17,15 @@ const projectSlice = createSlice({
         return { payload: { description, id: crypto.randomUUID(), masterfiles, name, path } };
       }
     },
+    // An existing project opened from disk: every content slice takes its part of `content`.
+    projectLoaded: {
+      reducer(_state, action: PayloadAction<{ content: ProjectContentState; project: Project }>) {
+        return action.payload.project;
+      },
+      prepare(project: Omit<Project, 'id'>, content: ProjectContentState) {
+        return { payload: { content, project: { ...project, id: crypto.randomUUID() } } };
+      }
+    },
     // An in-memory project got its folder on disk ("Save Project As"); content stays as is.
     projectLocated(state, action: PayloadAction<Pick<Project, 'description' | 'masterfiles' | 'name' | 'path'>>) {
       if (state) Object.assign(state, action.payload);
@@ -24,5 +33,5 @@ const projectSlice = createSlice({
   }
 });
 
-export const { projectCreated, projectLocated } = projectSlice.actions;
+export const { projectCreated, projectLoaded, projectLocated } = projectSlice.actions;
 export default projectSlice.reducer;

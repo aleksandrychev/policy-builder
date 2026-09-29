@@ -7,7 +7,7 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'save' | 'try-demo';
+type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'recents-changed' | 'save' | 'try-demo';
 
 // What the builder writes into cfbs.json: its entry in the top-level `meta`, and one module per policy file.
 export interface ProjectContent {
@@ -33,6 +33,19 @@ export interface MasterfilesVersions {
   lts: string;
 }
 
+export interface OpenedProject {
+  // The parsed cfbs.json.
+  cfbs: Record<string, unknown>;
+  path: string;
+}
+
+export interface RecentProject {
+  // False once the folder or its cfbs.json is gone.
+  exists: boolean;
+  name: string;
+  path: string;
+}
+
 export interface TargetCheck {
   parentWritable: boolean;
   targetState: 'empty' | 'new' | 'nonEmpty';
@@ -49,6 +62,8 @@ declare global {
       confirmWindowClose: () => Promise<void>;
       /** Runs `cfbs init` into parent/folderName, then writes the builder's content into its cfbs.json. */
       createProject: (request: CreateProjectRequest) => Promise<OperationResult<{ masterfiles: string | null; path: string }>>;
+      /** Removes a project from the recent-projects list. */
+      forgetRecentProject: (path: string) => Promise<void>;
       /** Formats CFEngine policy, rejecting with a message if it cannot. */
       formatPolicy: (source: string) => Promise<string>;
       /** The folder new projects go in by default: the last one used, else ~/Documents. */
@@ -57,10 +72,16 @@ declare global {
       getLayoutSettings: () => Promise<LayoutSettings | null>;
       /** Newest 3.27.x and 3.24.x masterfiles releases (built-in fallback when offline). */
       getMasterfilesVersions: () => Promise<MasterfilesVersions>;
+      /** The file-system path of a File dropped onto the window. */
+      getPathForFile: (file: File) => string;
+      /** The last few opened/created projects, most recent first. */
+      getRecentProjects: () => Promise<RecentProject[]>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
-      /** Subscribes to native menu clicks and window-close requests; call the returned function to unsubscribe. */
-      onMenuAction: (callback: (action: MenuAction) => void) => () => void;
+      /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
+      onMenuAction: (callback: (action: MenuAction, path?: string) => void) => () => void;
+      /** Reads a project's cfbs.json: `path` is its folder or the cfbs.json; without one, a native picker asks (null: cancelled). */
+      openProject: (request?: { path?: string }) => Promise<OperationResult<OpenedProject> | null>;
       /** Opens a native folder picker, or null if cancelled. */
       pickDirectory: (defaultPath?: string) => Promise<string | null>;
       /** Shows the project's cfbs.json in the OS file manager. */
