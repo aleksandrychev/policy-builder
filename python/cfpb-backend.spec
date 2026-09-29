@@ -17,7 +17,8 @@ for package in ("tree_sitter", "tree_sitter_cfengine"):
     binaries += package_binaries
 
 # Named so a missing module fails the build, not the packaged app.
-hiddenimports = ["cfengine_cli.format", "cfengine_cli.lint", "cfbs.pretty"]
+# cfbs.main is imported lazily by `init`; its own imports are all static.
+hiddenimports = ["cfengine_cli.format", "cfengine_cli.lint", "cfbs.main", "cfbs.pretty"]
 
 a = Analysis(
     ["cfpb_backend.py"],
