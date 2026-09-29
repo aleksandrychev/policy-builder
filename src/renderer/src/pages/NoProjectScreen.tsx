@@ -4,11 +4,10 @@ import { Box, Button, ButtonBase, Divider, Stack, Typography } from '@mui/materi
 
 import { StatusBar } from '../components/StatusBar';
 import { BlockNodesIcon } from '../components/icons/BlockNodesIcon';
-import { createNginxDemoProject } from '../demo/nginxDemoProject';
-import { useAppDispatch } from '../store';
 
 interface NoProjectScreenProps {
   onNewProject: () => void;
+  onTryDemo: () => void;
 }
 
 /**
@@ -17,9 +16,7 @@ interface NoProjectScreenProps {
  * File menu's "New Project…" needs to open it regardless of which screen
  * is currently showing, not just from this one's button.
  */
-export default function NoProjectScreen({ onNewProject }: NoProjectScreenProps) {
-  const dispatch = useAppDispatch();
-
+export default function NoProjectScreen({ onNewProject, onTryDemo }: NoProjectScreenProps) {
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
       <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', px: 3, pb: 10 }}>
@@ -43,7 +40,7 @@ export default function NoProjectScreen({ onNewProject }: NoProjectScreenProps) 
           </Divider>
 
           <ButtonBase
-            onClick={() => createNginxDemoProject(dispatch)}
+            onClick={onTryDemo}
             sx={{
               width: '100%',
               mt: 3,

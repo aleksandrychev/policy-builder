@@ -7,8 +7,11 @@ export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results &
 interface TopBarProps {
   activeTab: number;
   blockCount: number;
+  // Unsaved changes since the last save.
+  dirty: boolean;
   // "runs only if linux", when the open file is gated.
   fileGate?: string;
+  masterfiles: string | null;
   namespace: string;
   onTabChange: (index: number) => void;
   projectName: string;
@@ -30,7 +33,7 @@ const chipSx = {
   maxWidth: 200
 } as const;
 
-export function TopBar({ projectName, namespace, fileGate, blockCount, activeTab, onTabChange }: TopBarProps) {
+export function TopBar({ projectName, dirty, masterfiles, namespace, fileGate, blockCount, activeTab, onTabChange }: TopBarProps) {
   return (
     <Box
       component="header"
@@ -48,7 +51,15 @@ export function TopBar({ projectName, namespace, fileGate, blockCount, activeTab
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, height: '100%' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <BlockNodesIcon size={18} color="primary.main" />
-          <Typography sx={{ fontSize: 16, fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap' }}>{projectName}</Typography>
+          <Typography sx={{ fontSize: 16, fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap' }}>
+            {projectName}
+            {dirty && (
+              <Box component="span" title="Unsaved changes" aria-label="Unsaved changes" sx={{ color: 'text.muted', ml: 0.75 }}>
+                •
+              </Box>
+            )}
+          </Typography>
+          {masterfiles && <Typography sx={chipSx}>masterfiles {masterfiles}</Typography>}
           <Typography sx={chipSx}>namespace: {namespace}</Typography>
           {fileGate && (
             <Typography title="The whole file is gated by this condition" sx={chipSx}>

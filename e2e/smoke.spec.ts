@@ -33,6 +33,8 @@ test.afterEach(async ({}, testInfo) => {
     await window.screenshot({ path });
     await testInfo.attach('screenshot', { path, contentType: 'image/png' });
   }
+  // exit() skips the unsaved-changes prompt a plain close() would wait on.
+  await app?.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {});
   await app?.close();
   rmSync(userDataDir, { recursive: true, force: true });
 });
@@ -85,6 +87,17 @@ test('demo project: switch files, delete + undo, add and rename a block', async 
   await test.step('editing the label in Properties updates the canvas', async () => {
     await window.getByLabel('Label').fill('Copy the motd');
     await expect(window.locator('.react-flow').getByText('Copy the motd', { exact: true })).toBeVisible();
+  });
+
+  await test.step('closing the window with unsaved changes asks first', async () => {
+    await expect
+      .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle()))
+      .toBe('Nginx Web Server Demo — CFEngine Policy Builder');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    const prompt = window.getByRole('dialog', { name: /save changes/i });
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Cancel' }).click();
+    await expect(prompt).toBeHidden();
   });
 
   expect(consoleErrors, 'console errors during the run').toEqual([]);
