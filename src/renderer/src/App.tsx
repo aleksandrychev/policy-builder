@@ -1,24 +1,35 @@
-import { Box, Container, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 
-import PolicyFormatter from './components/PolicyFormatter';
+import { NewProjectDialog } from './components/dialogs/NewProjectDialog';
+import { createNginxDemoProject } from './demo/nginxDemoProject';
+import NoProjectScreen from './pages/NoProjectScreen';
+import ProjectView from './pages/ProjectView';
+import { useAppDispatch, useAppSelector } from './store';
+import { selectCurrentProject } from './store/projectSlice/selectors';
 
-/**
- * Placeholder landing screen. Its job right now is to prove the Mission Portal
- * theme is wired end-to-end (typography, palette, component overrides) and that
- * the Python sidecar is reachable.
- */
 export default function App() {
+  const dispatch = useAppDispatch();
+  const project = useAppSelector(selectCurrentProject);
+  // Owned here, not by NoProjectScreen, so the native File menu's "New
+  // Project…" (main/index.ts's buildApplicationMenu) can open it regardless
+  // of which screen is currently showing.
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+
+  useEffect(
+    () =>
+      window.api?.onMenuAction(action => {
+        if (action === 'new-project') setNewProjectOpen(true);
+        else if (action === 'try-demo') createNginxDemoProject(dispatch);
+        // 'open-project' has no renderer behavior yet — mirrors the
+        // still-inert "Open Project…" button on NoProjectScreen.
+      }),
+    [dispatch]
+  );
+
   return (
-    <Container maxWidth="md" sx={{ py: 6 }}>
-      <Stack spacing={4}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, mt: 1 }}>
-            CFEngine Policy Builder
-          </Typography>
-          <Typography color="text.muted">Build valid CFEngine policy visually — Electron + React shell with the Mission Portal theme.</Typography>
-        </Box>
-        <PolicyFormatter />
-      </Stack>
-    </Container>
+    <>
+      {project ? <ProjectView key={project.id} /> : <NoProjectScreen onNewProject={() => setNewProjectOpen(true)} />}
+      <NewProjectDialog open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+    </>
   );
 }
