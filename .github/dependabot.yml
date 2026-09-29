@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Its own PR: a Playwright bump can break the E2E job on its own. Must stay
+      # first, since a dependency joins the first group it matches.
+      e2e:
+        patterns: ['@playwright/*', 'playwright', 'playwright-core']
       production:
         dependency-type: production
       development:
