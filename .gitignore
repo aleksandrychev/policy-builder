@@ -157,3 +157,7 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 python/build/
+
+# Playwright (e2e/)
+test-results/
+playwright-report/

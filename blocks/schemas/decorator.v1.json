@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfengine.com/policy-builder/schemas/decorator.v1.json",
+  "title": "Decorators",
+  "description": "The shared library of value transforms a Define Variable value source (or a data-fed parameter) can be chained through. Consumed by the renderer and by the Python compiler — see blocks/README.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decorators"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "decorators": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decorator"
+      }
+    }
+  },
+  "$defs": {
+    "decorator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "input_type",
+        "output_type",
+        "parameters"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "expression"
+          ]
+        },
+        {
+          "required": [
+            "fallback"
+          ]
+        }
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "label": {
+          "type": "string"
+        },
+        "badge": {
+          "type": "string"
+        },
+        "help": {
+          "type": "string"
+        },
+        "input_type": {
+          "enum": [
+            "string",
+            "slist"
+          ],
+          "description": "What it takes from the previous step (an int counts as a string)."
+        },
+        "output_type": {
+          "enum": [
+            "string",
+            "slist",
+            "int"
+          ],
+          "description": "What it produces. int (length) is a string to later steps, but the compiler declares the variable int when it's the last step — string => length(...) is a fatal error on an unresolved list."
+        },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "$ref": "common.v1.json#/$defs/parameter"
+          }
+        },
+        "expression": {
+          "$ref": "common.v1.json#/$defs/expression",
+          "description": "Wraps the incoming value, which appears as {\"previous\": \"value\"}; nested inline."
+        },
+        "fallback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "trigger",
+            "value"
+          ],
+          "description": "Instead of an expression: the incoming value is stored in an intermediate var (<name>__in), and the result is that value unless it's undefined (e.g. the file was missing) or equals `trigger`, else `value` — two promises, since a function over an undefined var never evaluates at all.",
+          "properties": {
+            "trigger": {
+              "$ref": "common.v1.json#/$defs/template"
+            },
+            "value": {
+              "$ref": "common.v1.json#/$defs/template"
+            }
+          }
+        }
+      }
+    }
+  }
+}

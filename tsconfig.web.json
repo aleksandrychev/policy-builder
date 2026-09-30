@@ -9,10 +9,17 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"]
+    "types": ["node", "vite/client", "vitest/globals", "@testing-library/jest-dom"],
+    "paths": {
+      // Only needed for direct (non-glob) imports like decorators.ts's —
+      // import.meta.glob('@blocks/*.json') calls elsewhere are a Vite-only
+      // macro string TS doesn't resolve as a module specifier.
+      "@blocks/*": ["./blocks/*"]
+    }
   },
   "include": ["src/renderer/**/*", "src/preload/*.d.ts"]
 }

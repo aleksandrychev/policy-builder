@@ -9,7 +9,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@renderer': resolve('src/renderer/src')
+      '@renderer': resolve('src/renderer/src'),
+      // Built-in block descriptors live at repo root (blocks/) — see blocks/README.md.
+      '@blocks': resolve('blocks')
     }
   },
   test: {

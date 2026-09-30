@@ -1,0 +1,70 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "render-template",
+  "version": 1,
+  "name": "Render Template",
+  "category": "Files",
+  "description": "Renders a Mustache template to a destination file.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{destination}}",
+      "attributes": {
+        "create": "true",
+        "edit_template_string": "{{template_content}}",
+        "template_method": "inline_mustache",
+        "perms": {
+          "body": "mog",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "destination",
+      "label": "Destination path",
+      "type": "string",
+      "required": true,
+      "help": "The file rendered on the managed host, e.g. /etc/nginx/nginx.conf.",
+      "path": "absolute"
+    },
+    {
+      "name": "template_content",
+      "label": "Template content",
+      "type": "text",
+      "required": true,
+      "mustache": true,
+      "help": "Mustache: {{{vars.<namespace>:vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<namespace>:<class>}}…{{/classes.<namespace>:<class>}} keeps a section only while the class is set. $(name) is expanded by CFEngine first."
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "644",
+      "allowed_chars": "0-7"
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

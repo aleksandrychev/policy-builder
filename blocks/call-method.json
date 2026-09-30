@@ -1,0 +1,37 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "call-method",
+  "version": 1,
+  "name": "Call Method",
+  "category": "Methods",
+  "description": "Calls a bundle outside this canvas: stdlib, a module, or hand-written CFEngine.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "methods",
+      "promiser": "{{label}}",
+      "attributes": {
+        "usebundle": {
+          "bundle": "{{bundle_name}}"
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "label",
+      "label": "Label",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "bundle_name",
+      "label": "Bundle name",
+      "type": "string",
+      "required": true,
+      "allowed_chars": "a-zA-Z0-9_:",
+      "help": "A bundle that already exists elsewhere — CFEngine's standard library, a cfbs module, or one you wrote by hand — e.g. \"default:my_bundle\". Without a namespace it's looked up in default. Canvas blocks call each other automatically; this isn't for that. Takes no arguments."
+    }
+  ]
+}

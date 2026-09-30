@@ -1,0 +1,485 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "define-variable",
+  "version": 1,
+  "name": "Define Variable",
+  "category": "Variables & Classes",
+  "description": "Defines one or more variables other blocks can reference.",
+  "compile_target": "file_vars",
+  "entries": {
+    "name_param": "variable_name",
+    "noun": "variable",
+    "noun_plural": "variables"
+  },
+  "parameters": [
+    {
+      "name": "variable_name",
+      "label": "Variable name",
+      "type": "string",
+      "required": true,
+      "allowed_chars": "a-zA-Z0-9_",
+      "help": "Letters, numbers, and underscores only."
+    }
+  ],
+  "value_sources": [
+    {
+      "id": "literal",
+      "label": "Literal",
+      "badge": "string",
+      "value_type": "string",
+      "literal": true,
+      "parameters": [
+        {
+          "name": "value",
+          "label": "Value",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": "{{value}}"
+          }
+        }
+      ]
+    },
+    {
+      "id": "list",
+      "label": "List",
+      "badge": "slist",
+      "value_type": "slist",
+      "literal": true,
+      "parameters": [
+        {
+          "name": "items",
+          "label": "Items",
+          "type": "text",
+          "required": true,
+          "allow_list": true,
+          "help": "One item per line."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "slist": {
+              "list_param": "items"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "structured-data-literal",
+      "label": "Structured data (literal)",
+      "badge": "parsejson()",
+      "value_type": "data",
+      "literal": true,
+      "parameters": [
+        {
+          "name": "json",
+          "label": "JSON",
+          "type": "text",
+          "required": true,
+          "help": "A JSON object or array, e.g. { \"key\": \"value\" }."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "data": {
+              "call": "parsejson",
+              "args": [
+                "{{json}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "variable",
+      "label": "Variable",
+      "badge": "$(…)",
+      "value_type": "string",
+      "parameters": [
+        {
+          "name": "from_variable",
+          "label": "Variable",
+          "type": "string",
+          "required": true,
+          "references": "variable",
+          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "variable": "{{from_variable}}",
+              "as": "scalar"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "list-variable",
+      "label": "List variable",
+      "badge": "@(…)",
+      "value_type": "slist",
+      "parameters": [
+        {
+          "name": "from_variable",
+          "label": "List variable",
+          "type": "string",
+          "required": true,
+          "references": "variable",
+          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "slist": {
+              "variable": "{{from_variable}}",
+              "as": "list"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "command-output",
+      "label": "Command output",
+      "badge": "execresult()",
+      "value_type": "string",
+      "parameters": [
+        {
+          "name": "command",
+          "label": "Command",
+          "type": "string",
+          "required": true,
+          "help": "Start with an absolute path (/usr/bin/…) — a relative one leaves the variable undefined."
+        },
+        {
+          "name": "shell_mode",
+          "label": "Shell mode",
+          "type": "string",
+          "required": true,
+          "default": "noshell",
+          "options": [
+            {
+              "value": "noshell",
+              "label": "No shell"
+            },
+            {
+              "value": "useshell",
+              "label": "Through the shell (pipes, redirects)"
+            },
+            {
+              "value": "powershell",
+              "label": "PowerShell (Windows only)"
+            }
+          ],
+          "help": "With the shell, write a shell $( ) as $(const.dollar)( ): $(name) is a CFEngine variable."
+        },
+        {
+          "name": "output",
+          "label": "Capture",
+          "type": "string",
+          "required": true,
+          "default": "stdout",
+          "options": [
+            {
+              "value": "stdout",
+              "label": "Standard output"
+            },
+            {
+              "value": "stderr",
+              "label": "Standard error"
+            },
+            {
+              "value": "both",
+              "label": "Both"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "call": "execresult",
+              "args": [
+                "{{command}}",
+                "{{shell_mode}}",
+                "{{output}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "file-lines",
+      "label": "File lines",
+      "badge": "readstringlist()",
+      "help": "Reads the file as a list of lines — chain \"Keep matching entries (grep)\" and/or \"Count entries\" below to build things like a CPU count from /proc/cpuinfo.",
+      "value_type": "slist",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "File path",
+          "type": "string",
+          "required": true,
+          "help": "E.g. /proc/cpuinfo.",
+          "path": "absolute"
+        },
+        {
+          "name": "comment",
+          "label": "Skip lines matching",
+          "type": "string",
+          "required": false,
+          "default": "",
+          "help": "A regex applied to the whole file, not line by line: use #[^\\n]* for # comments (#.* would drop everything after the first #). Blank keeps every line. Empty lines are always dropped."
+        },
+        {
+          "name": "split",
+          "label": "Split on (regex)",
+          "type": "string",
+          "required": true,
+          "default": "\\n"
+        },
+        {
+          "name": "max_entries",
+          "label": "Max entries",
+          "type": "number",
+          "required": true,
+          "default": 1000,
+          "integer": true,
+          "minimum": 1
+        },
+        {
+          "name": "max_bytes",
+          "label": "Max bytes",
+          "type": "number",
+          "required": true,
+          "default": 1048576,
+          "integer": true,
+          "minimum": 1
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "slist": {
+              "call": "readstringlist",
+              "args": [
+                "{{path}}",
+                "{{comment}}",
+                "{{split}}",
+                "{{max_entries}}",
+                "{{max_bytes}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "file-content",
+      "label": "File content",
+      "badge": "readfile()",
+      "value_type": "string",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "File path",
+          "type": "string",
+          "required": true,
+          "path": "absolute"
+        },
+        {
+          "name": "max_size",
+          "label": "Max bytes",
+          "type": "number",
+          "required": true,
+          "default": 16384,
+          "integer": true,
+          "minimum": 1,
+          "help": "Maximum bytes readfile() reads from the file."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "call": "readfile",
+              "args": [
+                "{{path}}",
+                "{{max_size}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "file-metadata",
+      "label": "File metadata",
+      "badge": "filestat()",
+      "value_type": "string",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "File path",
+          "type": "string",
+          "required": true,
+          "path": "absolute"
+        },
+        {
+          "name": "attribute",
+          "label": "Attribute",
+          "type": "string",
+          "required": true,
+          "default": "size",
+          "options": [
+            "size",
+            "gid",
+            "uid",
+            "ino",
+            "nlink",
+            "ctime",
+            "atime",
+            "mtime",
+            "xattr",
+            "mode",
+            "modeoct",
+            "permstr",
+            "permoct",
+            "type",
+            "devno",
+            "dev_minor",
+            "dev_major",
+            "basename",
+            "dirname",
+            "linktarget",
+            "linktarget_shallow"
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "call": "filestat",
+              "args": [
+                "{{path}}",
+                "{{attribute}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "environment-variable",
+      "label": "Environment variable",
+      "badge": "getenv()",
+      "value_type": "string",
+      "parameters": [
+        {
+          "name": "env_var_name",
+          "label": "Environment variable name",
+          "type": "string",
+          "required": true,
+          "allowed_chars": "a-zA-Z0-9_"
+        },
+        {
+          "name": "max_size",
+          "label": "Max characters",
+          "type": "number",
+          "required": true,
+          "default": 1024,
+          "integer": true,
+          "minimum": 1
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "call": "getenv",
+              "args": [
+                "{{env_var_name}}",
+                "{{max_size}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "structured-data-json",
+      "label": "Structured data (JSON)",
+      "badge": "readjson()",
+      "value_type": "data",
+      "parameters": [
+        {
+          "name": "path",
+          "label": "File path",
+          "type": "string",
+          "required": true,
+          "path": "absolute"
+        },
+        {
+          "name": "max_size",
+          "label": "Max bytes",
+          "type": "number",
+          "required": true,
+          "default": 1048576,
+          "integer": true,
+          "minimum": 1
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "data": {
+              "call": "readjson",
+              "args": [
+                "{{path}}",
+                "{{max_size}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

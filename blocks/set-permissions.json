@@ -1,0 +1,61 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "set-permissions",
+  "version": 1,
+  "name": "Set Permissions",
+  "category": "Files",
+  "description": "Enforces ownership and mode on one or more paths, without managing content.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "perms": {
+          "body": "mog_dirs",
+          "lib": "builder",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "Path",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One absolute path per line.",
+      "path": "absolute"
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "644",
+      "allowed_chars": "0-7",
+      "help": "Directories keep their execute bits, so they stay enterable."
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

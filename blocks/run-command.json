@@ -1,0 +1,62 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "run-command",
+  "version": 1,
+  "name": "Run Command",
+  "category": "Commands",
+  "description": "Runs a command via the shell.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "commands",
+      "promiser": "{{command}}",
+      "attributes": {
+        "contain": {
+          "body": "in_shell"
+        },
+        "action": {
+          "if_set": "run_interval",
+          "value": {
+            "body": "if_elapsed",
+            "args": [
+              "{{run_interval}}"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "command",
+      "label": "Command",
+      "type": "text",
+      "required": true,
+      "help": "Start with an absolute path (/usr/bin/…). $(name) is a CFEngine variable, so write a shell $( ) as $(const.dollar)( )."
+    },
+    {
+      "name": "run_interval",
+      "label": "How often",
+      "type": "string",
+      "required": false,
+      "default": "1440",
+      "options": [
+        {
+          "value": "",
+          "label": "Every agent run"
+        },
+        {
+          "value": "60",
+          "label": "At most once an hour"
+        },
+        {
+          "value": "1440",
+          "label": "At most once a day"
+        }
+      ],
+      "help": "A command runs every time the agent does (every 5 minutes by default) unless limited here."
+    }
+  ]
+}
