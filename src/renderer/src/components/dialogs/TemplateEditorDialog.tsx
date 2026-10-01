@@ -2,7 +2,7 @@ import { type KeyboardEvent, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
-import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography, useTheme } from '@mui/material';
 
 import { autocompletion } from '@codemirror/autocomplete';
 import { EditorView } from '@codemirror/view';
@@ -144,6 +144,7 @@ function TokenGroup({
 }
 
 export function TemplateEditorDialog({ open, title, value, variables, mustache, onClose, onSave }: TemplateEditorDialogProps) {
+  const theme = useTheme();
   // The parent unmounts this dialog on close (conditional render), so a fresh
   // mount is guaranteed each time it opens — no effect needed to resync `draft`.
   const [draft, setDraft] = useState(value);
@@ -204,6 +205,7 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
             ref={(instance: ReactCodeMirrorRef | null) => setEditorView(instance?.view ?? null)}
             value={draft}
             onChange={setDraft}
+            theme={theme.palette.mode}
             height="100%"
             style={{ height: '100%', fontSize: 13 }}
             extensions={extensions}
