@@ -824,7 +824,9 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
           blockCount={instances.length}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          onSave={onSave}
           onOpenSettings={onOpenSettings}
+          savedToDisk={Boolean(project.path)}
           type={project.type}
         />
 

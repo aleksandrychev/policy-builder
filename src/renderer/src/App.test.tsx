@@ -38,6 +38,9 @@ describe('App', () => {
     expect(screen.getByText(/project: web server hardening/i)).toBeInTheDocument();
     // Appears in both the top bar's namespace badge and the status bar.
     expect(screen.getAllByText(/bundle: web_server_hardening/i).length).toBeGreaterThan(0);
+    // Not on disk (no desktop app in tests), so saving means choosing where first.
+    // (By text: the closing New Project dialog still hides the page from role queries.)
+    expect(screen.getByText('Save As…').closest('button')).toBeEnabled();
   });
 
   it('adds a block to the canvas by clicking it in the palette, then edits its properties', () => {

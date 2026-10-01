@@ -175,8 +175,10 @@ test('opens a project whose builder data is still in cfbs.json, and moves it out
 
   await openFromMenu(path);
   await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
+  const save = window.getByRole('button', { name: 'Save', exact: true });
+  await expect(save).toBeDisabled();
   await window.getByRole('button', { name: /^Copy File\b/ }).click();
-  await window.keyboard.press('ControlOrMeta+s');
+  await save.click();
 
   await expect
     .poll(() => (existsSync(join(path, '.policy-builder/project.json')) ? builderJson(path).files[0].blocks.length : 0), { timeout: SAVE_TIMEOUT_MS })

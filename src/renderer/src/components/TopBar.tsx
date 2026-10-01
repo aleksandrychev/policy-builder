@@ -17,8 +17,12 @@ interface TopBarProps {
   fileGate?: string;
   masterfiles: string | null;
   onOpenSettings: () => void;
+  // Saving writes cfbs.json, the builder's data and the generated policy.
+  onSave: () => void;
   onTabChange: (index: number) => void;
   projectName: string;
+  // A project that isn't on disk yet (the demo) is saved with Save As.
+  savedToDisk: boolean;
   type: ProjectType;
 }
 
@@ -38,7 +42,20 @@ const chipSx = {
   maxWidth: 200
 } as const;
 
-export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, blockCount, activeTab, onTabChange, onOpenSettings, type }: TopBarProps) {
+export function TopBar({
+  projectName,
+  dirty,
+  masterfiles,
+  bundle,
+  fileGate,
+  blockCount,
+  activeTab,
+  onTabChange,
+  onOpenSettings,
+  onSave,
+  savedToDisk,
+  type
+}: TopBarProps) {
   return (
     <Box
       component="header"
@@ -90,8 +107,15 @@ export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, bloc
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, whiteSpace: 'nowrap' }}>
         <Typography sx={{ fontSize: 12, color: 'text.muted' }}>{blockCount} blocks</Typography>
-        <Button variant="contained" color="primary" disabled={blockCount === 0} sx={{ whiteSpace: 'nowrap' }}>
-          Generate Policy
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={onSave}
+          disabled={savedToDisk && !dirty}
+          title={savedToDisk ? 'Save the project and generate its policy (⌘S)' : 'Save the project to disk (⌘S)'}
+          sx={{ whiteSpace: 'nowrap' }}
+        >
+          {savedToDisk ? 'Save' : 'Save As…'}
         </Button>
       </Box>
     </Box>
