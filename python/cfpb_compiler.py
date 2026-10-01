@@ -656,6 +656,8 @@ class FileCompiler:
             variables.append(f'"{local}" slist => {{ {", ".join(quote(v) for v in values)} }};')
             promiser_params[param["name"]] = f"$({local})"
         promiser = Context(self.vars_name, promiser_params, self.bodies).substitute(step["promiser"])
+        # The promise iterates as a whole: its attributes see the same list variable.
+        ctx.params = promiser_params
         attributes = attributes_of(step, ctx)
         variables += ctx.locals
         template_data = self.template_data(step, declared, params, prefix)

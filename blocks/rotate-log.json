@@ -1,0 +1,57 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "rotate-log",
+  "version": 1,
+  "name": "Rotate Log",
+  "category": "Files",
+  "description": "Rotates log files once they grow past a size, keeping a number of old copies.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "methods",
+      "promiser": "rotate {{path}}",
+      "attributes": {
+        "usebundle": {
+          "bundle": "logrotate",
+          "args": [
+            "{{path}}",
+            "{{max_size}}",
+            "{{keep}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "Log file",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "path": "absolute",
+      "help": "One absolute path per line; a missing file is skipped."
+    },
+    {
+      "name": "max_size",
+      "label": "Rotate when bigger than",
+      "type": "string",
+      "required": true,
+      "default": "10M",
+      "allowed_chars": "0-9kKmMgG",
+      "help": "Bytes, or with a unit: 500k, 10M, 1G."
+    },
+    {
+      "name": "keep",
+      "label": "Old copies to keep",
+      "type": "number",
+      "required": true,
+      "default": 5,
+      "integer": true,
+      "minimum": 1,
+      "help": "The file moves to <name>.1, .2 … and the oldest is overwritten."
+    }
+  ]
+}
