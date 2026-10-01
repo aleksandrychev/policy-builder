@@ -53,6 +53,17 @@ export interface IfSetExpression {
   value: Expression;
 }
 
+// The case for an options parameter's value.
+export interface ChooseExpression {
+  cases: Record<string, Expression>;
+  choose: string;
+}
+
+// `key value` lines as a local array, passed by its qualified name.
+export interface ArrayParamExpression {
+  array_param: string;
+}
+
 // Attributes only: the parameter's text as its own file next to the policy (templates).
 export interface TemplateFileExpression {
   template_file: string;
@@ -60,6 +71,8 @@ export interface TemplateFileExpression {
 
 export type Expression =
   | Template
+  | ChooseExpression
+  | ArrayParamExpression
   | CallExpression
   | BodyExpression
   | ListExpression

@@ -19,7 +19,7 @@ PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 # Stdlib bodies the compiled policy may reference (as default:<name>). The
 # compiler has to ship masterfiles' lib/ for these; add to the list knowingly.
-STDLIB_BODIES = {"mog", "local_cp", "recurse", "tidy", "in_shell", "if_elapsed"}
+STDLIB_BODIES = {"mog", "local_cp", "recurse", "tidy", "in_shell", "if_elapsed", "ln_s", "days_old", "detect_content"}
 
 
 def _schema(name: str) -> dict:
@@ -72,6 +72,12 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
             problems.append(f"{where}: {expr['body']} takes {len(known[expr['body']]['parameters'])} arguments")
     if "list_param" in expr:
         yield expr["list_param"]
+    if "array_param" in expr:
+        yield expr["array_param"]
+    if "choose" in expr:
+        yield expr["choose"]
+        for case in expr["cases"].values():
+            yield from _walk(case, top_level=False, in_decorator=in_decorator, problems=problems, where=where)
     if "template_file" in expr:
         if not top_level:
             problems.append(f"{where}: template_file is only allowed as a whole attribute value")

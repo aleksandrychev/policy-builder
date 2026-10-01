@@ -72,6 +72,10 @@ def quote(text: str) -> str:
     return '"' + re.sub(r'\\(?=[\\"]|$)', r"\\\\", text).replace('"', '\\"') + '"'
 
 
+# `key value` or `key=value` (or a bare key); keys hold no spaces, `=` or brackets.
+KEY_VALUE = re.compile(r"^([^\s=\[\]]+)(?:\s*[=\s]\s*(.*?))?\s*$")
+
+
 def lines_of(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
 
@@ -104,6 +108,10 @@ class Context:
     block_name: str = ""
     files: dict[str, str] = field(default_factory=dict)
     to_root: str = ""
+    # The block's locals: named `<prefix><name>` in bundle `owner`; expressions may add `vars:` lines.
+    prefix: str = ""
+    owner: str = ""
+    locals: list[str] = field(default_factory=list)
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -150,6 +158,20 @@ def compile_value(expr, ctx: Context) -> str:
         return ctx.previous
     if "if_set" in expr:
         return compile_value(expr["value"], ctx)
+    if "choose" in expr:
+        picked = ctx.params.get(expr["choose"], "")
+        if picked not in expr["cases"]:
+            raise CompileError(f"{expr['choose']}: {picked!r} isn't one of {', '.join(expr['cases'])}")
+        return compile_value(expr["cases"][picked], ctx)
+    if "array_param" in expr:
+        # One `key value` / `key=value` line per entry, as a local array; the qualified name is passed.
+        local = f"{ctx.prefix}{expr['array_param']}"
+        for line in lines_of(ctx.params.get(expr["array_param"], "")):
+            match = KEY_VALUE.match(line)
+            if match and not line.startswith("#"):
+                key, value = match.group(1), match.group(2) or ""
+                ctx.locals.append(f"{quote(f'{local}[{key}]')} string => {quote(value)};")
+        return quote(f"{ctx.owner}.{local}")
     if "template_file" in expr:
         # Relative to the policy file, so it resolves the same in the project and on hosts.
         name = f"{ctx.block_name}.mustache"
@@ -609,7 +631,16 @@ class FileCompiler:
             raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
         step = steps[0]
         to_root = "../" * self.file["path"][2:].count("/")
-        ctx = Context(self.vars_name, params, self.bodies, block_name=name, files=self.companions, to_root=to_root)
+        ctx = Context(
+            self.vars_name,
+            params,
+            self.bodies,
+            block_name=name,
+            files=self.companions,
+            to_root=to_root,
+            prefix=prefix,
+            owner=owner,
+        )
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
         variables, promiser_params = [line for lines in computed.values() for line in lines], dict(params)
         for param in declared:
@@ -626,6 +657,7 @@ class FileCompiler:
             promiser_params[param["name"]] = f"$({local})"
         promiser = Context(self.vars_name, promiser_params, self.bodies).substitute(step["promiser"])
         attributes = attributes_of(step, ctx)
+        variables += ctx.locals
         template_data = self.template_data(step, declared, params, prefix)
         if template_data:
             variables += template_data

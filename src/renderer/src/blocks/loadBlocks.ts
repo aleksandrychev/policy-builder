@@ -12,7 +12,19 @@ const modules = import.meta.glob('@blocks/*.json', { eager: true }) as Record<st
 // Call Method, an escape hatch for bundles outside the canvas) sorts last.
 // A category missing from this list falls back to alphabetical order after
 // the ones listed here.
-const CATEGORY_ORDER = ['Files', 'Variables & Classes', 'Packages', 'Commands', 'Services', 'Users', 'Storage', 'Reports', 'Processes', 'Methods'];
+const CATEGORY_ORDER = [
+  'Files',
+  'File Contents',
+  'Variables & Classes',
+  'Packages',
+  'Commands',
+  'Services',
+  'Users',
+  'Storage',
+  'Reports',
+  'Processes',
+  'Methods'
+];
 
 function categoryRank(category: string): number {
   const index = CATEGORY_ORDER.indexOf(category);

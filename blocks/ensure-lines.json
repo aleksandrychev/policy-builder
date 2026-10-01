@@ -1,0 +1,60 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "ensure-lines",
+  "version": 1,
+  "name": "Ensure Lines in File",
+  "category": "File Contents",
+  "description": "Appends lines that are missing from a file, leaving the rest of it alone.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "create": "{{create}}",
+        "edit_line": {
+          "bundle": "append_if_no_lines",
+          "args": [
+            "{{lines}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "help": "An absolute path.",
+      "path": "absolute"
+    },
+    {
+      "name": "lines",
+      "label": "Lines",
+      "type": "text",
+      "required": true,
+      "help": "One line per line; each is appended at the end of the file unless it's already there, exactly as written."
+    },
+    {
+      "name": "create",
+      "label": "If the file is missing",
+      "type": "string",
+      "required": true,
+      "default": "true",
+      "options": [
+        {
+          "value": "true",
+          "label": "Create it"
+        },
+        {
+          "value": "false",
+          "label": "Leave it missing"
+        }
+      ]
+    }
+  ]
+}

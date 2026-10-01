@@ -1,0 +1,61 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "clean-up-old-files",
+  "version": 1,
+  "name": "Clean Up Old Files",
+  "category": "Files",
+  "description": "Deletes files under a directory that haven't changed for a number of days.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{directory}}",
+      "attributes": {
+        "delete": {
+          "body": "tidy"
+        },
+        "file_select": {
+          "body": "days_old",
+          "args": [
+            "{{days}}"
+          ]
+        },
+        "depth_search": {
+          "body": "recurse",
+          "args": [
+            "{{depth}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "directory",
+      "label": "Directory",
+      "type": "string",
+      "required": true,
+      "path": "absolute",
+      "help": "Its contents are cleaned, not the directory itself, e.g. /var/tmp."
+    },
+    {
+      "name": "days",
+      "label": "Older than (days)",
+      "type": "number",
+      "required": true,
+      "default": 7,
+      "integer": true,
+      "minimum": 1
+    },
+    {
+      "name": "depth",
+      "label": "Recursion depth",
+      "type": "string",
+      "required": true,
+      "default": "inf",
+      "help": "\"inf\" for the whole tree, or a number like \"1\" for just the directory's own files."
+    }
+  ]
+}

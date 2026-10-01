@@ -1,0 +1,51 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "replace-text",
+  "version": 1,
+  "name": "Replace Text in File",
+  "category": "File Contents",
+  "description": "Replaces every match of a pattern in a file, like sed.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "edit_line": {
+          "bundle": "regex_replace",
+          "args": [
+            "{{find}}",
+            "{{replace}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "help": "An absolute path.",
+      "path": "absolute"
+    },
+    {
+      "name": "find",
+      "label": "Find",
+      "type": "string",
+      "required": true,
+      "help": "A regular expression, e.g. example\\.com. The replacement mustn't match it again, or the agent reports the edit as not convergent."
+    },
+    {
+      "name": "replace",
+      "label": "Replace with",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "help": "Empty removes the matched text."
+    }
+  ]
+}

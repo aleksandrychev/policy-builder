@@ -43,3 +43,53 @@ body contain in_shell
 {
   useshell => "true";
 }
+
+body link_from ln_s(x)
+{
+  link_type => "symlink";
+  source => "$(x)";
+  when_no_source => "force";
+}
+
+body file_select days_old(days)
+{
+  mtime => irange(0, ago(0, 0, "$(days)", 0, 0, 0));
+  file_result => "mtime";
+}
+
+body changes detect_content
+{
+  hash => "md5";
+  report_changes => "content";
+  update_hashes => "yes";
+}
+
+bundle edit_line append_if_no_lines(lines)
+{
+  insert_lines:
+    "$(lines)";
+}
+
+bundle edit_line delete_lines_matching(regex)
+{
+  delete_lines:
+    "$(regex)";
+}
+
+bundle edit_line comment_lines_matching(regex, comment)
+{
+  reports:
+    "$(regex) $(comment)";
+}
+
+bundle edit_line regex_replace(find, replace)
+{
+  reports:
+    "$(find) $(replace)";
+}
+
+bundle edit_line set_line_based(v, sep, bp, kp, cp)
+{
+  reports:
+    "$(v) $(sep) $(bp) $(kp) $(cp)";
+}

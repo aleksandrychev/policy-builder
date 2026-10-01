@@ -141,7 +141,9 @@ Every promiser and attribute value is an **expression**:
 | `{"list_param": "items"}` | `{ "a", "b" }` from a one-value-per-line parameter, blank lines dropped |
 | `{"class_refs": true}` | The entry's picked classes, `{ "a", "!b" }` (Define Class's combine sources) |
 | `{"class_expression": "{{condition}}"}` | Quoted when plain (`"linux.!debian"`), as-is when a function call (`not(fileexists("/x"))` — quoting it is a syntax error) |
-| `{"bundle": "{{bundle_name}}"}` | A `usebundle` target, as written |
+| `{"bundle": "{{bundle_name}}"}` | A `usebundle` target, as written — also an `edit_line` bundle with `args` (`edit_line => append_if_no_lines("…")`) |
+| `{"choose": "format", "cases": {"space": " ", "equals": "="}}` | The case for an options parameter's value (a separator per file format) |
+| `{"array_param": "settings"}` | `key value` / `key=value` lines as a local array, `"<block>_settings[key]" string => "value";`, compiled to its qualified name (`"tier.harden_ssh_settings"`) — what `set_line_based()` takes |
 | `{"variable": "{{param}}", "as": ...}` | A picked variable, always bundle-qualified (`vars.x` means this file's `<bundle>_vars.x`): `scalar` → `"$(common_vars.x)"`, `list` → `{ @(common_vars.x) }`, `name` → `"common_vars.x"` |
 | `{"previous": "value"}` | Decorators only: the incoming value (see "Chains") |
 | `{"if_set": "param", "value": ...}` | The attribute, or nothing when the parameter is empty (`report_to_file => ""` is a hard error) |

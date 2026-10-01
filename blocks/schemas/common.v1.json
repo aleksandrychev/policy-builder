@@ -296,6 +296,40 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "choose",
+            "cases"
+          ],
+          "description": "The case for the parameter's value (an options parameter): e.g. a separator per file format.",
+          "properties": {
+            "choose": {
+              "$ref": "#/$defs/identifier"
+            },
+            "cases": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "array_param"
+          ],
+          "description": "A one-entry-per-line parameter (`key value` or `key=value`) as a local associative array, \"<prefix><param>[key]\" string => \"value\"; compiles to the array's qualified name, as stdlib bundles like set_line_based() take it.",
+          "properties": {
+            "array_param": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
             "template_file"
           ],
           "description": "Attributes only: the parameter's text, written to its own file next to the compiled policy (<block bundle>.mustache), and compiled to that file's path, \"$(this.promise_dirname)/<block bundle>.mustache\". The file is used as-is: no CFEngine escaping, and no $(...) expansion.",

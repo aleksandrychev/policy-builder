@@ -1,0 +1,42 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "remove-lines",
+  "version": 1,
+  "name": "Remove Matching Lines",
+  "category": "File Contents",
+  "description": "Deletes every line of a file that matches a pattern.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "edit_line": {
+          "bundle": "delete_lines_matching",
+          "args": [
+            "{{pattern}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "help": "An absolute path.",
+      "path": "absolute"
+    },
+    {
+      "name": "pattern",
+      "label": "Line pattern",
+      "type": "string",
+      "required": true,
+      "help": "A regular expression the whole line must match, e.g. PermitRootLogin.* (not a substring search)."
+    }
+  ]
+}
