@@ -233,6 +233,7 @@ export function SubjectEditor({
           value={paramValue(editingParam)}
           variables={templateTokens}
           mustache={editingParam.mustache === true}
+          help={editingParam.help}
           onClose={() => setEditingParam(null)}
           onSave={value => callbacks.onParamChange(editingParam.name, value)}
         />

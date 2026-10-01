@@ -105,7 +105,8 @@ function renderTextField({ parameter, value, onOpenEditor, label, error }: Field
       label={label}
       value={value}
       error={Boolean(error)}
-      helperText={error ?? (parameter.help ? `${parameter.help} Click to edit.` : 'Click to edit.')}
+      // A template's help (its syntax notes) is shown in the editor instead.
+      helperText={error ?? (parameter.help && !parameter.mustache ? `${parameter.help} Click to edit.` : 'Click to edit.')}
       fullWidth
       multiline
       minRows={3}
