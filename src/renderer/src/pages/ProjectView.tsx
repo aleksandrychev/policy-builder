@@ -202,11 +202,12 @@ function DragPreviewCard({ badge, label }: DragPreview) {
 interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
+  onOpenSettings: () => void;
   onSave: () => void;
 }
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -823,6 +824,8 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
           blockCount={instances.length}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          onOpenSettings={onOpenSettings}
+          type={project.type}
         />
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>

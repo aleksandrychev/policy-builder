@@ -1,5 +1,5 @@
 import { type ElectronApplication, type Page, _electron as electron, expect, test } from '@playwright/test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 
@@ -16,12 +16,19 @@ const SAVE_TIMEOUT_MS = 20_000;
 
 const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf-8'));
 
-function writeProject(folder: string, cfbs: object): string {
+// A project folder: its cfbs.json and, for a builder project, .policy-builder/project.json.
+function writeProject(folder: string, cfbs: object, builder?: object): string {
   const path = join(scratchDir, folder);
   mkdirSync(path);
   writeFileSync(join(path, 'cfbs.json'), JSON.stringify(cfbs, null, 2));
+  if (builder) {
+    mkdirSync(join(path, '.policy-builder'));
+    writeFileSync(join(path, '.policy-builder/project.json'), JSON.stringify(builder, null, 2));
+  }
   return path;
 }
+
+const builderJson = (path: string) => readJson(join(path, '.policy-builder/project.json'));
 
 const block = (instanceId: string, label: string) => ({
   instanceId,
@@ -43,26 +50,26 @@ const builderProject = {
       added_by: 'cfbs add',
       steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web']
     }
-  ],
-  meta: {
-    'policy-builder': {
-      schema_version: 1,
-      folders: [],
-      files: [
-        {
-          id: 'file-1',
-          name: 'Web',
-          bundle: 'web',
-          path: './web.cf',
-          blocks: [block('block-1', 'Say hello'), block('block-2', 'Say goodbye')],
-          edges: [{ id: 'edge-1', source: 'block-1', target: 'block-2', outcomes: ['kept'] }],
-          order: ['block-1', 'block-2'],
-          layout: { positions: { 'block-1': { x: 0, y: 0 }, 'block-2': { x: 0, y: 200 } }, groups: [], derived_positions: {} }
-        }
-      ],
-      current_file_id: 'file-1'
+  ]
+};
+
+// Its .policy-builder/project.json.
+const builderData = {
+  schema_version: 1,
+  folders: [],
+  files: [
+    {
+      id: 'file-1',
+      name: 'Web',
+      bundle: 'web',
+      path: './web.cf',
+      blocks: [block('block-1', 'Say hello'), block('block-2', 'Say goodbye')],
+      edges: [{ id: 'edge-1', source: 'block-1', target: 'block-2', outcomes: ['kept'] }],
+      order: ['block-1', 'block-2'],
+      layout: { positions: { 'block-1': { x: 0, y: 0 }, 'block-2': { x: 0, y: 200 } }, groups: [], derived_positions: {} }
     }
-  }
+  ],
+  current_file_id: 'file-1'
 };
 
 const openFromMenu = (path: string) =>
@@ -98,7 +105,7 @@ test.afterEach(async ({}, testInfo) => {
 });
 
 test('opens a builder project with its blocks and arrows, clean, and saves it back', async () => {
-  const path = writeProject('web', builderProject);
+  const path = writeProject('web', builderProject, builderData);
   const statusBar = window.locator('footer');
   const unsaved = window.getByLabel('Unsaved changes');
 
@@ -122,8 +129,9 @@ test('opens a builder project with its blocks and arrows, clean, and saves it ba
     const saved = readJson(join(path, 'cfbs.json'));
     expect(saved.build[0]).toEqual(builderProject.build[0]);
     expect(saved.build[1]).toEqual(builderProject.build[1]);
-    expect(saved.meta['policy-builder'].files[0].blocks).toHaveLength(3);
-    expect(saved.meta['policy-builder'].files[0].edges).toHaveLength(1);
+    expect(saved.meta).toBeUndefined();
+    expect(builderJson(path).files[0].blocks).toHaveLength(3);
+    expect(builderJson(path).files[0].edges).toHaveLength(1);
     const policy = readFileSync(join(path, 'web.cf'), 'utf-8');
     expect(policy).toContain('bundle agent web\n');
     expect(policy).toContain('  # Say goodbye\n');
@@ -144,7 +152,9 @@ test('opens a plain cfbs project with one empty file, keeping its build entries 
   await expect(window.getByLabel('Unsaved changes')).toHaveCount(0);
 
   await window.keyboard.press('ControlOrMeta+s');
-  await expect.poll(() => readJson(join(path, 'cfbs.json')).meta?.['policy-builder']?.schema_version, { timeout: SAVE_TIMEOUT_MS }).toBe(1);
+  await expect
+    .poll(() => (existsSync(join(path, '.policy-builder/project.json')) ? builderJson(path).schema_version : null), { timeout: SAVE_TIMEOUT_MS })
+    .toBe(1);
   const saved = readJson(join(path, 'cfbs.json'));
   expect(saved.build[0]).toEqual(fake);
   expect(saved.build).toHaveLength(2);
@@ -152,9 +162,60 @@ test('opens a plain cfbs project with one empty file, keeping its build entries 
 });
 
 test('a project from a newer builder does not open, and shows why', async () => {
-  const path = writeProject('newer', { ...builderProject, meta: { 'policy-builder': { ...builderProject.meta['policy-builder'], schema_version: 99 } } });
+  const path = writeProject('newer', builderProject, { ...builderData, schema_version: 99 });
 
   await openFromMenu(path);
   await expect(window.getByRole('alert')).toContainText('newer version of CFEngine Policy Builder');
   await expect(window.getByText(/^Try Demo:/)).toBeVisible();
+});
+
+test('opens a project whose builder data is still in cfbs.json, and moves it out on save', async () => {
+  const path = writeProject('legacy', { ...builderProject, meta: { 'policy-builder': builderData, 'other-tool': { kept: true } } });
+  const statusBar = window.locator('footer');
+
+  await openFromMenu(path);
+  await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
+  await window.getByRole('button', { name: /^Copy File\b/ }).click();
+  await window.keyboard.press('ControlOrMeta+s');
+
+  await expect
+    .poll(() => (existsSync(join(path, '.policy-builder/project.json')) ? builderJson(path).files[0].blocks.length : 0), { timeout: SAVE_TIMEOUT_MS })
+    .toBe(3);
+  // Another tool's meta stays; the builder's moved to .policy-builder/.
+  expect(readJson(join(path, 'cfbs.json')).meta).toEqual({ 'other-tool': { kept: true } });
+  expect(consoleErrors, 'console errors during the run').toEqual([]);
+});
+
+test('Project Settings converts a policy set to a module and back', async () => {
+  const path = writeProject('convert', builderProject, builderData);
+  const statusBar = window.locator('footer');
+  const settings = window.getByRole('button', { name: 'Project settings' });
+  const store = async (as: 'Module' | 'Policy set') => {
+    await settings.click();
+    await window.getByRole('radio', { name: new RegExp(`^${as}`) }).check();
+    await window.getByRole('button', { name: 'Save', exact: true }).last().click();
+    await expect(window.getByRole('dialog')).toHaveCount(0, { timeout: SAVE_TIMEOUT_MS });
+  };
+
+  await openFromMenu(path);
+  await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
+
+  await store('Module');
+  const module = readJson(join(path, 'cfbs.json'));
+  expect(module.type).toBe('module');
+  // A module's cfbs.json name is its module name, derived from the project name.
+  expect(module.name).toBe('web-hardening');
+  expect(Object.keys(module.provides)).toEqual(['web-hardening']);
+  expect(module.provides['web-hardening'].steps).toContain('bundles web');
+  // Masterfiles (not ours) is kept; our own build module isn't.
+  expect(module.build).toEqual([builderProject.build[0]]);
+  await expect(window.locator('header').getByText('module', { exact: true })).toBeVisible();
+
+  await store('Policy set');
+  const policySet = readJson(join(path, 'cfbs.json'));
+  expect(policySet.type).toBe('policy-set');
+  expect(policySet.name).toBe('Web Hardening');
+  expect(policySet.provides).toBeUndefined();
+  expect(policySet.build).toEqual(builderProject.build);
+  expect(consoleErrors, 'console errors during the run').toEqual([]);
 });

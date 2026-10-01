@@ -8,18 +8,19 @@ import { deriveBundle } from '../store/filesSlice/deriveBundle';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
+import type { ProjectType } from '../store/projectSlice/types';
+import { moduleNameFor } from './moduleName';
 
 /**
- * The builder's state as it's stored in cfbs.json: a normal cfbs project that
- * mirrors the file tree — each top-level policy file is a local file module,
- * each top-level folder one local directory module (what `cfbs add` writes
- * for them) — with all of the builder's own data, folders and every file's
- * canvas, in the top-level `meta["policy-builder"]`. Each save also writes
- * the generated .cf files (main process, via the sidecar's compiler).
+ * The builder's state on disk: a normal cfbs project that mirrors the file
+ * tree — each top-level policy file is a local file module, each top-level
+ * folder one local directory module (what `cfbs add` writes for them) — and
+ * all of the builder's own data, folders and every file's canvas, in
+ * `.policy-builder/project.json`, so cfbs.json stays plain cfbs. Each save
+ * also writes the generated .cf files (main process, via the sidecar).
  */
 
 export const SCHEMA_VERSION = 1;
-export const META_KEY = 'policy-builder';
 const ROOT = './';
 const OUTPUT_DIR = 'services/cfbs/';
 // Top-level names taken next to cfbs.json: cfbs's build output, and generated templates.
@@ -34,6 +35,10 @@ export interface ProjectMeta {
   files: FileMeta[];
   // `path` is the folder's directory, e.g. "./services/".
   folders: (PolicyFolder & { path: string })[];
+  // The name the project is provided under when stored as a cfbs module.
+  module_name: string;
+  // The display name (a module's cfbs.json name has to be its module name).
+  name: string;
   schema_version: number;
   // Stamped by the main process on save (the app's version).
   tool_version?: string;
@@ -69,9 +74,27 @@ export interface PolicyModule {
   tags: string[];
 }
 
+// The one module a project stored as a cfbs module provides: cfbs.json `provides[<module_name>]`.
+export interface ProvidedModule {
+  description: string;
+  steps: string[];
+  tags: string[];
+}
+
 export interface CfbsProjectContent {
-  meta: { [META_KEY]: ProjectMeta };
+  // cfbs.json `build` entries, when stored as a policy set.
   modules: PolicyModule[];
+  // .policy-builder/project.json.
+  project: ProjectMeta;
+  // When stored as a module. The main process adds a templates/ copy step when there are templates.
+  provided: ProvidedModule;
+}
+
+// What the project is called and provided as.
+interface Identity {
+  description: string;
+  moduleName: string;
+  name: string;
 }
 
 const withoutFileId = <T extends { fileId: string }>({ fileId: _fileId, ...rest }: T): Omit<T, 'fileId'> => rest;
@@ -165,7 +188,19 @@ function toModule(name: string, entryBundles: string[]): PolicyModule {
   };
 }
 
-export function toCfbsProject(data: ProjectData): CfbsProjectContent {
+// A module's steps: its files and folders copied into services/cfbs/<module>/, as the
+// policy-set modules lay them out, so templates are found the same way.
+function toProvided(names: Map<string, string[]>, identity: Identity): ProvidedModule {
+  const output = `${OUTPUT_DIR}${identity.moduleName}/`;
+  const copies = [...names.keys()].map(name => `copy ${name} ${output}${name.slice(ROOT.length)}`);
+  return {
+    description: identity.description || 'Policy built with CFEngine Policy Builder',
+    tags: ['policy-builder'],
+    steps: [...copies, `policy_files ${output}`, ...bundlesSteps([...names.values()].flat())]
+  };
+}
+
+export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjectContent {
   const paths = folderPaths(data.files.folders);
   const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.bundle}.cf`;
   const callsBlocks = (file: PolicyFile) => data.canvas.some(block => block.fileId === file.id && isSequenced(blockDescriptorsById.get(block.blockId)));
@@ -176,25 +211,20 @@ export function toCfbsProject(data: ProjectData): CfbsProjectContent {
     modules.set(name, [...(modules.get(name) ?? []), ...(callsBlocks(file) ? [file.bundle] : [])]);
   }
   return {
-    meta: {
-      [META_KEY]: {
-        schema_version: SCHEMA_VERSION,
-        folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
-        files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
-        current_file_id: data.files.currentFileId
-      }
+    project: {
+      schema_version: SCHEMA_VERSION,
+      name: identity.name,
+      module_name: identity.moduleName,
+      folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
+      files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
+      current_file_id: data.files.currentFileId
     },
-    modules: [...modules].map(([name, bundles]) => toModule(name, bundles))
+    modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
+    provided: toProvided(modules, identity)
   };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-
-// The builder's part of cfbs.json's `meta`, if any.
-const builderMetaOf = (entry: unknown): Record<string, unknown> | undefined => {
-  const meta = isObject(entry) && isObject(entry.meta) ? entry.meta[META_KEY] : undefined;
-  return isObject(meta) ? meta : undefined;
-};
 
 const listOf = <T>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
 
@@ -209,10 +239,10 @@ function checkSchemaVersion(version: unknown) {
   }
 }
 
-/** Rebuilds the builder's in-memory state from a parsed cfbs.json. */
-export function fromCfbsProject(json: unknown): ProjectData {
-  const project = builderMetaOf(json) as unknown as ProjectMeta | undefined;
-  if (!project) throw new Error(`Not a CFEngine Policy Builder project (no "meta"."${META_KEY}" in cfbs.json)`);
+/** Rebuilds the builder's in-memory state from a parsed .policy-builder/project.json. */
+export function fromBuilderProject(json: unknown): ProjectData {
+  if (!isObject(json)) throw new Error('The project’s builder data (.policy-builder/project.json) is not a JSON object');
+  const project = json as unknown as ProjectMeta;
   checkSchemaVersion(project.schema_version);
   const folders = listOf(project.folders);
   const modules = listOf(project.files)
@@ -257,7 +287,9 @@ export interface LoadedProject {
   data: ProjectData;
   description: string;
   masterfiles: string | null;
+  moduleName: string;
   name: string;
+  type: ProjectType;
 }
 
 // The masterfiles build entry's release, "master" for a branch/URL one, null without.
@@ -270,21 +302,24 @@ function masterfilesOf(build: unknown[]): string | null {
 }
 
 /**
- * An opened project's cfbs.json → what goes into the store. A cfbs project
+ * An opened project's cfbs.json and builder data (.policy-builder/project.json,
+ * null when there is none) → what goes into the store. A cfbs project
  * without builder data opens with one empty policy file named after it.
  */
-export function loadCfbsProject(json: unknown, folderName: string): LoadedProject {
+export function loadCfbsProject(json: unknown, builder: unknown, folderName: string): LoadedProject {
   if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
-  const name = (typeof json.name === 'string' && json.name.trim()) || folderName;
-  const description = typeof json.description === 'string' ? json.description : '';
+  const type: ProjectType = json.type === 'module' ? 'module' : 'policy-set';
+  const cfbsName = (typeof json.name === 'string' && json.name.trim()) || folderName;
+  const saved = isObject(builder) ? builder : {};
+  // A policy set's cfbs.json name is its display name; a module's is its module name, so its display name is the builder's.
+  const name = (type === 'module' && typeof saved.name === 'string' && saved.name.trim()) || cfbsName;
+  const moduleName = typeof saved.module_name === 'string' && saved.module_name ? saved.module_name : type === 'module' ? cfbsName : moduleNameFor(name);
+  const identity = { description: typeof json.description === 'string' ? json.description : '', moduleName, name, type };
   const masterfiles = masterfilesOf(Array.isArray(json.build) ? json.build : []);
-  if (isObject(json.meta) && json.meta[META_KEY] !== undefined && !isObject(json.meta[META_KEY])) {
-    throw new Error(`The project’s builder data is corrupt ("meta"."${META_KEY}" is not an object)`);
-  }
-  const data = builderMetaOf(json) ? fromCfbsProject(json) : null;
-  if (data && data.files.files.length > 0) return { data, description, masterfiles, name };
+  const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
+  if (data && data.files.files.length > 0) return { ...identity, data, masterfiles };
   const files = filesReducer(undefined, projectFilesInitialized(name));
-  return { data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [] }, description, masterfiles, name };
+  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [] }, masterfiles };
 }
 
 /** The project folder's name for a project name: "Web Server Hardening" → "web-server-hardening". */

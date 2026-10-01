@@ -8,7 +8,8 @@ non-zero exit.
 | --- | --- | --- | --- |
 | `format` (also the default with no subcommand) | policy | formatted policy | 1 syntax error, 2 other |
 | `init` | `{"directory", "name", "description", "masterfiles", "git", "content"?}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
-| `compile` | cfbs.json's `meta["policy-builder"]` | `{"files": {<path>: <contents>}}` | 1 can't compile, 2 compiler fault |
+| `masterfiles` | `{"version"}` (`3.27.1` or `master`) | the masterfiles `build` entry `cfbs init` writes | 1 failed, 2 invalid input |
+| `compile` | the project's `.policy-builder/project.json` | `{"files": {<path>: <contents>}}` | 1 can't compile, 2 compiler fault |
 
 `init` runs `cfbs init` in-process (non-interactive, `--git=no`) in `directory`,
 which must be absent or empty, with an existing parent. `masterfiles` is an
@@ -18,8 +19,15 @@ like `3.24.x`, so they are refused. It then writes `name`/`description` into
 cfbs's `cfbs <cfbs@hostname>` identity if git has none). The result's
 `masterfiles` is the build entry cfbs wrote, or `null`. All cfbs output goes to
 stderr; the last stderr line is a one-line summary for the UI. Any failure
-removes what init created. With `content` (the builder's `meta` and modules), it
-also writes them into `cfbs.json` and the compiled files, before the commit.
+removes what init created. With `content` (the builder's modules and its
+`project` data), it also writes the modules into `cfbs.json`, the data into
+`.policy-builder/project.json` and the compiled files, before the commit. With
+`"type": "module"` there's no `cfbs init` and no masterfiles: `cfbs.json` is a
+module project (`"type": "module"`, named after the module) whose `provides`
+holds the project as one module.
+
+`masterfiles` runs `cfbs init` in a throwaway folder and returns the masterfiles
+entry it wrote: how a module project gets masterfiles when it becomes a policy set.
 
 `compile` (`cfpb_compiler.py`) turns the builder's canvases into policy, one
 formatted `.cf` per policy file plus the template files its blocks render (in

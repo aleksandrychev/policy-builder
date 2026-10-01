@@ -6,9 +6,11 @@ import { createNginxDemoProject } from '../demo/nginxDemoProject';
 import { type RootState, createAppStore, useAppDispatch, useAppSelector } from '../store';
 import { projectFilesInitialized } from '../store/filesSlice';
 import { UNDOABLE_KEYS, historyCleared } from '../store/history';
-import { projectCreated, projectLoaded, projectLocated } from '../store/projectSlice';
+import { projectCreated, projectLoaded, projectLocated, projectTypeChanged } from '../store/projectSlice';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
+import type { ProjectType } from '../store/projectSlice/types';
 import { type ProjectData, loadCfbsProject, toCfbsProject } from './cfbsProject';
+import { moduleNameFor } from './moduleName';
 
 const snapshotOf = (state: RootState): ProjectData => ({
   canvas: state.canvas,
@@ -42,10 +44,11 @@ export function useProjectSession() {
   const markSaved = (data = snapshotOf(store.getState())) => setBaseline(data);
 
   const createProject = async (values: ProjectFormValues): Promise<SubmitResult> => {
-    const { name, description } = values;
+    const { name, description, type } = values;
+    const moduleName = moduleNameFor(name);
     const filesInitialized = projectFilesInitialized(name);
     const open = (located: { masterfiles: string | null; path: string | null }) => {
-      dispatch(projectCreated({ name, description, ...located }));
+      dispatch(projectCreated({ name, description, moduleName, type, ...located }));
       // Every project starts with one policy file, named after the project (its namespace derives from it).
       dispatch(filesInitialized);
       dispatch(historyCleared());
@@ -59,7 +62,8 @@ export function useProjectSession() {
     const scratch = createAppStore();
     scratch.dispatch(projectCreated({ name }));
     scratch.dispatch(filesInitialized);
-    const result = await window.api.createProject({ ...values, parent: values.parent, ...toCfbsProject(snapshotOf(scratch.getState())) });
+    const content = toCfbsProject(snapshotOf(scratch.getState()), { description, moduleName, name });
+    const result = await window.api.createProject({ ...values, parent: values.parent, ...content });
     if (!result.ok) return result;
     open(result);
     return { ok: true };
@@ -68,9 +72,12 @@ export function useProjectSession() {
   const saveProjectAs = async (values: ProjectFormValues): Promise<SubmitResult> => {
     if (!window.api || !values.parent) return { ok: false, message: 'Saving needs the desktop app', details: '' };
     const data = snapshotOf(store.getState());
-    const result = await window.api.createProject({ ...values, parent: values.parent, ...toCfbsProject(data) });
+    const moduleName = moduleNameFor(values.name);
+    const content = toCfbsProject(data, { description: values.description, moduleName, name: values.name });
+    const result = await window.api.createProject({ ...values, parent: values.parent, ...content });
     if (!result.ok) return result;
-    dispatch(projectLocated({ name: values.name, description: values.description, masterfiles: result.masterfiles, path: result.path }));
+    const { description, name, type } = values;
+    dispatch(projectLocated({ description, masterfiles: result.masterfiles, moduleName, name, path: result.path, type }));
     markSaved(data);
     return { ok: true };
   };
@@ -103,8 +110,12 @@ export function useProjectSession() {
     saving.current = true;
     const data = snapshotOf(store.getState());
     try {
-      const result = await window.api.saveProject(current.path, toCfbsProject(data));
+      const content = toCfbsProject(data, current);
+      // The stored type is what cfbs.json becomes: a type change in Project Settings converts it here.
+      const result = await window.api.saveProject(current.path, content, { masterfiles: current.masterfiles, type: current.type });
       if (!result.ok) throw new Error(result.message);
+      // A conversion to a policy set brings masterfiles: show the version it got.
+      if (result.masterfiles !== current.masterfiles) dispatch(projectTypeChanged({ masterfiles: result.masterfiles, type: current.type }));
       markSaved(data);
       return true;
     } catch (cause) {
@@ -115,6 +126,19 @@ export function useProjectSession() {
     }
   };
 
+  // Project Settings: store the project as a policy set or a module. On disk, that's saved (and
+  // cfbs.json converted) at once; if the save fails, the type goes back.
+  const changeProjectType = async (type: ProjectType, masterfiles: string | null): Promise<boolean> => {
+    const current = store.getState().project;
+    if (!current) return false;
+    const previous = { masterfiles: current.masterfiles, type: current.type };
+    dispatch(projectTypeChanged({ type, ...(masterfiles ? { masterfiles } : {}) }));
+    if (!current.path) return true;
+    const saved = await save();
+    if (!saved) dispatch(projectTypeChanged(previous));
+    return saved;
+  };
+
   // No path: the native picker asks. The current project stays as is unless the new one loads.
   const openProject = async (path?: string) => {
     if (!window.api) return;
@@ -122,8 +146,8 @@ export function useProjectSession() {
       const result = await window.api.openProject(path ? { path } : {});
       if (!result) return;
       if (!result.ok) throw new Error(result.message);
-      const { data, description, masterfiles, name } = loadCfbsProject(result.cfbs, folderNameOf(result.path));
-      dispatch(projectLoaded({ description, masterfiles, name, path: result.path }, data));
+      const { data, ...project } = loadCfbsProject(result.cfbs, result.builder, folderNameOf(result.path));
+      dispatch(projectLoaded({ ...project, path: result.path }, data));
       dispatch(historyCleared());
       markSaved();
     } catch (cause) {
@@ -150,6 +174,7 @@ export function useProjectSession() {
   };
 
   return {
+    changeProjectType,
     closeProjectDialog,
     dirty,
     dismissError: () => setError(null),

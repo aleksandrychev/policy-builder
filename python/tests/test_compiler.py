@@ -13,7 +13,7 @@ import pytest
 from cfpb_compiler import CompileError, compile_project, quote, templates_module
 
 FIXTURES = Path(__file__).parent / "fixtures"
-# The demo project's meta["policy-builder"], as the app saves it.
+# The demo project's .policy-builder/project.json, as the app saves it.
 DEMO = json.loads((FIXTURES / "demo-project.json").read_text())
 COMMON, WEBSERVER = "./common.cf", "./webserver.cf"
 TEMPLATE = "./templates/webserver_render_nginx_config.mustache"

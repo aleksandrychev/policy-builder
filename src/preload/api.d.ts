@@ -7,12 +7,23 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'recents-changed' | 'save' | 'try-demo';
+type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
 
-// What the builder writes into cfbs.json: its entry in the top-level `meta`, and one module per policy file.
+// What the builder saves: its cfbs.json modules (`build` entries for a policy set, the one
+// `provides` entry for a module), and its own data for .policy-builder/project.json.
 export interface ProjectContent {
-  meta: Record<string, object>;
   modules: object[];
+  project: object;
+  provided: object;
+}
+
+export type ProjectType = 'module' | 'policy-set';
+
+// How cfbs.json is stored on save; a different type than on disk converts it.
+export interface ProjectStorage {
+  // Wanted when a module becomes a policy set without masterfiles: "3.27.1", "master", or null.
+  masterfiles: string | null;
+  type: ProjectType;
 }
 
 export interface CreateProjectRequest extends ProjectContent {
@@ -23,6 +34,7 @@ export interface CreateProjectRequest extends ProjectContent {
   masterfiles: string;
   name: string;
   parent: string;
+  type: ProjectType;
 }
 
 // Errors come back as data: Electron drops custom Error properties like `details`.
@@ -33,6 +45,8 @@ export interface MasterfilesVersions {
 }
 
 export interface OpenedProject {
+  // The parsed .policy-builder/project.json (or an older project's cfbs.json meta), null without.
+  builder: Record<string, unknown> | null;
   // The parsed cfbs.json.
   cfbs: Record<string, unknown>;
   path: string;
@@ -86,7 +100,7 @@ declare global {
       /** Shows the project's cfbs.json in the OS file manager. */
       revealProject: (path: string) => Promise<void>;
       /** Merges the builder's content into the project's cfbs.json. */
-      saveProject: (path: string, content: ProjectContent) => Promise<OperationResult<object>>;
+      saveProject: (path: string, content: ProjectContent, storage: ProjectStorage) => Promise<OperationResult<{ masterfiles: string | null }>>;
       /** Sets the window title (null: no project) and the unsaved-changes state. */
       setDocument: (document: { edited: boolean; title: string | null }) => Promise<void>;
       /** Persists sidebar/palette sizes so they survive an app restart. */

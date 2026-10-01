@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Alert, Snackbar } from '@mui/material';
 
-import { NewProjectDialog } from './components/dialogs/NewProjectDialog';
+import { NewProjectDialog, useMasterfilesVersions } from './components/dialogs/NewProjectDialog';
+import { ProjectSettingsDialog } from './components/dialogs/ProjectSettingsDialog';
 import { UnsavedChangesDialog } from './components/dialogs/UnsavedChangesDialog';
 import NoProjectScreen from './pages/NoProjectScreen';
 import ProjectView from './pages/ProjectView';
@@ -23,6 +24,8 @@ export default function App() {
   });
   // Bumped when main reports the recent-projects list changed.
   const [recentsVersion, setRecentsVersion] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const masterfilesVersions = useMasterfilesVersions();
 
   useEffect(
     () =>
@@ -35,6 +38,7 @@ export default function App() {
         else if (action === 'open-project' && !modalOpen()) current.openProject();
         else if (action === 'open-recent' && path && !modalOpen()) current.openProject(path);
         else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
+        else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
       }),
     []
   );
@@ -69,15 +73,24 @@ export default function App() {
   return (
     <>
       {project ? (
-        <ProjectView key={project.id} dirty={dirty} onSave={session.save} />
+        <ProjectView key={project.id} dirty={dirty} onSave={session.save} onOpenSettings={() => setSettingsOpen(true)} />
       ) : (
         <NoProjectScreen onNewProject={session.newProject} onOpenProject={session.openProject} onTryDemo={session.startDemo} recentsVersion={recentsVersion} />
+      )}
+      {project && settingsOpen && (
+        <ProjectSettingsDialog
+          project={project}
+          latestMasterfiles={masterfilesVersions.latest}
+          onTypeChange={session.changeProjectType}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
       {projectDialog && (
         <NewProjectDialog
           mode={projectDialog}
           initialName={projectDialog === 'saveAs' ? project?.name : undefined}
           initialDescription={projectDialog === 'saveAs' ? project?.description || undefined : undefined}
+          initialType={projectDialog === 'saveAs' ? project?.type : undefined}
           onClose={session.closeProjectDialog}
           onSubmit={session.submitProjectDialog}
         />

@@ -3,8 +3,17 @@ import type { IpcMainInvokeEvent, OpenDialogOptions, WebFrameMain } from 'electr
 import { constants, promises as fs } from 'fs';
 import { basename, dirname, isAbsolute, join, normalize, resolve } from 'path';
 
-import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, RecentProject, TargetCheck } from '../preload/api';
-import { compilePolicy, initCfbsProject } from './backend';
+import type {
+  CreateProjectRequest,
+  MasterfilesVersions,
+  OperationResult,
+  ProjectContent,
+  ProjectStorage,
+  ProjectType,
+  RecentProject,
+  TargetCheck
+} from '../preload/api';
+import { compilePolicy, initCfbsProject, masterfilesEntry } from './backend';
 
 /**
  * The project:* IPC channels: creating a cfbs project on disk (via the Python
@@ -12,8 +21,10 @@ import { compilePolicy, initCfbsProject } from './backend';
  * the recent-projects list.
  */
 
-// The builder's key under cfbs.json's top-level `meta`.
-const META_KEY = 'policy-builder';
+// The builder's own data, next to cfbs.json (which stays plain cfbs).
+const BUILDER_FILE = '.policy-builder/project.json';
+// Where projects saved before .policy-builder/ kept it: cfbs.json's meta["policy-builder"].
+const LEGACY_META_KEY = 'policy-builder';
 const VERSIONS_URL = 'https://raw.githubusercontent.com/cfengine/build-index/master/versions.json';
 const VERSIONS_TIMEOUT_MS = 5000;
 const FALLBACK_VERSIONS: MasterfilesVersions = { latest: '3.27.1' };
@@ -102,14 +113,14 @@ const GENERATED_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.(cf|mustache)
 const isGeneratedPath = (path: unknown): path is string => typeof path === 'string' && GENERATED_PATH.test(path) && !path.startsWith('./out/');
 
 // What the previous save generated (older projects list only their policy files).
-function generatedPaths(meta: unknown): string[] {
-  const generated = isRecord(meta) && isRecord(meta[META_KEY]) ? meta[META_KEY].generated : undefined;
-  return Array.isArray(generated) ? generated.filter(isGeneratedPath) : builderPaths(meta).filter(isPolicyPath);
+function generatedPaths(project: unknown): string[] {
+  const generated = isRecord(project) ? project.generated : undefined;
+  return Array.isArray(generated) ? generated.filter(isGeneratedPath) : builderPaths(project).filter(isPolicyPath);
 }
 
-// The policy file paths the builder's meta lists.
-function builderPaths(meta: unknown): string[] {
-  const files = isRecord(meta) && isRecord(meta[META_KEY]) ? meta[META_KEY].files : undefined;
+// The policy file paths the builder's project data lists.
+function builderPaths(project: unknown): string[] {
+  const files = isRecord(project) ? project.files : undefined;
   return Array.isArray(files) ? files.flatMap(file => (isRecord(file) && typeof file.path === 'string' ? [file.path] : [])) : [];
 }
 
@@ -119,20 +130,25 @@ const moduleNameOf = (path: string) => {
   return parts.length === 1 ? path : `./${parts[0]}/`;
 };
 // Plus ./templates/, once a save has generated templates into it.
-const builderModules = (meta: unknown) => {
-  const modules = new Set(builderPaths(meta).map(moduleNameOf));
-  if (generatedPaths(meta).some(path => path.startsWith(TEMPLATES_DIR))) modules.add(TEMPLATES_DIR);
+const builderModules = (project: unknown) => {
+  const modules = new Set(builderPaths(project).map(moduleNameOf));
+  if (generatedPaths(project).some(path => path.startsWith(TEMPLATES_DIR))) modules.add(TEMPLATES_DIR);
   return modules;
 };
 
 function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
-  if (!isRecord(content) || !isRecord(content.meta) || !isRecord(content.meta[META_KEY]) || !Array.isArray(content.modules)) {
+  if (!isRecord(content) || !isRecord(content.project) || !Array.isArray(content.modules) || !isRecord(content.provided)) {
     throw new InvalidRequest('Invalid project content');
   }
-  const paths = builderPaths(content.meta);
+  if (typeof content.project.module_name !== 'string' || !MODULE_NAME.test(content.project.module_name)) {
+    throw new InvalidRequest('Invalid module name');
+  }
+  const provided = content.provided;
+  if (!Array.isArray(provided.steps) || !provided.steps.every(step => typeof step === 'string')) throw new InvalidRequest('Invalid provided module');
+  const paths = builderPaths(content.project);
   if (!paths.every(isPolicyPath) || new Set(paths).size !== paths.length) throw new InvalidRequest('Invalid policy file path');
-  const modules = builderModules(content.meta);
+  const modules = builderModules(content.project);
   const names = content.modules.map(module => (isRecord(module) ? module.name : undefined));
   const ok =
     names.length === modules.size &&
@@ -141,6 +157,18 @@ function checkedContent(value: unknown): ProjectContent {
   if (!ok) throw new InvalidRequest('Invalid policy module');
   if (JSON.stringify(content).length > MAX_CONTENT_BYTES) throw new InvalidRequest('Project is too large');
   return content as ProjectContent;
+}
+
+// A cfbs module name (cfbs validates a module project's name this way).
+const MODULE_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+const PROJECT_TYPES: ProjectType[] = ['module', 'policy-set'];
+
+function checkedStorage(value: unknown): ProjectStorage {
+  const storage = value as Partial<ProjectStorage> | null;
+  const masterfiles = storage?.masterfiles ?? null;
+  if (!isRecord(storage) || !PROJECT_TYPES.includes(storage.type as ProjectType)) throw new InvalidRequest('Invalid project type');
+  if (masterfiles !== null && (typeof masterfiles !== 'string' || !MASTERFILES.test(masterfiles))) throw new InvalidRequest('Invalid masterfiles version');
+  return { masterfiles, type: storage.type as ProjectType };
 }
 
 // Templates' directory module, as `cfbs add ./templates/` writes it.
@@ -153,21 +181,40 @@ const TEMPLATES_MODULE = {
   steps: ['directory ./ services/cfbs/templates/']
 };
 
-// What a save generated, into the meta (so the next save can remove what it no longer
-// does), and the ./templates/ module when there are templates to ship (an empty one fails the build).
-function withGenerated(content: ProjectContent, generated: string[]): ProjectContent {
-  const templates = generated.some(path => path.startsWith(TEMPLATES_DIR));
+// What a save generated, into the builder's data (so the next save can remove what it no longer
+// does), and — for a policy set — the ./templates/ module when there are templates to ship (an
+// empty one fails the build). A module ships them with a copy step instead.
+function withGenerated(content: ProjectContent, generated: string[], type: ProjectType = 'policy-set'): ProjectContent {
+  const templates = type === 'policy-set' && generated.some(path => path.startsWith(TEMPLATES_DIR));
   return {
-    meta: { ...content.meta, [META_KEY]: { ...content.meta[META_KEY], generated } },
+    ...content,
+    project: { ...content.project, generated },
     modules: [...content.modules, ...(templates ? [TEMPLATES_MODULE] : [])]
   };
 }
 
-// The app's version, into the builder's project meta.
-const stamped = (content: ProjectContent): ProjectContent => ({
-  ...content,
-  meta: { ...content.meta, [META_KEY]: { ...content.meta[META_KEY], tool_version: app.getVersion() } }
-});
+// The app's version, into the builder's data.
+const stamped = (content: ProjectContent): ProjectContent => ({ ...content, project: { ...content.project, tool_version: app.getVersion() } });
+
+// A project's builder data: .policy-builder/project.json, else (saved before it existed)
+// cfbs.json's meta["policy-builder"], else null for a plain cfbs project.
+async function readBuilderProject(folder: string, cfbs: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+  const path = join(folder, BUILDER_FILE);
+  const stats = await fs.stat(path).catch(() => null);
+  if (stats) {
+    if (!stats.isFile() || stats.size > MAX_CFBS_JSON_BYTES) throw new InvalidRequest(`${BUILDER_FILE} isn't a readable project file.`);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await fs.readFile(path, 'utf-8'));
+    } catch (error) {
+      throw new InvalidRequest(`${BUILDER_FILE} isn't valid JSON: ${error instanceof Error ? error.message : error}`);
+    }
+    if (!isRecord(parsed)) throw new InvalidRequest(`${BUILDER_FILE} is not a JSON object.`);
+    return parsed;
+  }
+  const legacy = isRecord(cfbs.meta) ? cfbs.meta[LEGACY_META_KEY] : undefined;
+  return isRecord(legacy) ? legacy : null;
+}
 
 async function checkTarget(parent: string, folderName: string): Promise<TargetCheck> {
   let parentWritable = await isDirectory(parent);
@@ -216,16 +263,60 @@ async function fetchMasterfilesVersions(): Promise<MasterfilesVersions> {
   }
 }
 
+// The module a module project provides, plus the copy that ships its templates.
+function providedWithTemplates(content: ProjectContent, moduleName: string, generated: string[]): Record<string, unknown> {
+  const provided = content.provided as { steps: string[] };
+  if (!generated.some(path => path.startsWith(TEMPLATES_DIR))) return provided;
+  const copy = `copy ${TEMPLATES_DIR} services/cfbs/${moduleName}/templates/`;
+  const at = provided.steps.findIndex(step => step.startsWith('policy_files '));
+  return { ...provided, steps: [...provided.steps.slice(0, at), copy, ...provided.steps.slice(at)] };
+}
+
+const isOurProvided = (module: unknown) => isRecord(module) && Array.isArray(module.tags) && module.tags.includes('policy-builder');
+
 /**
- * Merges builder state into an existing cfbs.json: our `meta` entry replaced,
- * our modules (the ones its files make up, before and after) replaced after
- * everything else, other tools' meta and all other keys and entries kept.
+ * Merges the builder's content into an existing cfbs.json, shaped as `type` asks (converting
+ * it when that changed). Our own entries are replaced — the `build` modules the project's
+ * files make up (before and after), and the `provides` entry we wrote — and everything else is
+ * kept: other modules, masterfiles, other keys. A policy set's `build` gets our modules; a
+ * module's `provides` gets the project, under its module name. Builder data an older save left
+ * in `meta` goes (it now lives in .policy-builder/project.json).
  */
-export function mergeCfbsJson(existing: Record<string, unknown>, content: ProjectContent): Record<string, unknown> {
+export function mergeCfbsJson(
+  existing: Record<string, unknown>,
+  content: ProjectContent,
+  previous: unknown,
+  type: ProjectType,
+  generated: string[],
+  masterfiles: Record<string, unknown> | null = null
+): Record<string, unknown> {
   const build = Array.isArray(existing.build) ? existing.build : [];
-  const ours = new Set([...builderModules(existing.meta), ...builderModules(content.meta)]);
-  const meta = { ...(isRecord(existing.meta) ? existing.meta : {}), ...content.meta };
-  return { ...existing, meta, build: [...build.filter(entry => !(isRecord(entry) && ours.has(entry.name as string))), ...content.modules] };
+  const ours = new Set([...builderModules(previous), ...builderModules(content.project)]);
+  const others = build.filter(entry => !(isRecord(entry) && ours.has(entry.name as string)));
+  const provides = Object.fromEntries(Object.entries(isRecord(existing.provides) ? existing.provides : {}).filter(([, module]) => !isOurProvided(module)));
+  const project = content.project as { module_name: string; name: string };
+  const merged: Record<string, unknown> = { ...existing, type };
+  if (type === 'module') {
+    merged.name = project.module_name;
+    merged.provides = { ...provides, [project.module_name]: providedWithTemplates(content, project.module_name, generated) };
+    if (others.length) merged.build = others;
+    else delete merged.build;
+  } else {
+    merged.name = project.name;
+    if (Object.keys(provides).length) merged.provides = provides;
+    else delete merged.provides;
+    const hasMasterfiles = others.some(entry => isRecord(entry) && entry.name === 'masterfiles');
+    merged.build = [...(masterfiles && !hasMasterfiles ? [masterfiles] : []), ...others, ...content.modules];
+  }
+  return withoutLegacyMeta(merged);
+}
+
+// Builder data an older save kept in cfbs.json's `meta` goes; other tools' entries stay.
+function withoutLegacyMeta(cfbs: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(cfbs.meta) || !(LEGACY_META_KEY in cfbs.meta)) return cfbs;
+  const { [LEGACY_META_KEY]: _legacy, ...otherMeta } = cfbs.meta;
+  const { meta: _meta, ...rest } = cfbs;
+  return Object.keys(otherMeta).length ? { ...rest, meta: otherMeta } : rest;
 }
 
 // A moved or deleted file's folders, once nothing is left in them (git doesn't keep empty ones).
@@ -240,16 +331,21 @@ async function removeEmptyFolders(projectPath: string, folder: string): Promise<
 }
 
 /**
- * Saves the project: its generated .cf files first, then cfbs.json. Policy
- * files the previous save generated and this one doesn't are removed.
+ * Saves the project: its generated files first, then .policy-builder/project.json,
+ * then cfbs.json. Files the previous save generated and this one doesn't are removed.
  */
-async function writeProjectContent(projectPath: string, content: ProjectContent): Promise<void> {
+async function writeProjectContent(projectPath: string, content: ProjectContent, storage: ProjectStorage): Promise<{ masterfiles: string | null }> {
   const cfbsPath = join(projectPath, 'cfbs.json');
   const existing = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
   if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) throw new Error('cfbs.json is not a JSON object');
-  const files = await compilePolicy(content.meta[META_KEY]);
+  // A module becoming a policy set without masterfiles: fetch the entry before writing anything.
+  const build: unknown[] = Array.isArray(existing.build) ? existing.build : [];
+  const hasMasterfiles = build.some(entry => isRecord(entry) && entry.name === 'masterfiles');
+  const masterfiles = storage.type === 'policy-set' && !hasMasterfiles && storage.masterfiles ? await masterfilesEntry(storage.masterfiles) : null;
+  const previous = await readBuilderProject(projectPath, existing);
+  const files = await compilePolicy(content.project);
   const generated = Object.keys(files);
-  const missing = builderPaths(content.meta).find(path => typeof files[path] !== 'string');
+  const missing = builderPaths(content.project).find(path => typeof files[path] !== 'string');
   if (missing) throw new Error(`No policy was generated for ${missing}`);
   const outside = generated.find(path => !isGeneratedPath(path));
   if (outside) throw new Error(`Refusing to write generated policy outside the project: ${outside}`);
@@ -258,12 +354,19 @@ async function writeProjectContent(projectPath: string, content: ProjectContent)
     await fs.mkdir(dirname(target), { recursive: true });
     await writeFileAtomic(target, files[path]);
   }
-  for (const stale of generatedPaths(existing.meta).filter(path => !generated.includes(path))) {
+  for (const stale of generatedPaths(previous).filter(path => !generated.includes(path))) {
     await fs.rm(join(projectPath, stale), { force: true });
     await removeEmptyFolders(projectPath, dirname(stale));
   }
-  const saved = withGenerated(stamped(content), generated);
-  await writeFileAtomic(cfbsPath, `${JSON.stringify(mergeCfbsJson(existing, saved), null, 2)}\n`);
+  const saved = withGenerated(stamped(content), generated, storage.type);
+  await fs.mkdir(dirname(join(projectPath, BUILDER_FILE)), { recursive: true });
+  await writeFileAtomic(join(projectPath, BUILDER_FILE), `${JSON.stringify(saved.project, null, 2)}\n`);
+  const merged = mergeCfbsJson(existing, saved, previous, storage.type, generated, masterfiles);
+  await writeFileAtomic(cfbsPath, `${JSON.stringify(merged, null, 2)}\n`);
+  const entry = (Array.isArray(merged.build) ? merged.build : []).find(item => isRecord(item) && item.name === 'masterfiles') as
+    Record<string, unknown> | undefined;
+  const version = entry ? (typeof entry.version === 'string' ? entry.version : 'master') : null;
+  return { masterfiles: version };
 }
 
 const failure = (error: unknown): OperationResult<never> => ({
@@ -367,9 +470,10 @@ async function openProject(event: IpcMainInvokeEvent, request: { path?: unknown 
   if (picked === null) return null;
   const path = await projectFolderOf(resolve(picked));
   const cfbs = await readCfbsJson(path);
+  const builder = await readBuilderProject(path, cfbs);
   knownProjects.add(path);
   await rememberRecent(path, typeof cfbs.name === 'string' && cfbs.name.trim() ? cfbs.name.trim() : basename(path));
-  return { ok: true as const, cfbs, path };
+  return { ok: true as const, builder, cfbs, path };
 }
 
 async function createProject(request: CreateProjectRequest) {
@@ -379,13 +483,22 @@ async function createProject(request: CreateProjectRequest) {
   const description = checkedString(request.description, 'description', 500);
   if (typeof request.git !== 'boolean') throw new InvalidRequest('Invalid git option');
   if (typeof request.masterfiles !== 'string' || !MASTERFILES.test(request.masterfiles)) throw new InvalidRequest('Invalid masterfiles version');
-  const content = stamped(checkedContent({ meta: request.meta, modules: request.modules }));
+  const content = stamped(checkedContent({ project: request.project, modules: request.modules, provided: request.provided }));
+  const type = checkedStorage({ type: request.type, masterfiles: null }).type;
   const check = await checkTarget(parent, folderName);
   if (!check.parentWritable) throw new InvalidRequest(`Can't write to ${parent}`);
   if (check.targetState === 'nonEmpty') throw new InvalidRequest(`A folder named '${folderName}' already exists and isn't empty.`);
 
   // The content goes in before the initial commit, so a git project starts clean.
-  const result = await initCfbsProject({ content, description, directory: join(parent, folderName), git: request.git, masterfiles: request.masterfiles, name });
+  const result = await initCfbsProject({
+    content,
+    description,
+    directory: join(parent, folderName),
+    git: request.git,
+    masterfiles: request.masterfiles,
+    name,
+    type
+  });
   knownProjects.add(result.path);
   await writeSettings({ lastProjectParent: parent }).catch(error => console.error(`[project] settings not saved: ${error}`));
   await rememberRecent(result.path, name);
@@ -451,12 +564,13 @@ export function registerProjectHandlers(isTrustedFrame: (frame: WebFrameMain | n
 
   ipcMain.handle(
     'project:save',
-    trusted(async (_event, request: { meta?: unknown; modules?: unknown; path?: unknown }) => {
+    trusted(async (_event, request: { modules?: unknown; path?: unknown; project?: unknown; provided?: unknown; storage?: unknown }) => {
       try {
         const path = checkedAbsolutePath(request?.path, 'project path');
         if (!knownProjects.has(path)) throw new InvalidRequest('Not a project opened in this session');
-        await writeProjectContent(path, checkedContent({ meta: request.meta, modules: request.modules }));
-        return { ok: true as const };
+        const content = checkedContent({ project: request.project, modules: request.modules, provided: request.provided });
+        const { masterfiles } = await writeProjectContent(path, content, checkedStorage(request.storage));
+        return { ok: true as const, masterfiles };
       } catch (error) {
         return failure(error);
       }

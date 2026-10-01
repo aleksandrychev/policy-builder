@@ -1,7 +1,7 @@
 """Policy Builder canvases -> CFEngine policy, one .cf per policy file.
 
 The contract is blocks/README.md: descriptors (blocks/*.json), decorators and
-builder bodies (blocks/lib/). Input is cfbs.json's meta["policy-builder"];
+builder bodies (blocks/lib/). Input is the project's .policy-builder/project.json;
 output is {file path: contents} — each .cf, plus the template files its
 blocks render (in ./templates/, one cfbs directory module). Targets CFEngine
 3.27+: every file evaluates top-down, all of its blocks in its one entry
@@ -657,12 +657,12 @@ def format_policy(text: str) -> str:
 
 
 def compile_project(meta: dict, library: Library | None = None) -> dict[str, str]:
-    """meta["policy-builder"] -> {path: contents}, every .cf and the files next to it."""
+    """.policy-builder/project.json -> {path: contents}, every .cf and its templates."""
     return {path: text for files in compile_files(meta, library).values() for path, text in files.items()}
 
 
 def compile_files(meta: dict, library: Library | None = None) -> dict[str, dict[str, str]]:
-    """meta["policy-builder"] -> {policy path: {path: contents}}: each .cf first, then its templates."""
+    """.policy-builder/project.json -> {policy path: {path: contents}}: each .cf first, then its templates."""
     library = library or Library.load()
     files = meta.get("files")
     if not isinstance(files, list):

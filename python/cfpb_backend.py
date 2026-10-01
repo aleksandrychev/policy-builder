@@ -3,7 +3,8 @@ diagnostics on stderr, non-zero exit on failure.
 
   cfpb-backend [format]   policy on stdin -> formatted policy on stdout
   cfpb-backend init       JSON options on stdin -> JSON result on stdout
-  cfpb-backend compile    builder meta on stdin -> {"files": {path: policy}} on stdout
+  cfpb-backend compile    builder project on stdin -> {"files": {path: policy}} on stdout
+  cfpb-backend masterfiles  {"version"} on stdin -> the masterfiles build entry on stdout
 
 Calls cfengine_cli and cfbs in-process. Import cfengine_cli.format, never
 cfengine_cli.main — that one pulls in cf_remote and ~27 MB of libcloud.
@@ -30,6 +31,10 @@ from cfpb_compiler import CompileError, compile_project, templates_module
 
 LINE_LENGTH = 80
 INIT_COMMIT_MESSAGE = "Initialized a new CFEngine Build project"
+# The builder's own data (project.json), next to cfbs.json, which stays plain cfbs.
+BUILDER_DIR = ".policy-builder"
+# A cfbs module name (cfbs validates a module project's name this way).
+MODULE_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 # Exact versions, "master", or "no". cfbs 5.7.0 mishandles branch names like 3.24.x.
 MASTERFILES = re.compile(r"^(\d+\.\d+\.\d+(-\d+)?|master|no)$")
 # Substrings of cfbs/git output that mean the download failed, not the input.
@@ -83,11 +88,23 @@ def _parse_init_options(text: str) -> dict:
         raise InvalidInput("Project name must not be empty")
     if not MASTERFILES.match(options["masterfiles"]):
         raise InvalidInput(f"Unsupported masterfiles value: {options['masterfiles']}")
+    options.setdefault("type", "policy-set")
+    if options["type"] not in ("policy-set", "module"):
+        raise InvalidInput(f"Unsupported project type: {options['type']}")
     content = options.get("content")
     if content is not None and not (
-        isinstance(content, dict) and isinstance(content.get("meta"), dict) and isinstance(content.get("modules"), list)
+        isinstance(content, dict)
+        and isinstance(content.get("project"), dict)
+        and isinstance(content.get("modules"), list)
+        and isinstance(content.get("provided", {}), dict)
     ):
-        raise InvalidInput('"content" must be {"meta": {...}, "modules": [...]}')
+        raise InvalidInput('"content" must be {"project": {...}, "modules": [...], "provided": {...}}')
+    if options["type"] == "module":
+        name = (content or {}).get("project", {}).get("module_name")
+        if not isinstance(name, str) or not MODULE_NAME.match(name):
+            raise InvalidInput("A module needs a module name: lowercase letters, digits and dashes")
+        if not isinstance(content.get("provided"), dict):
+            raise InvalidInput('A module needs its "provided" module')
 
     return {**options, "directory": directory}
 
@@ -150,25 +167,45 @@ def _update_cfbs_json(directory: str, options: dict) -> dict:
     from cfbs.pretty import CFBS_DEFAULT_SORTING_RULES, pretty
 
     path = os.path.join(directory, "cfbs.json")
-    with open(path, encoding="utf-8") as file:
-        config = json.load(file, object_pairs_hook=OrderedDict)
-    config["name"] = options["name"]
+    module = options["type"] == "module"
+    if module:
+        # No cfbs init for a module (it has no masterfiles): its cfbs.json is just what it provides.
+        config = OrderedDict([("type", "module"), ("provides", OrderedDict())])
+    else:
+        with open(path, encoding="utf-8") as file:
+            config = json.load(file, object_pairs_hook=OrderedDict)
+    content = options.get("content")
+    # A module's name is its module name (cfbs validates it); the display name stays in project.json.
+    config["name"] = content["project"]["module_name"] if module else options["name"]
     config["description"] = options["description"]
     config["git"] = options["git"]  # what `cfbs init --git=yes` would have written
-    # The builder's own meta and modules, in before the initial commit.
-    content = options.get("content")
+    # The builder's modules, its generated policy and its own data, in before the initial commit.
     if content:
-        builder = content["meta"].get("policy-builder", {})
-        files = compile_project(builder)
+        files = compile_project(content["project"])
         _write_policy(directory, files)
         # What this save generated, so the next one can remove what it no longer does.
-        meta = {**content["meta"], "policy-builder": {**builder, "generated": list(files)}}
-        config["meta"] = {**config.get("meta", {}), **meta}
-        templates = templates_module(files)
-        config["build"] = [*config.get("build", []), *content["modules"], *([templates] if templates else [])]
+        project = {**content["project"], "generated": list(files)}
+        os.makedirs(os.path.join(directory, BUILDER_DIR), exist_ok=True)
+        with open(os.path.join(directory, BUILDER_DIR, "project.json"), "w", encoding="utf-8") as file:
+            file.write(json.dumps(project, indent=2) + "\n")
+        if module:
+            config["provides"][config["name"]] = _with_templates(content["provided"], config["name"], files)
+        else:
+            templates = templates_module(files)
+            config["build"] = [*config.get("build", []), *content["modules"], *([templates] if templates else [])]
     with open(path, "w", encoding="utf-8") as file:
         file.write(pretty(config, CFBS_DEFAULT_SORTING_RULES) + "\n")
     return config
+
+
+def _with_templates(provided: dict, module_name: str, files: dict[str, str]) -> dict:
+    """A module ships its templates with a copy step, before its policy_files."""
+    if not any(path.startswith("./templates/") for path in files):
+        return provided
+    steps = list(provided["steps"])
+    at = next((i for i, step in enumerate(steps) if step.startswith("policy_files ")), len(steps))
+    steps.insert(at, f"copy ./templates/ services/cfbs/{module_name}/templates/")
+    return {**provided, "steps": steps}
 
 
 def _write_policy(directory: str, files: dict[str, str]) -> None:
@@ -235,7 +272,8 @@ def init_command() -> int:
     try:
         if created:
             os.mkdir(directory)
-        _run_cfbs_init(directory, options["masterfiles"])
+        if options["type"] == "policy-set":
+            _run_cfbs_init(directory, options["masterfiles"])
         config = _update_cfbs_json(directory, options)
         if options["git"]:
             _git_commit_all(directory)
@@ -246,12 +284,40 @@ def init_command() -> int:
         return 1
 
     masterfiles = None
-    if options["masterfiles"] != "no":
+    if options["type"] == "policy-set" and options["masterfiles"] != "no":
         build = config.get("build", [])
         masterfiles = next(
             (entry for entry in build if entry.get("name") == "masterfiles"), build[0] if build else None
         )
     print(json.dumps({"path": directory, "masterfiles": masterfiles}))
+    return 0
+
+
+def masterfiles_command() -> int:
+    """The masterfiles build entry cfbs init writes for a version, from a throwaway project:
+    for turning a module into a policy set."""
+    import tempfile
+
+    try:
+        version = json.loads(sys.stdin.read()).get("version")
+    except (json.JSONDecodeError, AttributeError):
+        version = None
+    if not isinstance(version, str) or not MASTERFILES.match(version) or version == "no":
+        print('Expected {"version": "<x.y.z>" or "master"} on stdin', file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory() as scratch:
+        try:
+            _run_cfbs_init(scratch, version)
+            with open(os.path.join(scratch, "cfbs.json"), encoding="utf-8") as file:
+                build = json.load(file, object_pairs_hook=OrderedDict).get("build", [])
+        except Exception as error:
+            print(str(error) if isinstance(error, InitFailed) else f"masterfiles failed: {error}", file=sys.stderr)
+            return 1
+    entry = next((module for module in build if module.get("name") == "masterfiles"), None)
+    if entry is None:
+        print(f"cfbs init added no masterfiles for {version}", file=sys.stderr)
+        return 1
+    print(json.dumps(entry))
     return 0
 
 
@@ -282,9 +348,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("format", help="format CFEngine policy (the default)")
     commands.add_parser("init", help="create a cfbs project")
     commands.add_parser("compile", help="generate policy from the builder's project data")
+    commands.add_parser("masterfiles", help="the masterfiles build entry for a version")
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
-    commands = {"init": init_command, "compile": compile_command}
+    commands = {"init": init_command, "compile": compile_command, "masterfiles": masterfiles_command}
     return commands.get(args.command, format_command)()
 
 

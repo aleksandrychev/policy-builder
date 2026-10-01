@@ -1,5 +1,7 @@
-import { Box, Button, Tab, Tabs, Typography } from '@mui/material';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import { Box, Button, IconButton, Tab, Tabs, Typography } from '@mui/material';
 
+import type { ProjectType } from '../store/projectSlice/types';
 import { BlockNodesIcon } from './icons/BlockNodesIcon';
 
 export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results & Logs'] as const;
@@ -14,8 +16,10 @@ interface TopBarProps {
   // "runs only if linux", when the open file is gated.
   fileGate?: string;
   masterfiles: string | null;
+  onOpenSettings: () => void;
   onTabChange: (index: number) => void;
   projectName: string;
+  type: ProjectType;
 }
 
 const chipSx = {
@@ -34,7 +38,7 @@ const chipSx = {
   maxWidth: 200
 } as const;
 
-export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, blockCount, activeTab, onTabChange }: TopBarProps) {
+export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, blockCount, activeTab, onTabChange, onOpenSettings, type }: TopBarProps) {
   return (
     <Box
       component="header"
@@ -60,6 +64,14 @@ export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, bloc
               </Box>
             )}
           </Typography>
+          <IconButton size="small" onClick={onOpenSettings} aria-label="Project settings" title="Project settings (⌘,)" sx={{ ml: -1 }}>
+            <SettingsOutlinedIcon fontSize="small" />
+          </IconButton>
+          {type === 'module' && (
+            <Typography title="Stored as a cfbs module: other policy sets add it with cfbs add" sx={chipSx}>
+              module
+            </Typography>
+          )}
           {masterfiles && <Typography sx={chipSx}>masterfiles {masterfiles}</Typography>}
           <Typography sx={chipSx}>bundle: {bundle}</Typography>
           {fileGate && (

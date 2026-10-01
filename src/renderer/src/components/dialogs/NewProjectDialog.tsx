@@ -23,6 +23,8 @@ import {
 } from '@mui/material';
 
 import { projectFolderName } from '../../project/cfbsProject';
+import type { ProjectType } from '../../store/projectSlice/types';
+import { ProjectTypeField } from './ProjectTypeField';
 
 export const DEFAULT_DESCRIPTION = 'Policy built with CFEngine Policy Builder';
 const FALLBACK_VERSIONS = { latest: '3.27.1' };
@@ -40,6 +42,7 @@ export interface ProjectFormValues {
   name: string;
   // null without the Electron bridge (tests): the project stays in memory.
   parent: string | null;
+  type: ProjectType;
 }
 
 export type SubmitResult = { ok: true } | { details: string; message: string; ok: false };
@@ -47,6 +50,7 @@ export type SubmitResult = { ok: true } | { details: string; message: string; ok
 interface NewProjectDialogProps {
   initialDescription?: string;
   initialName?: string;
+  initialType?: ProjectType;
   // 'saveAs': gives an in-memory project (the demo) its folder on disk.
   mode: 'new' | 'saveAs';
   onClose: () => void;
@@ -69,7 +73,7 @@ function useDefaultParent() {
   return [parent, setParent] as const;
 }
 
-function useMasterfilesVersions() {
+export function useMasterfilesVersions() {
   const [versions, setVersions] = useState(FALLBACK_VERSIONS);
   useEffect(() => {
     window.api
@@ -167,7 +171,14 @@ function ErrorAlert({ error }: { error: { details: string; message: string } }) 
  * Creates a cfbs project folder on disk (`cfbs init` via main) and opens it.
  * Without the Electron bridge (tests) the project is created in memory only.
  */
-export function NewProjectDialog({ mode, initialName = '', initialDescription = DEFAULT_DESCRIPTION, onClose, onSubmit }: NewProjectDialogProps) {
+export function NewProjectDialog({
+  mode,
+  initialName = '',
+  initialDescription = DEFAULT_DESCRIPTION,
+  initialType = 'policy-set',
+  onClose,
+  onSubmit
+}: NewProjectDialogProps) {
   const persistent = Boolean(window.api);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
@@ -175,6 +186,7 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
   const versions = useMasterfilesVersions();
   const [masterfiles, setMasterfiles] = useState<MasterfilesChoice>('latest');
   const [git, setGit] = useState(true);
+  const [type, setType] = useState<ProjectType>(initialType);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<{ details: string; message: string } | null>(null);
 
@@ -190,7 +202,17 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
-    const values = { name: name.trim(), description: description.trim(), parent: persistent ? parent : null, folderName, masterfiles: version, git };
+    // A module brings no masterfiles: the policy sets that add it do.
+    const masterfilesValue = type === 'module' ? 'no' : version;
+    const values = {
+      name: name.trim(),
+      description: description.trim(),
+      parent: persistent ? parent : null,
+      folderName,
+      masterfiles: masterfilesValue,
+      git,
+      type
+    };
     const result = await onSubmit(values).catch((cause: unknown): SubmitResult => ({
       ok: false,
       message: String((cause as Error)?.message ?? cause),
@@ -203,7 +225,12 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
     }
   };
 
-  const progress = masterfiles === 'master' ? 'Downloading masterfiles from the master branch…' : `Downloading masterfiles ${version}…`;
+  const progress =
+    type === 'module'
+      ? 'Creating the module…'
+      : masterfiles === 'master'
+        ? 'Downloading masterfiles from the master branch…'
+        : `Downloading masterfiles ${version}…`;
 
   return (
     <Dialog open onClose={submitting ? undefined : onClose} fullWidth maxWidth="sm">
@@ -250,7 +277,8 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
             {persistent && (
               <>
                 <LocationField parent={parent} folderName={folderName} check={check} disabled={submitting} onChange={setParent} />
-                <FormControl disabled={submitting}>
+                <ProjectTypeField value={type} onChange={setType} disabled={submitting} />
+                <FormControl disabled={submitting} sx={{ display: type === 'module' ? 'none' : undefined }}>
                   <FormLabel id="masterfiles-label" sx={{ fontSize: 14 }}>
                     Which version of masterfiles would you like to use?
                   </FormLabel>

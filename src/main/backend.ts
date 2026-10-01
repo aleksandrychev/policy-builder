@@ -112,13 +112,15 @@ export async function formatPolicy(source: string): Promise<string> {
 }
 
 export type InitCfbsProjectOptions = {
-  // The builder's own cfbs.json content, written before the initial commit.
-  content?: { meta: Record<string, unknown>; modules: unknown[] };
+  // The builder's own content (modules, provided module, project data), written before the initial commit.
+  content?: { modules: unknown[]; project: object; provided: object };
   description: string;
   directory: string;
   git: boolean;
   masterfiles: string;
   name: string;
+  // A module gets no cfbs init and no masterfiles: its cfbs.json provides the project.
+  type: 'module' | 'policy-set';
 };
 
 export type InitCfbsProjectResult = {
@@ -142,12 +144,12 @@ export async function initCfbsProject(options: InitCfbsProjectOptions): Promise<
 }
 
 /**
- * Generates the policy for the builder's project data (cfbs.json's
- * meta["policy-builder"]), resolving with every generated file by project path:
- * the .cf files, and the templates in ./templates/.
+ * Generates the policy for the builder's project data (.policy-builder/project.json),
+ * resolving with every generated file by project path: the .cf files, and the
+ * templates in ./templates/.
  */
-export async function compilePolicy(meta: unknown): Promise<Record<string, string>> {
-  const result = await runSidecar(['compile'], JSON.stringify(meta), COMPILE_TIMEOUT_MS);
+export async function compilePolicy(project: unknown): Promise<Record<string, string>> {
+  const result = await runSidecar(['compile'], JSON.stringify(project), COMPILE_TIMEOUT_MS);
   logStderr(result.stderr);
   if (result.code !== 0) throw sidecarError(result, COMPILE_TIMEOUT_MS);
   try {
@@ -156,5 +158,22 @@ export async function compilePolicy(meta: unknown): Promise<Record<string, strin
     return files;
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable compile result'), { details: result.stdout });
+  }
+}
+
+/**
+ * The masterfiles build entry cfbs writes for `version` ("3.27.1" or "master"), for turning a
+ * module into a policy set. Needs the network, like New Project.
+ */
+export async function masterfilesEntry(version: string): Promise<Record<string, unknown>> {
+  const result = await runSidecar(['masterfiles'], JSON.stringify({ version }), INIT_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, INIT_TIMEOUT_MS);
+  try {
+    const entry = JSON.parse(result.stdout) as Record<string, unknown>;
+    if (typeof entry !== 'object' || entry === null || entry.name !== 'masterfiles') throw new Error('not a masterfiles entry');
+    return entry;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable masterfiles entry'), { details: result.stdout });
   }
 }

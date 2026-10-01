@@ -102,6 +102,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: send('menu:open-project') },
         { label: 'Open Recent', submenu: openRecent },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
+        { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', click: send('menu:project-settings') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
         { type: 'separator' },

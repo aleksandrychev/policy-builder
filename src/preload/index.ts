@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
-import type { CreateProjectRequest, MasterfilesVersions, OpenedProject, OperationResult, ProjectContent, RecentProject, TargetCheck } from './api';
+import type {
+  CreateProjectRequest,
+  MasterfilesVersions,
+  OpenedProject,
+  OperationResult,
+  ProjectContent,
+  ProjectStorage,
+  RecentProject,
+  TargetCheck
+} from './api';
 
 // Everything the renderer can ask the main process to do goes through this
 // typed bridge (see api.d.ts — the filename is load-bearing, see the note
@@ -22,7 +31,7 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'recents-changed' | 'save' | 'try-demo';
+export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:new-project': 'new-project',
@@ -30,6 +39,7 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
   // Carries the project path.
   'menu:open-recent': 'open-recent',
   'menu:save': 'save',
+  'menu:project-settings': 'project-settings',
   'menu:try-demo': 'try-demo',
   // Not a menu item: main asking whether a window with unsaved changes may close.
   'window:close-requested': 'close-requested',
@@ -92,7 +102,8 @@ const api = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   /** Merges the builder's content into the project's cfbs.json. */
-  saveProject: (path: string, content: ProjectContent): Promise<OperationResult<object>> => invoke('project:save', { path, ...content }),
+  saveProject: (path: string, content: ProjectContent, storage: ProjectStorage): Promise<OperationResult<{ masterfiles: string | null }>> =>
+    invoke('project:save', { path, ...content, storage }),
 
   /** Shows the project's cfbs.json in the OS file manager. */
   revealProject: (path: string): Promise<void> => invoke('project:reveal', path),
