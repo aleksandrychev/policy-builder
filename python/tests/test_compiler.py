@@ -82,6 +82,38 @@ def test_default_if_empty_splits_into_an_intermediate_and_two_promises():
     assert 'string => "auto",\n      if => not(isvariable("common_vars.worker_processes"));' in policy
 
 
+def test_a_chain_is_explained_step_by_step_from_its_summary_patterns():
+    policy = compile_project(DEMO)[COMMON]
+
+    assert (
+        "    # The lines of /proc/cpuinfo\n"
+        "    # → keep entries matching processor.*\n"
+        "    # → count the entries\n"
+        '    # → fall back to "auto" if unset or "0"\n'
+        '    "worker_processes__in"\n'
+    ) in policy
+
+
+def test_a_parameter_computed_from_data_is_a_local_variable_explained_above_it():
+    meta = _demo()
+    block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "install-package")
+    split = {"id": "s", "decoratorId": "split-list", "params": {}}
+    block["paramBindings"] = {
+        "package_name": {
+            "valueSourceId": "command-output",
+            "params": {"command": "/usr/bin/list-pkgs"},
+            "decorators": [split],
+        }
+    }
+
+    bundle = _bundle(compile_project(meta)[WEBSERVER], "webserver_install_web_server_package")
+
+    assert (
+        '    # The stdout of "/usr/bin/list-pkgs"\n    # → split into a list on "\\n"\n    "package_name"\n' in bundle
+    )
+    assert '"$(package_name)" policy => "present";' in bundle
+
+
 def test_a_file_of_only_variables_and_classes_has_no_entry_bundle():
     policy = compile_project(DEMO)[COMMON]
 

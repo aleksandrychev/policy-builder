@@ -108,6 +108,7 @@
     {
       "id": "variable",
       "label": "Variable",
+      "summary": "The value of {{from_variable}}",
       "badge": "$(…)",
       "value_type": "string",
       "parameters": [
@@ -136,6 +137,7 @@
     {
       "id": "list-variable",
       "label": "List variable",
+      "summary": "The list {{from_variable}}",
       "badge": "@(…)",
       "value_type": "slist",
       "parameters": [
@@ -164,6 +166,7 @@
     {
       "id": "command-output",
       "label": "Command output",
+      "summary": "The {{output}} of \"{{command}}\"",
       "badge": "execresult()",
       "value_type": "string",
       "parameters": [
@@ -238,6 +241,7 @@
     {
       "id": "file-lines",
       "label": "File lines",
+      "summary": "The lines of {{path}}",
       "badge": "readstringlist()",
       "help": "Reads the file as a list of lines — chain \"Keep matching entries (grep)\" and/or \"Count entries\" below to build things like a CPU count from /proc/cpuinfo.",
       "value_type": "slist",
@@ -306,6 +310,7 @@
     {
       "id": "file-content",
       "label": "File content",
+      "summary": "The content of {{path}}",
       "badge": "readfile()",
       "value_type": "string",
       "parameters": [
@@ -346,6 +351,7 @@
     {
       "id": "file-metadata",
       "label": "File metadata",
+      "summary": "The {{attribute}} of {{path}}",
       "badge": "filestat()",
       "value_type": "string",
       "parameters": [
@@ -406,6 +412,7 @@
     {
       "id": "environment-variable",
       "label": "Environment variable",
+      "summary": "The environment variable {{env_var_name}}",
       "badge": "getenv()",
       "value_type": "string",
       "parameters": [
@@ -445,6 +452,7 @@
     {
       "id": "structured-data-json",
       "label": "Structured data (JSON)",
+      "summary": "The JSON in {{path}}",
       "badge": "readjson()",
       "value_type": "data",
       "parameters": [

@@ -124,6 +124,15 @@ def _check_steps(steps: list[dict], params: list[dict], where: str, problems: li
     return used
 
 
+def _check_summary(item: dict, params: list[dict], where: str, problems: list[str]):
+    """A summary (the generated policy's comment) may only name parameters."""
+    names = {param["name"] for param in params}
+    problems += [
+        f"{where}: summary's {{{{{name}}}}} isn't a parameter"
+        for name in set(PLACEHOLDER.findall(item.get("summary", ""))) - names
+    ]
+
+
 def _check_descriptor(path: Path, problems: list[str]):
     block = json.loads(path.read_text())
     where = path.name
@@ -148,6 +157,7 @@ def _check_descriptor(path: Path, problems: list[str]):
         used = _check_steps(source["steps"], params, at, problems)
         for name in {param["name"] for param in source["parameters"]} - used:
             problems.append(f"{at}: parameter {name} is never used")
+        _check_summary(source, params, at, problems)
         step = source["steps"][0]
         if step["promise_type"] == "vars":
             if list(step.get("attributes", {})) != [source.get("value_type")]:
@@ -205,6 +215,7 @@ def test_decorators_are_consistent():
         names = {param["name"] for param in params}
         problems += [f"{where}: {{{{{name}}}}} isn't a parameter" for name in used - names]
         problems += [f"{where}: parameter {name} is never used" for name in names - used]
+        _check_summary(decorator, params, where, problems)
     assert problems == []
 
 

@@ -60,6 +60,10 @@
         "help": {
           "type": "string"
         },
+        "summary": {
+          "$ref": "common.v1.json#/$defs/template",
+          "description": "One line for the generated policy's comment, e.g. \"Split into a list on {{delimiter}}\": what this step does, with its parameters filled in."
+        },
         "input_type": {
           "enum": [
             "string",

@@ -189,6 +189,19 @@ def missing_required(declared: list[dict], params: dict[str, str]) -> list[str]:
     ]
 
 
+SUMMARY_VALUE_LENGTH = 60
+
+
+def fill_summary(pattern: str, params: dict[str, str]) -> str:
+    """A summary pattern with its parameters in, fit for a one-line comment."""
+
+    def shown(match: re.Match) -> str:
+        value = params.get(match.group(1), "").replace("\r", "").replace("\n", "\\n")
+        return value if len(value) <= SUMMARY_VALUE_LENGTH else value[: SUMMARY_VALUE_LENGTH - 1] + "…"
+
+    return PLACEHOLDER.sub(shown, pattern)
+
+
 def canonical(name: str) -> str:
     return re.sub(r"\W", "_", name)
 
@@ -378,8 +391,32 @@ class FileCompiler:
         extra: list[str],
     ):
         """A value source through its decorators, as `vars:` promises for `name` in
-        bundle `owner`. A chain nests inline; a fallback (Default if empty) can't,
-        so it splits into an intermediate variable and two promises."""
+        bundle `owner`, explained step by step in a comment above them. A chain
+        nests inline; a fallback (Default if empty) can't, so it splits into an
+        intermediate variable and two promises."""
+        explained = self.explain(source, ctx.params, decorators)
+        return [*explained, *self.chain_promises(name, owner, source, value, decorators, ctx, conditions, extra)]
+
+    def explain(self, source: dict, params: dict[str, str], decorators: list[dict]) -> list[str]:
+        """`# The stdout of "/usr/bin/x"` / `# → sort (lex)`: each step's summary pattern, filled in."""
+        steps = [fill_summary(source.get("summary") or source["label"], params)]
+        for instance in decorators:
+            decorator = self.library.decorators[instance["decoratorId"]]
+            decorator_params = params_with_defaults(decorator.get("parameters", []), instance.get("params") or {})
+            steps.append(f"→ {fill_summary(decorator.get('summary') or decorator['label'], decorator_params)}")
+        return [f"# {step}" for step in steps]
+
+    def chain_promises(
+        self,
+        name: str,
+        owner: str,
+        source: dict,
+        value,
+        decorators: list[dict],
+        ctx: Context,
+        conditions: list[str],
+        extra: list[str],
+    ) -> list[str]:
         value_type = source.get("value_type", "string")
         # Chained values are function arguments, where lists are written differently.
         expression = compile_value(

@@ -43,6 +43,10 @@ affects stored instances or compiled output bumps the block's `version` (migrati
 - **`entries`** — one instance holds a list of definitions (several variables or classes), each
   with its own name (`name_param`), value source, parameters and optional condition.
 - **`outcome_step`**, **`arrow_default_outcome`** — see "Outcomes and arrows" below.
+- **`summary`** (value sources and decorators) — a one-line pattern with `{{param}}` placeholders,
+  e.g. `split into a list on "{{delimiter}}"`. The compiler fills them in and writes a chain's steps
+  as a comment above its promise (`# The stdout of "/usr/bin/x"` / `# → sort (lex)`); without one,
+  the label is used.
 
 ## Compiled shape (per policy file)
 
