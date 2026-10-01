@@ -811,7 +811,8 @@ export function FlowCanvas({
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         colorMode={theme.palette.mode}
-        attributionPosition="top-right"
+        // MIT-licensed; the attribution is a courtesy, not a license term.
+        proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1.5} color={theme.palette.divider} />
         <MiniMap pannable zoomable position="bottom-right" nodeBorderRadius={4} />
