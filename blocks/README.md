@@ -19,9 +19,9 @@ Schema can't: every `{{placeholder}}` is a parameter and every parameter is used
 `outcome_step`/`name_param` point at something real, defaults match their type and options. It runs
 in CI with the other backend tests (`npm run backend:test`).
 
-Compiled policy targets **CFEngine 3.24 and later** (verified on 3.28). Nothing in the contract is
-newer than 3.17 — `content` (3.16), `execresult()`'s output selector (3.17), `edit_template_string`
-and `inline_mustache` (3.12) — so anything added should keep to 3.24's language.
+Compiled policy targets **CFEngine 3.27 and later** (verified on 3.27.1 and 3.28): every file
+evaluates top-down (`evaluation_order => "top_down"`, new in 3.27), so promises run in canvas order.
+Projects are created on masterfiles 3.27 or master.
 
 Nothing is released yet, so the schemas stay at v1 and change in place. Once released, a change that
 affects stored instances or compiled output bumps the block's `version` (migrations key on
@@ -29,12 +29,11 @@ affects stored instances or compiled output bumps the block's `version` (migrati
 
 ## Descriptors
 
-- **`compile_target`** — `own_bundle`: a sequenced block, compiled to its own `bundle agent`, with
-  outcomes and arrows. `file_vars`: its entries compile into the file's shared `bundle common vars`
-  (Define Variable, Define Class) — not sequenced, no arrows.
-- **`steps`** — ordered promises; each compiles to its own chained bundle, called in order. That's
-  how a block controls ordering across promise types (CFEngine evaluates promise types within one
-  bundle in a fixed order). Every built-in block has one step today.
+- **`compile_target`** — `own_bundle`: a sequenced block, compiled to a promise of the file's entry
+  bundle, with outcomes and arrows (the name predates single-bundle files). `file_vars`: its
+  entries compile into the file's shared `bundle common <bundle>_vars` (Define Variable, Define
+  Class) — not sequenced, no arrows.
+- **`steps`** — ordered promises. Every built-in block has one step; the compiler refuses more.
 - **`value_sources`** — instead of `steps`/`parameters`, for blocks whose promise depends on how the
   value is produced (Define Variable: literal, command output, file…; Define Class: check, combine,
   custom…). Each source has one step and its own parameters, on top of the shared ones. `value_type`
@@ -67,27 +66,31 @@ bundle common <bundle>_vars              # every file_vars entry of the file
 
 bundle agent <bundle>                    # what the cfbs `bundles <bundle>` step runs; absent when the file only defines variables and classes
 {
-  methods:
+  # <block label>                        # every block, in canvas order
+  vars:                                  # the block's locals, if any, named <block>_<name>
     <file condition>::
-      "<label>" usebundle => <bundle>_<label_slug>,
+      "<block>_<param>" <type> => <value>;
+  <promise type>:
+    <file condition>::
+      "<promiser>" <attributes>,
         if => "<block condition>.<the arrows it waits for>",
-        classes => results("bundle", "<bundle>_<label_slug>");   # only if an arrow starts here
+        classes => results("bundle", "<bundle>_<block>");   # only if an arrow starts here
 }
-
-bundle agent <bundle>_<label_slug> { <promise type>: "<promiser>" <attributes>; }
 ```
 
-`python/cfpb_compiler.py` implements this; the output is run through `cfengine format`.
+Every file starts with `body file control { evaluation_order => "top_down"; }`, so promises run in
+the order written — canvas order — rather than by promise type. `python/cfpb_compiler.py`
+implements this; the output is run through `cfengine format`.
 
-- **Names** are readable and project-unique (the default namespace is shared with masterfiles,
-  whose bundle names are in [`lib/reserved-bundles.json`](lib/reserved-bundles.json)): a block's
-  bundle is the file's bundle plus its label slugged (`Render nginx config` →
-  `webserver_render_nginx_config`), `_2`, `_3`… on a clash. Only the file's entry bundle refers to
-  it, so renaming a block renames its bundle safely.
-- **Conditions** and arrow gates combine into one class expression on the call; the file condition
-  is a class guard over the whole `methods:` (and `vars`/`classes`) section.
+- **Names** are readable and project-unique: a block is named after the file's bundle plus its label
+  slugged (`Render nginx config` → `webserver_render_nginx_config`), `_2`, `_3`… on a clash, avoiding
+  masterfiles' bundle names ([`lib/reserved-bundles.json`](lib/reserved-bundles.json)). That name
+  prefixes the block's `results()` classes and names its template file; its local variables drop
+  the file part (`render_nginx_config_template_data`), since they live in the file's bundle.
+- **Conditions** and arrow gates combine into one class expression on the block's promise; the file
+  condition is a class guard over every promise of the file.
 - **A list parameter** in the promiser (`allow_list`) iterates over a `vars:` slist named after the
-  parameter — or, holding just one value, is written in place.
+  block and parameter — or, holding just one value, is written in place.
 - **Templates** are files: every Render Template's template goes into `./templates/`, which ships as
   one directory module (added only when there are templates — an empty one fails `cfbs build`;
   a file module can't carry extra files). The policy refers to it relative to itself, so it
@@ -194,10 +197,10 @@ join, … Each decorator's `expression` wraps the incoming value, which appears 
 ## Outcomes and arrows
 
 An arrow means "run the target after the source, when its outcome is …". The compiler puts
-`classes => results("bundle", "<source bundle>")` on the source's `methods:` call and
-`if => "<source bundle>_repaired|…"` on the target's (several incoming arrows joined with `.` for
-"All of these", `|` for "Any of these"). With `outcome_step`, the `results()` moves onto that step
-instead, with `namespace` scope, since the gate is checked in the entry bundle.
+`classes => results("bundle", "<source block>")` on the source's promise and
+`if => "<source block>_repaired|…"` on the target's (several incoming arrows joined with `.` for
+"All of these", `|` for "Any of these"). Top-down evaluation means the source has always run by the
+time the target is checked.
 
 A command's success counts as *repaired*, never *kept*, so `run-command` sets
 `arrow_default_outcome: "repaired"` (as does `render-template`: "only if the file changed").
@@ -210,26 +213,24 @@ points at a "repaired" arrow.
 
 Any string parameter of an action block can take its value from a data chain ("Compute from data…"):
 a Define Variable value source plus decorators, stored on the instance as `paramBindings[<param>]`.
-It compiles to a `vars:` promise named after the parameter in the block's own bundle (a fallback
-step splits as in "Chains"), and the parameter's value becomes `$(<param>)` — a list iterates, as
-with `allow_list`:
+It compiles to a `vars:` promise named after the block and parameter, right before the block's
+promise (a fallback step splits as in "Chains"), and the parameter's value becomes that variable — a
+list iterates, as with `allow_list`:
 
 ```cfengine3
-bundle agent webserver_install_packages
-{
+  # Install packages
   vars:
-    "package_name" slist => string_split(execresult("/usr/bin/list-pkgs", "noshell", "stdout"), " ", "10");
+    "install_packages_package_name" slist => string_split(execresult("/usr/bin/list-pkgs", "noshell", "stdout"), " ", "10");
   packages:
-    "$(package_name)" policy => "present";
-}
+    "$(install_packages_package_name)" policy => "present";
 ```
 
 ## Conditions and inventory
 
 A block instance, and each entry, can carry one **condition** (`if` or `unless` a class — see
-`Condition` in `src/renderer/src/store/canvasSlice/types.ts`), compiled as `if =>`/`unless =>` on its
-`methods:` call (a skipped bundle would still report "kept" if the condition sat inside it) and on an
-entry's own promise; a file's condition guards its entry bundle's call. Several conditions on one
+`Condition` in `src/renderer/src/store/canvasSlice/types.ts`), compiled as `if =>` on its promise
+(a skipped promise sets no outcome class, so arrows from it don't fire) and on an entry's own
+promise; a file's condition is a class guard over all of the file's promises. Several conditions on one
 promise are combined with `and(…)`. There's deliberately one condition per thing: combining several
 means defining a class with Define Class first.
 

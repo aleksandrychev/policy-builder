@@ -16,7 +16,7 @@ import { compilePolicy, initCfbsProject } from './backend';
 const META_KEY = 'policy-builder';
 const VERSIONS_URL = 'https://raw.githubusercontent.com/cfengine/build-index/master/versions.json';
 const VERSIONS_TIMEOUT_MS = 5000;
-const FALLBACK_VERSIONS: MasterfilesVersions = { latest: '3.27.1', lts: '3.24.4' };
+const FALLBACK_VERSIONS: MasterfilesVersions = { latest: '3.27.1' };
 const FOLDER_NAME = /^[a-z0-9][a-z0-9_-]{0,99}$/;
 const MASTERFILES = /^(\d+\.\d+\.\d+(-\d+)?|master|no)$/;
 const MAX_PATH_LENGTH = 4096;
@@ -208,7 +208,7 @@ async function fetchMasterfilesVersions(): Promise<MasterfilesVersions> {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const index = (await response.json()) as { masterfiles?: Record<string, unknown> };
     const versions = Object.keys(index.masterfiles ?? {});
-    return { latest: highestRelease(versions, '3.27') ?? FALLBACK_VERSIONS.latest, lts: highestRelease(versions, '3.24') ?? FALLBACK_VERSIONS.lts };
+    return { latest: highestRelease(versions, '3.27') ?? FALLBACK_VERSIONS.latest };
   } catch (error) {
     console.error(`[project] masterfiles versions unavailable, using built-in ones: ${error}`);
     versionsRequest = null; // retry next time

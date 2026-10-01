@@ -126,7 +126,7 @@ test('opens a builder project with its blocks and arrows, clean, and saves it ba
     expect(saved.meta['policy-builder'].files[0].edges).toHaveLength(1);
     const policy = readFileSync(join(path, 'web.cf'), 'utf-8');
     expect(policy).toContain('bundle agent web\n');
-    expect(policy).toContain('"Say goodbye"');
+    expect(policy).toContain('  # Say goodbye\n');
   });
 
   expect(consoleErrors, 'console errors during the run').toEqual([]);

@@ -30,7 +30,6 @@ export type OperationResult<T> = ({ ok: true } & T) | { details: string; message
 
 export interface MasterfilesVersions {
   latest: string;
-  lts: string;
 }
 
 export interface OpenedProject {
@@ -70,7 +69,7 @@ declare global {
       getDefaultProjectParent: () => Promise<string>;
       /** Returns the last-saved sidebar/palette sizes, or null if none were saved yet. */
       getLayoutSettings: () => Promise<LayoutSettings | null>;
-      /** Newest 3.27.x and 3.24.x masterfiles releases (built-in fallback when offline). */
+      /** Newest 3.27.x masterfiles release (built-in fallback when offline). */
       getMasterfilesVersions: () => Promise<MasterfilesVersions>;
       /** The file-system path of a File dropped onto the window. */
       getPathForFile: (file: File) => string;

@@ -25,9 +25,10 @@ import {
 import { projectFolderName } from '../../project/cfbsProject';
 
 export const DEFAULT_DESCRIPTION = 'Policy built with CFEngine Policy Builder';
-const FALLBACK_VERSIONS = { latest: '3.27.1', lts: '3.24.4' };
+const FALLBACK_VERSIONS = { latest: '3.27.1' };
 
-type MasterfilesChoice = 'latest' | 'lts' | 'master';
+// Generated policy evaluates top-down, which needs CFEngine 3.27+.
+type MasterfilesChoice = 'latest' | 'master';
 type TargetCheck = Awaited<ReturnType<NonNullable<Window['api']>['checkProjectTarget']>>;
 
 export interface ProjectFormValues {
@@ -182,7 +183,7 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
   const nameInvalid = Boolean(name.trim()) && !folderName;
   const locationValid = !persistent || (check !== null && check.parentWritable && check.targetState !== 'nonEmpty');
   const canSubmit = Boolean(folderName && description.trim()) && locationValid && !submitting;
-  const version = { latest: versions.latest, lts: versions.lts, master: 'master' }[masterfiles];
+  const version = { latest: versions.latest, master: 'master' }[masterfiles];
   const saveAs = mode === 'saveAs';
 
   const handleSubmit = async () => {
@@ -259,7 +260,6 @@ export function NewProjectDialog({ mode, initialName = '', initialDescription = 
                     onChange={event => setMasterfiles(event.target.value as MasterfilesChoice)}
                   >
                     <FormControlLabel value="latest" control={<Radio size="small" />} label={`Latest (${versions.latest})`} />
-                    <FormControlLabel value="lts" control={<Radio size="small" />} label={`3.24 LTS (${versions.lts})`} />
                     <FormControlLabel value="master" control={<Radio size="small" />} label="Master branch" />
                   </RadioGroup>
                 </FormControl>

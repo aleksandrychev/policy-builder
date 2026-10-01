@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from cfpb_compiler import Library, compile_project, slug
+from cfpb_compiler import Library, compile_project
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LIBRARY = Library.load()
@@ -150,12 +150,12 @@ def test_every_block_source_and_decorator_compiles_without_a_skip():
     assert "# Skipped" not in policy
     for block_id, descriptor in LIBRARY.descriptors.items():
         if descriptor.get("compile_target") == "own_bundle":
-            assert f"bundle agent all_{slug(descriptor['name'])}\n" in policy, block_id
-    assert '"package_name"\n      slist => string_split(' in policy
-    assert '"message" string => readfile(' in policy
+            assert f"\n  # {descriptor['name']}\n" in policy, block_id
+    assert '"install_package_package_name"\n      slist => string_split(' in policy
+    assert '"report_message_message" string => readfile(' in policy
 
 
-@pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine")
+@pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine 3.27+")
 def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: Path):
     for path, text in compile_project(_project()).items():
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)

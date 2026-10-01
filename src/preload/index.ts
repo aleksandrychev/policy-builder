@@ -70,7 +70,7 @@ const api = {
   /** Opens a native folder picker, or null if cancelled. */
   pickDirectory: (defaultPath?: string): Promise<string | null> => invoke('project:pick-directory', defaultPath),
 
-  /** Newest 3.27.x and 3.24.x masterfiles releases (built-in fallback when offline). */
+  /** Newest 3.27.x masterfiles release (built-in fallback when offline). */
   getMasterfilesVersions: (): Promise<MasterfilesVersions> => invoke('project:masterfiles-versions'),
 
   /** Checks whether a project folder can be created at parent/folderName. */
