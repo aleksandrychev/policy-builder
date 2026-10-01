@@ -6,6 +6,7 @@ import type { AppDispatch } from '../store';
 import { blockAdded } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { edgeAdded } from '../store/edgesSlice';
+import type { BlockOutcome } from '../store/edgesSlice/types';
 import { fileAdded, projectFilesInitialized } from '../store/filesSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
@@ -55,13 +56,17 @@ function buildCommonBlocks(): DemoBlock[] {
   ];
 }
 
-const NGINX_CONF_TEMPLATE = `worker_processes {{{vars.common_vars.worker_processes}}};
+const NGINX_CONF_TEMPLATE = `user www-data;
+worker_processes {{{vars.common_vars.worker_processes}}};
 
 events {
     worker_connections {{{vars.common_vars.worker_connections}}};
 }
 
 http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
     server {
         listen 80;
         server_name example.com;
@@ -107,6 +112,63 @@ function buildRenderTemplateBlock(): DemoBlock {
   };
 }
 
+// The page nginx serves from root /var/www/html. A Mustache template, so it
+// can show what the policy knows about the host (sys.* is CFEngine's own).
+const LANDING_PAGE_TEMPLATE = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CFEngine Policy Builder demo project</title>
+  <style>
+    :root { color-scheme: light dark; --accent: #0b7ad1; --ink: #1f2933; --muted: #5f6c7b; --card: #ffffff; --page: #eef2f7; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #e6edf3; --muted: #9aa7b4; --card: #161b22; --page: #0d1117; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+           font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    main { width: min(640px, 100%); background: var(--card); border-radius: 16px; padding: 40px;
+           box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12); border-top: 6px solid var(--accent); }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 24px; color: var(--muted); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .badge { display: inline-block; margin-bottom: 16px; padding: 2px 10px; border-radius: 999px;
+             background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; }
+    footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    {{#classes.webserver_role}}<span class="badge">Web server role</span>{{/classes.webserver_role}}
+    <h1>CFEngine Policy Builder demo project</h1>
+    <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>
+    <dl>
+      <dt>Host</dt><dd>{{{vars.sys.fqhost}}}</dd>
+      <dt>Operating system</dt><dd>{{{vars.sys.flavor}}}</dd>
+      <dt>nginx workers</dt><dd>{{{vars.common_vars.worker_processes}}}</dd>
+      <dt>CFEngine</dt><dd>{{{vars.sys.cf_version}}}</dd>
+    </dl>
+    <footer>Rendered by cf-agent from a Mustache template.</footer>
+  </main>
+</body>
+</html>
+`;
+
+function buildLandingPageBlock(): DemoBlock {
+  return {
+    blockId: 'render-template',
+    label: 'Publish the demo landing page',
+    params: {
+      destination: '/var/www/html/index.html',
+      template_content: LANDING_PAGE_TEMPLATE,
+      mode: '644',
+      owner: 'root',
+      group: 'root'
+    }
+  };
+}
+
 function buildWebserverBlocksAfterTemplate(): DemoBlock[] {
   return [
     {
@@ -135,6 +197,11 @@ function buildWebserverBlocksAfterTemplate(): DemoBlock[] {
       params: { message: 'Web server provisioning complete' }
     }
   ];
+}
+
+// Starts nginx (and enables it at boot) once it's installed, and keeps it running.
+function buildKeepRunningBlock(): DemoBlock {
+  return { blockId: 'manage-service', label: 'Keep nginx running', params: { service_name: 'nginx', action: 'start' } };
 }
 
 // Restarts nginx only when "Render nginx config" actually changed the file
@@ -168,16 +235,25 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   commonBlocks.forEach((block, index) => dispatch(blockAdded({ ...block, fileId: commonFileId, position: commonPositions[index] })));
 
   // Webserver: one column in execution order. The restart sits right under
-  // the config it depends on, gated by a "repaired" arrow from it.
+  // the config it depends on, gated by a "repaired" arrow from it. Whatever
+  // touches nginx's files waits for the package (kept or repaired): written
+  // before it, they'd get root-only folders and clash with the package's own.
   const webserverFile = dispatch(fileAdded('Webserver'));
   const webserverFileId = webserverFile.payload.id;
+  const [install, ...beforeTemplate] = buildWebserverBlocksBeforeTemplate();
   const renderTemplate = buildRenderTemplateBlock();
   const manageService = buildManageServiceBlock();
-  const column = [...buildWebserverBlocksBeforeTemplate(), renderTemplate, manageService, ...buildWebserverBlocksAfterTemplate()];
+  const keepRunning = buildKeepRunningBlock();
+  const landingPage = buildLandingPageBlock();
+  const column = [install, ...beforeTemplate, renderTemplate, manageService, keepRunning, landingPage, ...buildWebserverBlocksAfterTemplate()];
   const positions = stackPositions(column);
   const ids = column.map((block, index) => dispatch(blockAdded({ ...block, fileId: webserverFileId, position: positions[index] })).payload.instanceId);
-  dispatch(
-    edgeAdded({ fileId: webserverFileId, source: ids[column.indexOf(renderTemplate)], target: ids[column.indexOf(manageService)], outcomes: ['repaired'] })
-  );
+  const idOf = (block: DemoBlock) => ids[column.indexOf(block)];
+  const arrow = (source: DemoBlock, target: DemoBlock, outcomes: BlockOutcome[]) =>
+    dispatch(edgeAdded({ fileId: webserverFileId, source: idOf(source), target: idOf(target), outcomes }));
+  arrow(install, renderTemplate, ['kept', 'repaired']);
+  arrow(install, keepRunning, ['kept', 'repaired']);
+  arrow(install, landingPage, ['kept', 'repaired']);
+  arrow(renderTemplate, manageService, ['repaired']);
   dispatch(historyCleared());
 }

@@ -36,7 +36,12 @@ TEMPLATE = "./templates/webserver_render_nginx_config.mustache"
 
 
 def test_compiles_every_file_to_its_path_and_templates_into_templates():
-    assert list(compile_project(DEMO)) == [COMMON, WEBSERVER, TEMPLATE]
+    assert list(compile_project(DEMO)) == [
+        COMMON,
+        WEBSERVER,
+        TEMPLATE,
+        "./templates/webserver_publish_the_demo_landing_page.mustache",
+    ]
 
 
 def test_a_template_is_its_own_file_used_as_written():
@@ -88,6 +93,8 @@ def test_the_entry_bundle_is_named_after_the_file_and_calls_blocks_in_order():
         "webserver_remove_conflicting_apache",
         "webserver_render_nginx_config",
         "webserver_restart_nginx_on_config_change",
+        "webserver_keep_nginx_running",
+        "webserver_publish_the_demo_landing_page",
         "webserver_remove_default_nginx_site",
         "webserver_lock_down_nginx_config_files",
         "webserver_create_deploy_user",
@@ -101,7 +108,10 @@ def test_arrow_and_conditions_gate_the_calls():
 
     assert 'classes => results("bundle", "webserver_render_nginx_config");' in policy
     assert 'if => "webserver_render_nginx_config_repaired";' in policy
-    assert policy.count('if => "webserver_role";') == 2
+    assert policy.count('if => "webserver_role"') == 2
+    # Whatever touches nginx's files waits for its package.
+    installed = 'if => "webserver_install_web_server_package_kept|webserver_install_web_server_package_repaired"'
+    assert policy.count(installed) == 3
 
 
 def test_references_name_the_defining_files_vars_bundle():
