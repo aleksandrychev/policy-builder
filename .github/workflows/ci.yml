@@ -63,6 +63,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # Saving a project runs the Python sidecar's policy compiler.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
       # Ubuntu 24.04's AppArmor blocks the unprivileged user namespaces Chromium's sandbox needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: xvfb-run -a npm run test:e2e

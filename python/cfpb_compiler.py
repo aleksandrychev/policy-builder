@@ -1,0 +1,627 @@
+"""Policy Builder canvases -> CFEngine policy, one .cf per policy file.
+
+The contract is blocks/README.md: descriptors (blocks/*.json), decorators and
+builder bodies (blocks/lib/). Input is cfbs.json's meta["policy-builder"];
+output is {file path: formatted policy}. Targets CFEngine 3.24+, in the
+default namespace, next to masterfiles.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from cfengine_cli.format import format_policy_fin_fout
+
+PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
+FUNCTION_CALL = re.compile(r"^\s*[A-Za-z_]\w*\s*\(")
+# Arrow outcome -> the results() class suffix; all three together are "reached".
+OUTCOME_SUFFIX = {"kept": "kept", "repaired": "repaired", "not_kept": "not_kept"}
+# A Mustache tag: {{name}}, {{{name}}}, {{&name}}, {{#name}}, {{^name}}, {{/name}}, {{!comment}}.
+MUSTACHE_TAG = re.compile(r"\{\{(\{?)\s*([#^/&!>]?)\s*(.*?)\s*\}?\}\}", re.S)
+MUSTACHE_VAR = re.compile(r"vars\.([A-Za-z_]\w*)\.([A-Za-z_]\w*)(\..+)?")
+MUSTACHE_CLASS = re.compile(r"classes\.([A-Za-z_]\w*)")
+LINE_LENGTH = 80
+
+
+class CompileError(Exception):
+    """The canvas can't be compiled (as opposed to one block being skipped)."""
+
+
+def blocks_dir() -> Path:
+    # PyInstaller unpacks data files under sys._MEIPASS; in development it's the repo's blocks/.
+    bundled = getattr(sys, "_MEIPASS", None)
+    return Path(bundled, "blocks") if bundled else Path(__file__).resolve().parent.parent / "blocks"
+
+
+@dataclass
+class Library:
+    descriptors: dict[str, dict]
+    decorators: dict[str, dict]
+    bodies: dict[str, dict]
+    # Bundle names masterfiles already uses in the default namespace.
+    reserved_bundles: set[str] = field(default_factory=set)
+
+    @classmethod
+    def load(cls, directory: Path | None = None) -> Library:
+        directory = directory or blocks_dir()
+        descriptors = {}
+        for path in sorted(directory.glob("*.json")):
+            descriptor = json.loads(path.read_text(encoding="utf-8"))
+            descriptors[descriptor["id"]] = descriptor
+        decorators = json.loads((directory / "lib/decorators.json").read_text(encoding="utf-8"))["decorators"]
+        bodies = json.loads((directory / "lib/bodies.json").read_text(encoding="utf-8"))["bodies"]
+        reserved = json.loads((directory / "lib/reserved-bundles.json").read_text(encoding="utf-8"))["bundles"]
+        return cls(descriptors, {d["id"]: d for d in decorators}, {b["name"]: b for b in bodies}, set(reserved))
+
+
+# --- values ---------------------------------------------------------------
+
+
+def quote(text: str) -> str:
+    """A CFEngine string. Only \\\\ and \\" are escapes, so a backslash needs
+    doubling only before a backslash, a quote, or the closing quote."""
+    return '"' + re.sub(r'\\(?=[\\"]|$)', r"\\\\", text).replace('"', '\\"') + '"'
+
+
+def lines_of(value: str) -> list[str]:
+    return [line.strip() for line in value.splitlines() if line.strip()]
+
+
+def class_expression(condition: dict) -> str:
+    name = condition["className"].strip()
+    return f"!{name}" if condition.get("mode") == "unless" else name
+
+
+def combined(expressions: list[str]) -> str:
+    """Class expressions ANDed: "a.!b", parenthesised where they hold an OR."""
+    parts = [f"({e})" if "|" in e and len(expressions) > 1 else e for e in expressions if e]
+    return ".".join(parts)
+
+
+@dataclass
+class Context:
+    """What an expression compiles against: one block's (or entry's) parameters."""
+
+    # The file's `<bundle>_vars`, which `vars.x` references mean.
+    vars_bundle: str
+    params: dict[str, str]
+    bodies: set[str]
+    class_refs: list[dict] = field(default_factory=list)
+    previous: str | None = None
+    # Chained values are function arguments: a list can't be a { } literal there.
+    as_argument: bool = False
+
+    def substitute(self, template: str) -> str:
+        return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
+
+    def qualified(self, name: str) -> str:
+        return f"{self.vars_bundle}.{name[len('vars.'):]}" if name.startswith("vars.") else name
+
+
+def compile_value(expr, ctx: Context) -> str:
+    if isinstance(expr, str):
+        return quote(ctx.substitute(expr))
+    if "call" in expr:
+        return f"{expr['call']}({', '.join(compile_value(arg, ctx) for arg in expr.get('args', []))})"
+    if "body" in expr:
+        name = expr["body"]
+        if expr.get("lib") == "builder":
+            ctx.bodies.add(name)
+        args = expr.get("args")
+        return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
+    if "list" in expr:
+        return list_value([compile_value(item, ctx) for item in expr["list"]], ctx)
+    if "list_param" in expr:
+        return list_value([quote(item) for item in lines_of(ctx.params.get(expr["list_param"], ""))], ctx)
+    if "class_refs" in expr:
+        refs = [("!" if ref.get("negate") else "") + ref["name"] for ref in ctx.class_refs if ref.get("name")]
+        return "{ " + ", ".join(quote(ref) for ref in refs) + " }"
+    if "class_expression" in expr:
+        text = ctx.substitute(expr["class_expression"])
+        return text if FUNCTION_CALL.match(text) else quote(text)
+    if "bundle" in expr:
+        name = ctx.substitute(expr["bundle"])
+        args = expr.get("args")
+        return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
+    if "variable" in expr:
+        name = ctx.qualified(ctx.substitute(expr["variable"]))
+        if expr["as"] == "scalar":
+            return quote(f"$({name})")
+        if expr["as"] == "list" and not ctx.as_argument:
+            return f"{{ @({name}) }}"
+        return quote(name)
+    if "previous" in expr:
+        if ctx.previous is None:
+            raise CompileError("{previous} used outside a decorator")
+        return ctx.previous
+    if "if_set" in expr:
+        return compile_value(expr["value"], ctx)
+    raise CompileError(f"Unknown expression: {json.dumps(expr)}")
+
+
+def list_value(items: list[str], ctx: Context) -> str:
+    if not ctx.as_argument:
+        return "{ " + ", ".join(items) + " }"
+    # A literal list as a function argument goes in as inline JSON.
+    return "'" + json.dumps([json.loads(item) if item.startswith('"') else item for item in items]) + "'"
+
+
+def attributes_of(step: dict, ctx: Context) -> list[str]:
+    lines = []
+    for key, value in step.get("attributes", {}).items():
+        if isinstance(value, dict) and "if_set" in value and not ctx.params.get(value["if_set"], "").strip():
+            continue
+        lines.append(f"{key} => {compile_value(value, ctx)}")
+    return lines
+
+
+def promise(promiser: str, attributes: list[str], comment: str | None = None) -> list[str]:
+    lines = [f"# {comment}"] if comment else []
+    if not attributes:
+        return [*lines, f"{promiser};"]
+    return [*lines, promiser, *[f"  {line}," for line in attributes[:-1]], f"  {attributes[-1]};"]
+
+
+# --- parameters -----------------------------------------------------------
+
+
+def params_with_defaults(declared: list[dict], given: dict) -> dict[str, str]:
+    params = {}
+    for param in declared:
+        value = given.get(param["name"])
+        if value is None or value == "":
+            value = param.get("default")
+        # CFEngine booleans are "true"/"false"; Python's str() would give "True".
+        params[param["name"]] = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
+    return params
+
+
+def missing_required(declared: list[dict], params: dict[str, str]) -> list[str]:
+    return [
+        param.get("label", param["name"])
+        for param in declared
+        if param.get("required") and not params[param["name"]].strip()
+    ]
+
+
+def canonical(name: str) -> str:
+    return re.sub(r"\W", "_", name)
+
+
+def slug(label: str) -> str:
+    name = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "block"
+    return f"block_{name}" if name[0].isdigit() else name
+
+
+# --- one file ---------------------------------------------------------------
+
+
+@dataclass
+class TemplateRefs:
+    """What a Mustache template reads: variables (as (ns:bundle, name)) and classes."""
+
+    variables: list[tuple[str, str]]
+    classes: list[str]
+
+
+def template_refs(template: str) -> TemplateRefs | None:
+    """The template's datastate() references, or None when it uses anything else
+    (then it keeps rendering against datastate())."""
+    variables, classes, sections = [], [], []
+    for _brace, kind, name in MUSTACHE_TAG.findall(template):
+        if kind in ("!", ">"):
+            continue
+        in_list = any(section.startswith("vars.") for section in sections)
+        if kind == "/":
+            if sections and sections[-1] == name:
+                sections.pop()
+            continue
+        variable, cls = MUSTACHE_VAR.fullmatch(name), MUSTACHE_CLASS.fullmatch(name)
+        if variable:
+            ref = (variable.group(1), variable.group(2))
+            if ref not in variables:
+                variables.append(ref)
+        elif cls:
+            if cls.group(1) not in classes:
+                classes.append(cls.group(1))
+        elif not in_list:
+            return None
+        if kind in ("#", "^"):
+            sections.append(name)
+    return TemplateRefs(variables, classes)
+
+
+@dataclass
+class FileCompiler:
+    library: Library
+    file: dict
+    # "<bundle>_vars.name" -> its CFEngine type, for every variable the project defines.
+    types: dict[str, str] = field(default_factory=dict)
+    # Bundle names taken project-wide (the default namespace is shared); grows as blocks are named.
+    taken: set[str] = field(default_factory=set)
+    # Builder bodies an earlier file already defines: a body may only be defined once.
+    written_bodies: set[str] = field(default_factory=set)
+    bodies: set[str] = field(default_factory=set)
+
+    @property
+    def bundle(self) -> str:
+        return self.file["bundle"]
+
+    @property
+    def vars_name(self) -> str:
+        return f"{self.bundle}_vars"
+
+    def compile(self) -> str:
+        blocks = self.file.get("blocks") or []
+        definitions = [b for b in blocks if self.descriptor(b).get("compile_target") == "file_vars"]
+        sequenced = self.sequenced_blocks(blocks)
+        names = self.bundle_names(sequenced)
+
+        sections = [
+            f"# Generated by CFEngine Policy Builder from \"{self.file.get('name', self.bundle)}\".",
+            "# Edits here are overwritten when the project is saved.",
+        ]
+        vars_bundle = self.vars_bundle(definitions)
+        if vars_bundle:
+            sections.append(vars_bundle)
+        # Only variables and classes: nothing to call, so no entry bundle (and no `bundles` step).
+        if sequenced:
+            sections.append(self.entry_bundle(sequenced, names))
+        for block in sequenced:
+            bundle = self.block_bundle(block, names[block["instanceId"]])
+            if bundle:
+                sections.append(bundle)
+        new_bodies = sorted(self.bodies - self.written_bodies)
+        sections.extend(self.builder_body(name) for name in new_bodies)
+        self.written_bodies.update(new_bodies)
+        return format_policy("\n\n".join(sections) + "\n")
+
+    def descriptor(self, block: dict) -> dict:
+        descriptor = self.library.descriptors.get(block.get("blockId"))
+        if descriptor is None:
+            raise CompileError(f"Unknown block type {block.get('blockId')!r} in {self.file.get('name')}")
+        return descriptor
+
+    def sequenced_blocks(self, blocks: list[dict]) -> list[dict]:
+        own = {b["instanceId"]: b for b in blocks if self.descriptor(b).get("compile_target") == "own_bundle"}
+        order = [own[i] for i in self.file.get("order") or [] if i in own]
+        return order + [b for b in own.values() if b not in order]
+
+    def bundle_names(self, blocks: list[dict]) -> dict[str, str]:
+        """`<file bundle>_<label>`, e.g. webserver_render_nginx_config; _2, _3… on a clash."""
+        names = {}
+        for block in blocks:
+            base = f"{self.bundle}_{slug(block.get('label') or self.descriptor(block)['name'])}"
+            name, suffix = base, 2
+            while name in self.taken:
+                name, suffix = f"{base}_{suffix}", suffix + 1
+            self.taken.add(name)
+            names[block["instanceId"]] = name
+        return names
+
+    def file_guard(self) -> str | None:
+        condition = self.file.get("condition")
+        return class_expression(condition) if condition and condition.get("className", "").strip() else None
+
+    # bundle common <bundle>_vars: every Define Variable / Define Class entry.
+    def vars_bundle(self, blocks: list[dict]) -> str | None:
+        sections: dict[str, list[str]] = {"vars": [], "classes": []}
+        for block in blocks:
+            descriptor = self.descriptor(block)
+            first = {kind: True for kind in sections}
+            for entry in block.get("entries") or []:
+                kind, lines = self.entry_promises(block, descriptor, entry)
+                if first[kind]:
+                    lines = [f"# {block.get('label') or descriptor['name']}", *lines]
+                    first[kind] = False
+                sections[kind].extend(lines)
+        if not any(sections.values()):
+            return None
+        guard = self.file_guard()
+        body = []
+        for kind, lines in sections.items():
+            if lines:
+                body += [f"  {kind}:", *([f"    {guard}::"] if guard else []), *[f"      {line}" for line in lines]]
+        return f"bundle common {self.vars_name}\n{{\n" + "\n".join(body) + "\n}"
+
+    def entry_promises(self, block: dict, descriptor: dict, entry: dict) -> tuple[str, list[str]]:
+        sources = {s["id"]: s for s in descriptor.get("value_sources", [])}
+        source = sources.get(entry.get("valueSourceId")) or next(iter(sources.values()))
+        declared = [*descriptor.get("parameters", []), *source.get("parameters", [])]
+        params = params_with_defaults(declared, entry.get("params") or {})
+        step = source["steps"][0]
+        kind = step["promise_type"]
+        name = params[descriptor["entries"]["name_param"]]
+        missing = missing_required(declared, params)
+        if missing:
+            return kind, [f"# Skipped: {', '.join(missing)} not set."]
+
+        conditions = [
+            class_expression(c)
+            for c in (block.get("condition"), entry.get("condition"))
+            if c and c.get("className", "").strip()
+        ]
+        ctx = Context(self.vars_name, params, self.bodies, class_refs=entry.get("classRefs") or [])
+        extra = []
+        if entry.get("inventory", {}).get("attributeName", "").strip():
+            extra.append(
+                f'meta => {{ "inventory", {quote("attribute_name=" + entry["inventory"]["attributeName"].strip())} }}'
+            )
+
+        if kind != "vars":
+            return kind, promise(
+                quote(ctx.substitute(step["promiser"])), [*attributes_of(step, ctx), *condition_attributes(conditions)]
+            )
+
+        [(value_type, value)] = step["attributes"].items()
+        decorators = [d for d in entry.get("decorators") or [] if d.get("decoratorId") in self.library.decorators]
+        if not decorators:
+            return kind, promise(
+                quote(name), [f"{value_type} => {compile_value(value, ctx)}", *extra, *condition_attributes(conditions)]
+            )
+        return kind, self.chain(name, self.vars_name, source, value, decorators, ctx, conditions, extra)
+
+    def chain(
+        self,
+        name: str,
+        owner: str,
+        source: dict,
+        value,
+        decorators: list[dict],
+        ctx: Context,
+        conditions: list[str],
+        extra: list[str],
+    ):
+        """A value source through its decorators, as `vars:` promises for `name` in
+        bundle `owner`. A chain nests inline; a fallback (Default if empty) can't,
+        so it splits into an intermediate variable and two promises."""
+        value_type = source.get("value_type", "string")
+        # Chained values are function arguments, where lists are written differently.
+        expression = compile_value(
+            value, Context(ctx.vars_bundle, ctx.params, ctx.bodies, ctx.class_refs, as_argument=bool(decorators))
+        )
+        lines = []
+        for index, instance in enumerate(decorators):
+            decorator = self.library.decorators[instance["decoratorId"]]
+            params = params_with_defaults(decorator.get("parameters", []), instance.get("params") or {})
+            step_ctx = Context(ctx.vars_bundle, params, ctx.bodies, previous=expression, as_argument=True)
+            if "fallback" not in decorator:
+                expression, value_type = compile_value(decorator["expression"], step_ctx), decorator["output_type"]
+                continue
+            if index != len(decorators) - 1:
+                raise CompileError(f'"{decorator["label"]}" has to be the last step of {name}')
+            intermediate = f"{owner}.{name}__in"
+            trigger = step_ctx.substitute(decorator["fallback"]["trigger"])
+            usable = (
+                f'and(isvariable({quote(intermediate)}), not(strcmp({quote(f"$({intermediate})")}, {quote(trigger)})))'
+            )
+            fallback = quote(step_ctx.substitute(decorator["fallback"]["value"]))
+            lines += promise(quote(f"{name}__in"), [f"{value_type} => {expression}", *condition_attributes(conditions)])
+            lines += promise(
+                quote(name),
+                [
+                    f'{decorator["output_type"]} => {quote(f"$({intermediate})")}',
+                    *extra,
+                    *if_all([*conditions, usable]),
+                ],
+            )
+            unset = f'not(isvariable({quote(f"{owner}.{name}")}))'
+            lines += promise(
+                quote(name), [f'{decorator["output_type"]} => {fallback}', *extra, *if_all([*conditions, unset])]
+            )
+            return lines
+        return promise(quote(name), [f"{value_type} => {expression}", *extra, *condition_attributes(conditions)])
+
+    # bundle agent <bundle>: the entry bundle, calling every block in order.
+    def entry_bundle(self, blocks: list[dict], names: dict[str, str]) -> str:
+        edges = self.file.get("edges") or []
+        sources = {edge["source"] for edge in edges}
+        calls = []
+        for block in blocks:
+            instance = block["instanceId"]
+            name = names[instance]
+            gate = self.arrow_gate(block, edges, names)
+            condition = block.get("condition")
+            expressions = [class_expression(condition)] if condition and condition.get("className", "").strip() else []
+            attributes = [f"usebundle => {name}"]
+            expression = combined([*expressions, *([gate] if gate else [])])
+            if expression:
+                attributes.append(f"if => {quote(expression)}")
+            if instance in sources:
+                attributes.append(f'classes => results("bundle", "{name}")')
+            calls += promise(quote(block.get("label") or name), attributes)
+        guard = self.file_guard()
+        body = ["  methods:", *([f"    {guard}::"] if guard else []), *[f"      {line}" for line in calls]]
+        return f"bundle agent {self.bundle}\n{{\n" + "\n".join(body) + "\n}"
+
+    def arrow_gate(self, block: dict, edges: list[dict], names: dict[str, str]) -> str | None:
+        incoming = [edge for edge in edges if edge["target"] == block["instanceId"] and edge["source"] in names]
+        if not incoming:
+            return None
+        gates = []
+        for edge in incoming:
+            prefix = names[edge["source"]]
+            outcomes = [o for o in OUTCOME_SUFFIX if o in edge.get("outcomes", [])] or ["kept", "repaired"]
+            if len(outcomes) == len(OUTCOME_SUFFIX):
+                gates.append(f"{prefix}_reached")
+            else:
+                classes = "|".join(f"{prefix}_{OUTCOME_SUFFIX[o]}" for o in outcomes)
+                gates.append(f"({classes})" if len(outcomes) > 1 and len(incoming) > 1 else classes)
+        return ("|" if block.get("incomingMode") == "any" else ".").join(gates)
+
+    # bundle agent <block>: the block's own promise.
+    def block_bundle(self, block: dict, name: str) -> str | None:
+        descriptor = self.descriptor(block)
+        declared = descriptor.get("parameters", [])
+        params = params_with_defaults(declared, block.get("params") or {})
+        label = block.get("label") or descriptor["name"]
+        bound = set(block.get("paramBindings") or {})
+        computed, missing_data = self.computed_parameters(block, name)
+        missing = [*missing_required([p for p in declared if p["name"] not in bound], params), *missing_data]
+        if missing:
+            return f"# Skipped \"{label}\": {', '.join(missing)} not set.\nbundle agent {name}\n{{\n}}"
+        # A parameter computed from data reads the local variable holding it (a list iterates).
+        params.update({param: f"$({param})" for param in computed})
+        steps = descriptor.get("steps", [])
+        if len(steps) != 1:
+            raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
+        step = steps[0]
+        ctx = Context(self.vars_name, params, self.bodies)
+        # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
+        variables, promiser_params = [line for lines in computed.values() for line in lines], dict(params)
+        for param in declared:
+            values = (
+                lines_of(params[param["name"]]) if param.get("allow_list") and param["name"] not in computed else []
+            )
+            if f"{{{{{param['name']}}}}}" not in step["promiser"] or not values:
+                continue
+            if len(values) == 1:
+                promiser_params[param["name"]] = values[0]
+                continue
+            variables.append(f'"{param["name"]}" slist => {{ {", ".join(quote(v) for v in values)} }};')
+            promiser_params[param["name"]] = f"$({param['name']})"
+        promiser = Context(self.vars_name, promiser_params, self.bodies).substitute(step["promiser"])
+        attributes = attributes_of(step, ctx)
+        template_data = self.template_data(step, declared, params)
+        if template_data:
+            variables += template_data
+            attributes.append("template_data => @(template_data)")
+        body = promise(quote(promiser), attributes)
+        lines = ["  vars:", *[f"    {line}" for line in variables], ""] if variables else []
+        lines += [f"  {step['promise_type']}:", *[f"    {line}" for line in body]]
+        return f"bundle agent {name}\n{{\n" + "\n".join(lines) + "\n}"
+
+    def computed_parameters(self, block: dict, bundle: str) -> tuple[dict[str, list[str]], list[str]]:
+        """Parameters computed from data ("Compute from data…"): a Define Variable value
+        source and its decorators, as `vars:` promises named after the parameter in the
+        block's own bundle. Returns them, and the labels of any that aren't filled in."""
+        definitions = self.library.descriptors.get("define-variable", {})
+        sources = {source["id"]: source for source in definitions.get("value_sources", [])}
+        labels = {p["name"]: p.get("label", p["name"]) for p in self.descriptor(block).get("parameters", [])}
+        computed, missing = {}, []
+        for param, binding in (block.get("paramBindings") or {}).items():
+            source = sources.get(binding.get("valueSourceId"))
+            if source is None or param not in labels:
+                raise CompileError(
+                    f"{block.get('label')}: can't compute {param!r} from {binding.get('valueSourceId')!r}"
+                )
+            params = params_with_defaults(source.get("parameters", []), binding.get("params") or {})
+            unset = missing_required(source.get("parameters", []), params)
+            if unset:
+                missing.append(f"{labels[param]} ({', '.join(unset)})")
+                continue
+            [(_kind, value)] = source["steps"][0]["attributes"].items()
+            decorators = [d for d in binding.get("decorators") or [] if d.get("decoratorId") in self.library.decorators]
+            ctx = Context(self.vars_name, params, self.bodies)
+            computed[param] = self.chain(param, bundle, source, value, decorators, ctx, [], [])
+        return computed, missing
+
+    def template_data(self, step: dict, declared: list[dict], params: dict[str, str]) -> list[str] | None:
+        """Just what an inline Mustache template reads, instead of all of datastate():
+        local copies of its variables wrapped by mergedata() (safe for any value), and
+        its classes as true/false. Same shape as datastate(), so the template is unchanged."""
+        if step.get("attributes", {}).get("template_method") != "inline_mustache":
+            return None
+        template = next((params[p["name"]] for p in declared if p.get("mustache")), None)
+        refs = template_refs(template) if template is not None else None
+        if refs is None:
+            return None
+        names = [name for _bundle, name in refs.variables]
+        local = {ref: ref[1] if names.count(ref[1]) == 1 else canonical(f"{ref[0]}_{ref[1]}") for ref in refs.variables}
+        lines, bundles = [], {}
+        for (bundle, name), copy in local.items():
+            qualified = f"{bundle}.{name}"
+            kind = self.types.get(qualified, "string")
+            if kind == "slist":
+                lines += promise(quote(copy), [f"slist => {{ @({qualified}) }}"])
+            elif kind == "data":
+                lines += promise(quote(copy), [f"data => mergedata({quote(qualified)})"])
+            else:
+                lines += promise(quote(copy), [f"string => {quote(f'$({qualified})')}"])
+            bundles.setdefault(bundle, []).append(f'"{name}": {copy}')
+        parts = []
+        if bundles:
+            inner = ", ".join(f'"{bundle}": {{ {", ".join(items)} }}' for bundle, items in bundles.items())
+            parts.append(f"'{{ \"vars\": {{ {inner} }} }}'")
+        if refs.classes:
+            json_classes = ", ".join(f'"{cls}": %s' for cls in refs.classes)
+            flags = ", ".join(f'ifelse({quote(cls)}, "true", "false")' for cls in refs.classes)
+            parts.append(f"parsejson(format('{{ \"classes\": {{ {json_classes} }} }}', {flags}))")
+        if not parts:
+            data = "mergedata('{}')"
+        elif bundles:
+            data = f"mergedata({', '.join(parts)})"
+        else:
+            data = parts[0]
+        return [*lines, *promise('"template_data"', [f"data => {data}"])]
+
+    def builder_body(self, name: str) -> str:
+        body = self.library.bodies[name]
+        ctx = Context(self.vars_name, {}, set())
+        attributes = "\n".join(f"  {key} => {compile_value(value, ctx)};" for key, value in body["attributes"].items())
+        return f"body {body['type']} {name}({', '.join(body['parameters'])})\n{{\n{attributes}\n}}"
+
+
+def condition_attributes(conditions: list[str]) -> list[str]:
+    expression = combined(conditions)
+    return [f"if => {quote(expression)}"] if expression else []
+
+
+def if_all(expressions: list[str]) -> list[str]:
+    """`if => and(...)` over class expressions and function calls."""
+    parts = [e if FUNCTION_CALL.match(e) else quote(e) for e in expressions]
+    return [f"if => {parts[0] if len(parts) == 1 else 'and(' + ', '.join(parts) + ')'}"]
+
+
+def format_policy(text: str) -> str:
+    out = io.StringIO()
+    format_policy_fin_fout(io.StringIO(text), out, LINE_LENGTH, False)
+    return out.getvalue()
+
+
+def compile_project(meta: dict, library: Library | None = None) -> dict[str, str]:
+    """meta["policy-builder"] -> {module path: policy}."""
+    library = library or Library.load()
+    files = meta.get("files")
+    if not isinstance(files, list):
+        raise CompileError('"files" must be a list')
+    for file in files:
+        if (
+            not isinstance(file, dict)
+            or not isinstance(file.get("path"), str)
+            or not isinstance(file.get("bundle"), str)
+        ):
+            raise CompileError("Every file needs a path and a bundle")
+    types = variable_types(files, library)
+    # Everything shares the default namespace: masterfiles' bundles and every file's own two.
+    taken = set(library.reserved_bundles) | {
+        name for file in files for name in (file["bundle"], f"{file['bundle']}_vars")
+    }
+    written_bodies: set[str] = set()
+    return {file["path"]: FileCompiler(library, file, types, taken, written_bodies).compile() for file in files}
+
+
+def variable_types(files: list[dict], library: Library) -> dict[str, str]:
+    """ "<bundle>_vars.name" -> CFEngine type of every Define Variable entry in the project."""
+    types = {}
+    for file in files:
+        for block in file.get("blocks") or []:
+            descriptor = library.descriptors.get(block.get("blockId"), {})
+            if descriptor.get("compile_target") != "file_vars" or "entries" not in descriptor:
+                continue
+            sources = {source["id"]: source for source in descriptor.get("value_sources", [])}
+            for entry in block.get("entries") or []:
+                source = sources.get(entry.get("valueSourceId"))
+                name = (entry.get("params") or {}).get(descriptor["entries"]["name_param"], "")
+                if not source or not name or source["steps"][0]["promise_type"] != "vars":
+                    continue
+                kind = source.get("value_type", "string")
+                for instance in entry.get("decorators") or []:
+                    kind = library.decorators.get(instance.get("decoratorId"), {}).get("output_type", kind)
+                types[f"{file['bundle']}_vars.{name}"] = kind
+    return types

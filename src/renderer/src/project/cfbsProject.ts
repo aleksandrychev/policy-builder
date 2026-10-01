@@ -14,7 +14,8 @@ import type { UndoableKey } from '../store/history';
  * mirrors the file tree — each top-level policy file is a local file module,
  * each top-level folder one local directory module (what `cfbs add` writes
  * for them) — with all of the builder's own data, folders and every file's
- * canvas, in the top-level `meta["policy-builder"]`.
+ * canvas, in the top-level `meta["policy-builder"]`. Each save also writes
+ * the generated .cf files (main process, via the sidecar's compiler).
  */
 
 export const SCHEMA_VERSION = 1;

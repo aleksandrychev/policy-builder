@@ -3,14 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 
-// Opening projects from disk. Fixtures are written directly (no Python sidecar needed), and opened
-// the way the File > Open Recent menu does it, so no native dialog is involved.
+// Opening projects from disk. Fixtures are written directly, and opened the way the File > Open
+// Recent menu does it, so no native dialog is involved. Saving runs the Python sidecar's compiler.
 const appEntry = resolve(__dirname, '../out/main/index.js');
 
 let app: ElectronApplication;
 let window: Page;
 let scratchDir: string;
 const consoleErrors: string[] = [];
+
+const SAVE_TIMEOUT_MS = 20_000;
 
 const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf-8'));
 
@@ -115,12 +117,16 @@ test('opens a builder project with its blocks and arrows, clean, and saves it ba
     await expect(statusBar.getByText('Blocks: 3', { exact: true })).toBeVisible();
     await expect(unsaved).toBeVisible();
     await window.keyboard.press('ControlOrMeta+s');
-    await expect(unsaved).toHaveCount(0);
+    // Saving spawns the Python sidecar to generate the policy; a cold start can take a while.
+    await expect(unsaved).toHaveCount(0, { timeout: SAVE_TIMEOUT_MS });
     const saved = readJson(join(path, 'cfbs.json'));
     expect(saved.build[0]).toEqual(builderProject.build[0]);
     expect(saved.build[1]).toEqual(builderProject.build[1]);
     expect(saved.meta['policy-builder'].files[0].blocks).toHaveLength(3);
     expect(saved.meta['policy-builder'].files[0].edges).toHaveLength(1);
+    const policy = readFileSync(join(path, 'web.cf'), 'utf-8');
+    expect(policy).toContain('bundle agent web\n');
+    expect(policy).toContain('"Say goodbye"');
   });
 
   expect(consoleErrors, 'console errors during the run').toEqual([]);
@@ -138,7 +144,7 @@ test('opens a plain cfbs project with one empty file, keeping its build entries 
   await expect(window.getByLabel('Unsaved changes')).toHaveCount(0);
 
   await window.keyboard.press('ControlOrMeta+s');
-  await expect.poll(() => readJson(join(path, 'cfbs.json')).meta?.['policy-builder']?.schema_version).toBe(1);
+  await expect.poll(() => readJson(join(path, 'cfbs.json')).meta?.['policy-builder']?.schema_version, { timeout: SAVE_TIMEOUT_MS }).toBe(1);
   const saved = readJson(join(path, 'cfbs.json'));
   expect(saved.build[0]).toEqual(fake);
   expect(saved.build).toHaveLength(2);

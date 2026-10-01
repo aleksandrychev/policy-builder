@@ -1,0 +1,45 @@
+# The masterfiles lib/ bodies the block descriptors use, so cf-promises can check compiled policy
+# without a masterfiles checkout. Same signatures as masterfiles 3.24.
+body classes results(scope, class_prefix)
+{
+  scope => "$(scope)";
+  promise_kept => { "$(class_prefix)_reached", "$(class_prefix)_kept" };
+  promise_repaired => { "$(class_prefix)_reached", "$(class_prefix)_repaired" };
+  repair_failed => { "$(class_prefix)_reached", "$(class_prefix)_error", "$(class_prefix)_not_kept", "$(class_prefix)_failed" };
+  repair_denied => { "$(class_prefix)_reached", "$(class_prefix)_error", "$(class_prefix)_not_kept", "$(class_prefix)_denied" };
+  repair_timeout => { "$(class_prefix)_reached", "$(class_prefix)_error", "$(class_prefix)_not_kept", "$(class_prefix)_timeout" };
+}
+
+body perms mog(mode, user, group)
+{
+  owners => { "$(user)" };
+  groups => { "$(group)" };
+  mode => "$(mode)";
+}
+
+body delete tidy
+{
+  dirlinks => "delete";
+  rmdirs => "true";
+}
+
+body action if_elapsed(x)
+{
+  ifelapsed => "$(x)";
+  expireafter => "$(x)";
+}
+
+body copy_from local_cp(from)
+{
+  source => "$(from)";
+}
+
+body depth_search recurse(d)
+{
+  depth => "$(d)";
+}
+
+body contain in_shell
+{
+  useshell => "true";
+}

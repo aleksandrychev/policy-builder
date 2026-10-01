@@ -9,6 +9,7 @@ import { join } from 'path';
  */
 
 const FORMAT_TIMEOUT_MS = 30_000;
+const COMPILE_TIMEOUT_MS = 30_000;
 // Downloading masterfiles on a slow network can take a while.
 const INIT_TIMEOUT_MS = 120_000;
 
@@ -137,5 +138,22 @@ export async function initCfbsProject(options: InitCfbsProjectOptions): Promise<
     return JSON.parse(result.stdout) as InitCfbsProjectResult;
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable init result'), { details: result.stdout });
+  }
+}
+
+/**
+ * Generates the policy for the builder's project data (cfbs.json's
+ * meta["policy-builder"]), resolving with each module path's policy text.
+ */
+export async function compilePolicy(meta: unknown): Promise<Record<string, string>> {
+  const result = await runSidecar(['compile'], JSON.stringify(meta), COMPILE_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, COMPILE_TIMEOUT_MS);
+  try {
+    const { files } = JSON.parse(result.stdout) as { files: Record<string, string> };
+    if (typeof files !== 'object' || files === null) throw new Error('no files');
+    return files;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable compile result'), { details: result.stdout });
   }
 }

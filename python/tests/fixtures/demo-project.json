@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "folders": [],
+  "files": [
+    {
+      "id": "09ad07d4-5206-4d93-bf0f-093973bd9338",
+      "name": "Common",
+      "bundle": "common",
+      "path": "./common.cf",
+      "blocks": [
+        {
+          "blockId": "define-variable",
+          "label": "Nginx settings",
+          "params": {},
+          "entries": [
+            {
+              "valueSourceId": "literal",
+              "params": {
+                "variable_name": "webserver_package",
+                "value": "nginx"
+              },
+              "id": "01304988-e9cf-4eb9-9b48-30f45804db10"
+            },
+            {
+              "valueSourceId": "file-lines",
+              "params": {
+                "variable_name": "worker_processes",
+                "path": "/proc/cpuinfo",
+                "comment": "",
+                "split": "\\n",
+                "max_entries": "1000",
+                "max_bytes": "1048576"
+              },
+              "sampleInput": "processor\t: 0\nmodel name\t: Example CPU\nprocessor\t: 1\nmodel name\t: Example CPU",
+              "decorators": [
+                {
+                  "id": "32f16875-53a8-4834-b919-f43804b352a4",
+                  "decoratorId": "grep",
+                  "params": {
+                    "pattern": "processor.*"
+                  }
+                },
+                {
+                  "id": "315ea040-022a-4769-8513-2eec664740cd",
+                  "decoratorId": "length",
+                  "params": {}
+                },
+                {
+                  "id": "a4cd09f3-f68a-4a0d-bb12-05f414ed130a",
+                  "decoratorId": "default-if-empty",
+                  "params": {
+                    "trigger": "0",
+                    "fallback": "auto"
+                  }
+                }
+              ],
+              "id": "1e3388fe-9b0a-4c93-88a7-982449d0f4f0"
+            },
+            {
+              "valueSourceId": "literal",
+              "params": {
+                "variable_name": "worker_connections",
+                "value": "1024"
+              },
+              "id": "3724d4bc-d42e-45a7-9d23-bfc1e4f03bca"
+            }
+          ],
+          "instanceId": "d3118ad4-73ca-439a-aa8f-50b1a3005f75"
+        },
+        {
+          "blockId": "define-class",
+          "label": "Web server role",
+          "params": {},
+          "entries": [
+            {
+              "valueSourceId": "always-true",
+              "params": {
+                "class_name": "webserver_role"
+              },
+              "id": "d4e88e09-14ab-4bf3-a848-8fde47ae933b"
+            }
+          ],
+          "instanceId": "6a2250da-aff8-4dc4-a781-f0571d28cad4"
+        }
+      ],
+      "edges": [],
+      "order": [],
+      "layout": {
+        "positions": {
+          "d3118ad4-73ca-439a-aa8f-50b1a3005f75": {
+            "x": 0,
+            "y": 0
+          },
+          "6a2250da-aff8-4dc4-a781-f0571d28cad4": {
+            "x": 0,
+            "y": 200
+          }
+        },
+        "groups": [],
+        "derived_positions": {}
+      }
+    },
+    {
+      "id": "73c8fe6d-7e9c-4aaa-a46c-c2b242e5f494",
+      "name": "Webserver",
+      "bundle": "webserver",
+      "path": "./webserver.cf",
+      "blocks": [
+        {
+          "blockId": "install-package",
+          "label": "Install web server package",
+          "params": {
+            "package_name": "$(common_vars.webserver_package)"
+          },
+          "condition": {
+            "mode": "if",
+            "kind": "class",
+            "className": "webserver_role"
+          },
+          "instanceId": "f9c797ce-b43f-4c88-8195-d7ed8ece8686"
+        },
+        {
+          "blockId": "remove-package",
+          "label": "Remove conflicting Apache",
+          "params": {
+            "package_name": "apache2"
+          },
+          "condition": {
+            "mode": "if",
+            "kind": "class",
+            "className": "webserver_role"
+          },
+          "instanceId": "c8cfaa1d-9461-4937-857c-30d2cbeb4964"
+        },
+        {
+          "blockId": "render-template",
+          "label": "Render nginx config",
+          "params": {
+            "destination": "/etc/nginx/nginx.conf",
+            "template_content": "worker_processes {{{vars.common_vars.worker_processes}}};\n\nevents {\n    worker_connections {{{vars.common_vars.worker_connections}}};\n}\n\nhttp {\n    server {\n        listen 80;\n        server_name example.com;\n        root /var/www/html;\n    }\n}\n",
+            "mode": "644",
+            "owner": "root",
+            "group": "root"
+          },
+          "instanceId": "23a481d9-1d03-403e-8e7e-eebaa152f1d6"
+        },
+        {
+          "blockId": "manage-service",
+          "label": "Restart nginx on config change",
+          "params": {
+            "service_name": "nginx",
+            "action": "restart"
+          },
+          "instanceId": "10bd00a6-91bf-4434-95d2-85f7611839ab"
+        },
+        {
+          "blockId": "remove-file",
+          "label": "Remove default nginx site",
+          "params": {
+            "path": "/etc/nginx/sites-enabled/default"
+          },
+          "instanceId": "8ba088bc-cb51-4659-b0c6-a2837c3f345c"
+        },
+        {
+          "blockId": "set-permissions",
+          "label": "Lock down nginx config files",
+          "params": {
+            "path": "/etc/nginx/nginx.conf\n/etc/nginx/conf.d/default.conf",
+            "mode": "644",
+            "owner": "root",
+            "group": "root"
+          },
+          "instanceId": "7715e0b0-b7d5-4000-b360-ca7500a9868b"
+        },
+        {
+          "blockId": "manage-users",
+          "label": "Create deploy user",
+          "params": {
+            "username": "deploy",
+            "state": "present"
+          },
+          "instanceId": "b3dca036-f40e-40d8-be73-0f7a50858f3d"
+        },
+        {
+          "blockId": "report-message",
+          "label": "Report provisioning done",
+          "params": {
+            "message": "Web server provisioning complete"
+          },
+          "instanceId": "d7032692-9115-41fb-b288-be49b70ab929"
+        }
+      ],
+      "edges": [
+        {
+          "source": "23a481d9-1d03-403e-8e7e-eebaa152f1d6",
+          "target": "10bd00a6-91bf-4434-95d2-85f7611839ab",
+          "outcomes": [
+            "repaired"
+          ],
+          "id": "77a4bfc9-912f-4809-94b2-8fc2765bbd5c"
+        }
+      ],
+      "order": [
+        "f9c797ce-b43f-4c88-8195-d7ed8ece8686",
+        "c8cfaa1d-9461-4937-857c-30d2cbeb4964",
+        "23a481d9-1d03-403e-8e7e-eebaa152f1d6",
+        "10bd00a6-91bf-4434-95d2-85f7611839ab",
+        "8ba088bc-cb51-4659-b0c6-a2837c3f345c",
+        "7715e0b0-b7d5-4000-b360-ca7500a9868b",
+        "b3dca036-f40e-40d8-be73-0f7a50858f3d",
+        "d7032692-9115-41fb-b288-be49b70ab929"
+      ],
+      "layout": {
+        "positions": {
+          "f9c797ce-b43f-4c88-8195-d7ed8ece8686": {
+            "x": 0,
+            "y": 0
+          },
+          "c8cfaa1d-9461-4937-857c-30d2cbeb4964": {
+            "x": 0,
+            "y": 160
+          },
+          "23a481d9-1d03-403e-8e7e-eebaa152f1d6": {
+            "x": 0,
+            "y": 320
+          },
+          "10bd00a6-91bf-4434-95d2-85f7611839ab": {
+            "x": 0,
+            "y": 560
+          },
+          "8ba088bc-cb51-4659-b0c6-a2837c3f345c": {
+            "x": 0,
+            "y": 740
+          },
+          "7715e0b0-b7d5-4000-b360-ca7500a9868b": {
+            "x": 0,
+            "y": 900
+          },
+          "b3dca036-f40e-40d8-be73-0f7a50858f3d": {
+            "x": 0,
+            "y": 1120
+          },
+          "d7032692-9115-41fb-b288-be49b70ab929": {
+            "x": 0,
+            "y": 1300
+          }
+        },
+        "groups": [],
+        "derived_positions": {}
+      }
+    }
+  ],
+  "current_file_id": "73c8fe6d-7e9c-4aaa-a46c-c2b242e5f494"
+}

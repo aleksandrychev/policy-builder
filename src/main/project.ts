@@ -4,7 +4,7 @@ import { constants, promises as fs } from 'fs';
 import { basename, dirname, isAbsolute, join, normalize, resolve } from 'path';
 
 import type { CreateProjectRequest, MasterfilesVersions, OperationResult, ProjectContent, RecentProject, TargetCheck } from '../preload/api';
-import { initCfbsProject } from './backend';
+import { compilePolicy, initCfbsProject } from './backend';
 
 /**
  * The project:* IPC channels: creating a cfbs project on disk (via the Python
@@ -94,7 +94,7 @@ function checkedFolderName(value: unknown): string {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// A policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
+// A generated policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
 const POLICY_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.cf$/;
 const isPolicyPath = (path: unknown): path is string => typeof path === 'string' && POLICY_PATH.test(path) && !path.startsWith('./out/');
 
@@ -194,10 +194,37 @@ export function mergeCfbsJson(existing: Record<string, unknown>, content: Projec
   return { ...existing, meta, build: [...build.filter(entry => !(isRecord(entry) && ours.has(entry.name as string))), ...content.modules] };
 }
 
+// A moved or deleted file's folders, once nothing is left in them (git doesn't keep empty ones).
+async function removeEmptyFolders(projectPath: string, folder: string): Promise<void> {
+  for (let current = folder; current !== '.' && current !== './' && current !== ''; current = dirname(current)) {
+    const removed = await fs.rmdir(join(projectPath, current)).then(
+      () => true,
+      () => false
+    );
+    if (!removed) return;
+  }
+}
+
+/**
+ * Saves the project: its generated .cf files first, then cfbs.json. Policy
+ * files the previous save generated and this one doesn't are removed.
+ */
 async function writeProjectContent(projectPath: string, content: ProjectContent): Promise<void> {
   const cfbsPath = join(projectPath, 'cfbs.json');
   const existing = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
   if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) throw new Error('cfbs.json is not a JSON object');
+  const paths = builderPaths(content.meta);
+  const policies = await compilePolicy(content.meta[META_KEY]);
+  for (const path of paths) {
+    if (typeof policies[path] !== 'string') throw new Error(`No policy was generated for ${path}`);
+    const target = join(projectPath, path);
+    await fs.mkdir(dirname(target), { recursive: true });
+    await writeFileAtomic(target, policies[path]);
+  }
+  for (const stale of builderPaths(existing.meta).filter(path => !paths.includes(path) && isPolicyPath(path))) {
+    await fs.rm(join(projectPath, stale), { force: true });
+    await removeEmptyFolders(projectPath, dirname(stale));
+  }
   await writeFileAtomic(cfbsPath, `${JSON.stringify(mergeCfbsJson(existing, stamped(content)), null, 2)}\n`);
 }
 

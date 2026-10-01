@@ -8,6 +8,8 @@ from PyInstaller.utils.hooks import collect_all, collect_data_files
 # collect_data_files, not collect_all: collect_all enumerates cfengine_cli.main,
 # which imports cf_remote and drags in ~27 MB of libcloud drivers.
 datas = collect_data_files("cfengine_cli") + collect_data_files("cfbs")
+# The block descriptors the compiler reads (see cfpb_compiler.blocks_dir).
+datas += [("../blocks/*.json", "blocks"), ("../blocks/lib/*.json", "blocks/lib")]
 binaries = []
 
 # Compiled extension modules and the CFEngine grammar — invisible to static analysis.

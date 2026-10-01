@@ -3,6 +3,7 @@ diagnostics on stderr, non-zero exit on failure.
 
   cfpb-backend [format]   policy on stdin -> formatted policy on stdout
   cfpb-backend init       JSON options on stdin -> JSON result on stdout
+  cfpb-backend compile    builder meta on stdin -> {"files": {path: policy}} on stdout
 
 Calls cfengine_cli and cfbs in-process. Import cfengine_cli.format, never
 cfengine_cli.main — that one pulls in cf_remote and ~27 MB of libcloud.
@@ -24,6 +25,8 @@ from typing import Iterator
 
 from cfengine_cli.format import format_policy_fin_fout
 from cfengine_cli.lint import PolicySyntaxError
+
+from cfpb_compiler import CompileError, compile_project
 
 LINE_LENGTH = 80
 INIT_COMMIT_MESSAGE = "Initialized a new CFEngine Build project"
@@ -157,9 +160,23 @@ def _update_cfbs_json(directory: str, options: dict) -> dict:
     if content:
         config["meta"] = {**config.get("meta", {}), **content["meta"]}
         config["build"] = [*config.get("build", []), *content["modules"]]
+        _write_policy(directory, content["meta"].get("policy-builder", {}))
     with open(path, "w", encoding="utf-8") as file:
         file.write(pretty(config, CFBS_DEFAULT_SORTING_RULES) + "\n")
     return config
+
+
+def _write_policy(directory: str, meta: dict) -> None:
+    for path, policy in compile_project(meta).items():
+        target = os.path.normpath(os.path.join(directory, path))
+        inside = target.startswith(directory + os.sep) and not target.startswith(
+            os.path.join(directory, "out") + os.sep
+        )
+        if not inside or not target.endswith(".cf"):
+            raise InitFailed(f"Refusing to write policy outside the project: {path}")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "w", encoding="utf-8") as file:
+            file.write(policy)
 
 
 def _git(directory: str, *args: str, echo: bool = True) -> subprocess.CompletedProcess:
@@ -233,6 +250,22 @@ def init_command() -> int:
     return 0
 
 
+def compile_command() -> int:
+    try:
+        meta = json.loads(sys.stdin.read())
+        if not isinstance(meta, dict):
+            raise CompileError("Expected a JSON object on stdin")
+        files = compile_project(meta)
+    except (json.JSONDecodeError, CompileError) as error:
+        print(f"Couldn't generate the policy: {error}", file=sys.stderr)
+        return 1
+    except Exception as error:
+        print(f"Policy compiler failed: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    print(json.dumps({"files": files}))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows would otherwise decode stdio with the ANSI code page.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
@@ -243,9 +276,11 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command")
     commands.add_parser("format", help="format CFEngine policy (the default)")
     commands.add_parser("init", help="create a cfbs project")
+    commands.add_parser("compile", help="generate policy from the builder's project data")
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
-    return init_command() if args.command == "init" else format_command()
+    commands = {"init": init_command, "compile": compile_command}
+    return commands.get(args.command, format_command)()
 
 
 if __name__ == "__main__":
