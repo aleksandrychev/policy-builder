@@ -28,7 +28,8 @@ export function BindToDataLink({
       <Button
         size="small"
         onClick={event => setAnchor(event.currentTarget)}
-        sx={{ fontSize: 12, px: 0.5, py: 0, minWidth: 0, textTransform: 'none', textAlign: 'left', justifyContent: 'flex-start' }}
+        // The dark theme's primary is grey, which reads as disabled; primary.light is its link blue.
+        sx={{ fontSize: 12, px: 0.5, py: 0, minWidth: 0, textTransform: 'none', textAlign: 'left', justifyContent: 'flex-start', color: 'primary.light' }}
       >
         {/* One span: the button is a flex box, which would put each text piece in its own column. */}
         <span>
