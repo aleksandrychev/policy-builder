@@ -66,7 +66,7 @@ bundle common <bundle>_vars              # every file_vars entry of the file
 
 bundle agent <bundle>                    # what the cfbs `bundles <bundle>` step runs; absent when the file only defines variables and classes
 {
-  # <block label>                        # every block, in canvas order
+  # <block label>                        # every ungrouped block, in canvas order
   vars:                                  # the block's locals, if any, named <block>_<name>
     <file condition>::
       "<block>_<param>" <type> => <value>;
@@ -75,6 +75,18 @@ bundle agent <bundle>                    # what the cfbs `bundles <bundle>` step
       "<promiser>" <attributes>,
         if => "<block condition>.<the arrows it waits for>",
         classes => results("bundle", "<bundle>_<block>");   # only if an arrow starts here
+
+  # Group: <group name>                  # a group, as one step, where it falls in the order
+  methods:
+    <file condition>::
+      "<group name>" usebundle => <bundle>_<group>,
+        if => "<group condition>.<the arrows it waits for>",
+        classes => results("bundle", "<bundle>_<group>");   # only if an arrow starts here
+}
+
+bundle agent <bundle>_<group>            # a group's blocks, written like the entry bundle's
+{
+  ...
 }
 ```
 
@@ -89,6 +101,12 @@ implements this; the output is run through `cfengine format`.
   the file part (`render_nginx_config_template_data`), since they live in the file's bundle.
 - **Conditions** and arrow gates combine into one class expression on the block's promise; the file
   condition is a class guard over every promise of the file.
+- **Groups** run as one step: their blocks go into a bundle of their own (named like a block, from
+  the group's name), called from the entry bundle. `results()` classes are bundle-scoped, so arrows
+  never cross a group's frame — they attach to the group, and one out of it reads the call's
+  rolled-up outcome (not kept if any block failed, else repaired if any repaired, else kept; a
+  group whose blocks all skipped is kept). Define Variable / Define Class blocks in a group still
+  compile into `<bundle>_vars`.
 - **A list parameter** in the promiser (`allow_list`) iterates over a `vars:` slist named after the
   block and parameter — or, holding just one value, is written in place.
 - **Templates** are files: every Render Template's template goes into `./templates/`, which ships as

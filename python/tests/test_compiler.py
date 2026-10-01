@@ -302,3 +302,60 @@ def test_compiled_demo_passes_cf_promises(tmp_path: Path):
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
+
+
+def _grouped_demo() -> dict:
+    """The demo with Render config + Restart nginx in a group, arrows attached to its frame."""
+    meta = _demo()
+    file = _webserver(meta)
+    ids = {block["label"]: block["instanceId"] for block in file["blocks"]}
+    for label in ("Render nginx config", "Restart nginx on config change"):
+        next(b for b in file["blocks"] if b["label"] == label)["groupId"] = "g1"
+    file["groups"] = [
+        {"id": "g1", "name": "Configure nginx", "condition": {"kind": "class", "className": "linux", "mode": "if"}}
+    ]
+    file["layout"]["groups"] = [{"id": "g1", "name": "Configure nginx", "color": "info"}]
+    for edge in file["edges"]:
+        if edge["target"] == ids["Render nginx config"]:
+            edge["target"] = "g1"
+    file["edges"].append(
+        {"id": "e-out", "source": "g1", "target": ids["Keep nginx running"], "outcomes": ["kept", "repaired"]}
+    )
+    return meta
+
+
+def test_a_group_is_its_own_bundle_called_as_one_step():
+    policy = compile_project(_grouped_demo())[WEBSERVER]
+    group = policy.split("bundle agent webserver_configure_nginx\n")[1]
+    entry = policy.split("bundle agent webserver\n")[1].split("\n}")[0]
+
+    assert '  # Group: Configure nginx\n  methods:\n    "Configure nginx"\n' in entry
+    call = _block(policy, "Group: Configure nginx")
+    assert "usebundle => webserver_configure_nginx," in call
+    assert (
+        'if => "linux.(webserver_install_web_server_package_kept|webserver_install_web_server_package_repaired)"'
+        in call
+    )
+    assert 'classes => results("bundle", "webserver_configure_nginx");' in call
+    keep = _block(policy, "Keep nginx running")
+    assert keep.endswith('.(webserver_configure_nginx_kept|webserver_configure_nginx_repaired)";\n')
+    # Arrows inside the group stay inside its bundle.
+    assert "# Render nginx config" not in entry
+    assert 'classes => results("bundle", "webserver_render_nginx_config");' in group
+    assert 'if => "webserver_render_nginx_config_repaired"' in group
+
+
+@pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine 3.27+")
+def test_compiled_groups_pass_cf_promises(tmp_path: Path):
+    for path, policy in compile_project(_grouped_demo()).items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(policy)
+    shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
+    (tmp_path / "promises.cf").write_text(
+        'body common control { inputs => { "stdlib.cf", "common.cf", "webserver.cf" };'
+        ' bundlesequence => { "webserver" }; }\n'
+    )
+
+    result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr

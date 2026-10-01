@@ -1,12 +1,13 @@
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { Box, Typography, alpha, useTheme } from '@mui/material';
 
-import { type Node, type NodeProps, NodeResizer, useStore } from '@xyflow/react';
+import { Handle, type Node, type NodeProps, NodeResizer, Position, useStore } from '@xyflow/react';
 
 import { GROUP_TITLE_HEIGHT } from '../canvas/groupFrames';
 import type { BlockGroup } from '../store/groupsSlice/types';
 
 export interface GroupFrameNodeData extends Record<string, unknown> {
+  // Has a block that runs, so arrows can go in and out of the group.
+  connectable: boolean;
   dropTarget: boolean;
   group: BlockGroup;
   isSelected: boolean;
@@ -14,8 +15,6 @@ export interface GroupFrameNodeData extends Record<string, unknown> {
   onResize: (rect: { height: number; width: number; x: number; y: number }) => void;
   onResizeEnd: () => void;
   onResizeStart: () => void;
-  // Order numbers of outside blocks that run in between the group's members.
-  outsiders: number[];
 }
 
 export type GroupFrameFlowNode = Node<GroupFrameNodeData, 'groupFrame'>;
@@ -23,14 +22,17 @@ export type GroupFrameFlowNode = Node<GroupFrameNodeData, 'groupFrame'>;
 /**
  * A group's frame. Only the title bar takes the pointer — grab it to move the
  * whole group, click it to edit the group — so the body stays click-through
- * to the canvas and the blocks inside.
+ * to the canvas and the blocks inside. Its top and bottom dots take arrows
+ * like a block's: the group runs as one step.
  */
 export function GroupFrameNode({ data }: NodeProps<GroupFrameFlowNode>) {
-  const { group, isSelected: selected, memberCount, outsiders, dropTarget, onResize, onResizeStart, onResizeEnd } = data;
+  const { group, isSelected: selected, memberCount, connectable, dropTarget, onResize, onResizeStart, onResizeEnd } = data;
   const theme = useTheme();
   const color = theme.palette[group.color].main;
   // Same threshold as block cards: zoomed out, the title grows so it stays readable.
   const compact = useStore(state => state.transform[2] < 0.55);
+  const handleSx = { width: 14, height: 14, border: `2px solid ${theme.palette.background.default}`, pointerEvents: 'all' as const };
+  const condition = group.condition?.className.trim() ? group.condition : undefined;
 
   return (
     <Box
@@ -81,15 +83,35 @@ export function GroupFrameNode({ data }: NodeProps<GroupFrameFlowNode>) {
         <Typography sx={{ fontSize: compact ? 20 : 12, color: 'text.muted', whiteSpace: 'nowrap' }}>
           {memberCount} {memberCount === 1 ? 'block' : 'blocks'}
         </Typography>
-        {outsiders.length > 0 && (
-          <Box
-            title={`Block${outsiders.length > 1 ? 's' : ''} ${outsiders.map(order => `#${order}`).join(', ')} from outside this group run${outsiders.length > 1 ? '' : 's'} in between its blocks. A group is only visual: order still follows arrows and position.`}
-            sx={{ display: 'flex', color: 'warning.main', ml: 'auto' }}
+        {condition && (
+          <Typography
+            title={`The group runs only ${condition.mode === 'unless' ? 'unless' : 'if'} ${condition.className}`}
+            sx={{
+              fontSize: compact ? 20 : 12,
+              fontFamily: 'monospace',
+              color: 'text.secondary',
+              ml: 'auto',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
           >
-            <WarningAmberIcon sx={{ fontSize: 16 }} />
-          </Box>
+            {condition.mode === 'unless' ? 'unless' : 'if'} {condition.className}
+          </Typography>
         )}
       </Box>
+      {connectable && (
+        <>
+          <Handle id="in" type="target" position={Position.Top} style={{ ...handleSx, background: theme.palette.text.secondary }} />
+          <Handle
+            id="out"
+            type="source"
+            position={Position.Bottom}
+            title="Drag onto a block or group to run it after this group"
+            style={{ ...handleSx, background: color }}
+          />
+        </>
+      )}
     </Box>
   );
 }

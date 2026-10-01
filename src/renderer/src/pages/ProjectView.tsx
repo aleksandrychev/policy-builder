@@ -15,6 +15,7 @@ import { type ChainOwner, dataFootprint } from '../canvas/dataChains';
 import { executionOrder } from '../canvas/executionOrder';
 import { describeFileCondition } from '../canvas/fileCondition';
 import { GATE_EDGE_PREFIX, GATE_LIFT, GATE_SPACE, type Gate, deriveGates, gateKey } from '../canvas/gates';
+import { throughGroups } from '../canvas/groupEdges';
 import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition, tidyLayout } from '../canvas/layout';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
@@ -28,6 +29,9 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
 import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
+import { ConditionSection } from '../components/properties/ConditionSection';
+import { RunsWhenSection } from '../components/properties/RunsWhenSection';
+import { buildClassNameOptions } from '../components/properties/classOptions';
 import {
   LEFT_SIDEBAR_MAX,
   LEFT_SIDEBAR_MIN,
@@ -96,7 +100,15 @@ import {
 } from '../store/filesSlice';
 import { collectFolderDescendants } from '../store/filesSlice/fileTree';
 import { selectCurrentFile, selectCurrentFileId, selectFiles, selectFolders } from '../store/filesSlice/selectors';
-import { groupColorChanged, groupRenamed } from '../store/groupsSlice';
+import {
+  groupColorChanged,
+  groupConditionClassNameChanged,
+  groupConditionEnabled,
+  groupConditionModeChanged,
+  groupConditionRemoved,
+  groupIncomingModeChanged,
+  groupRenamed
+} from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
 import { definedNames } from './pasteCopies';
@@ -565,7 +577,11 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
     };
     asOneStep(() => {
       const groupOf = (instance: BlockInstance) => (groups.some(group => group.id === instance.groupId) ? instance.groupId : undefined);
-      dispatch(blocksMoved({ positions: tidyLayout(instances, edges, order, sizeOf, footprintOf, blockDescriptorsById, groupOf) }));
+      dispatch(
+        blocksMoved({
+          positions: tidyLayout(instances, throughGroups(edges, instances, blockDescriptorsById), order, sizeOf, footprintOf, blockDescriptorsById, groupOf)
+        })
+      );
       // Gates and data-chain nodes go back to their default spots beside their blocks.
       if (currentFileId) dispatch(derivedNodePositionsClearedForFile({ fileId: currentFileId }));
       // Frames go back to hugging their (re-laid-out) blocks.
@@ -675,16 +691,19 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
     return index === -1 ? undefined : index + 1;
   };
   const selectedOrderNumber = selectedInstance ? orderNumberOf(selectedInstance.instanceId) : undefined;
-  const incomingArrows = selectedInstance
-    ? edges
-        .filter(edge => edge.target === selectedInstance.instanceId)
-        .map(edge => ({
+  const incomingArrowsOf = (targetId: string) =>
+    edges
+      .filter(edge => edge.target === targetId)
+      .map(edge => {
+        const group = groups.find(candidate => candidate.id === edge.source);
+        return {
           edgeId: edge.id,
           outcomes: edge.outcomes,
-          sourceLabel: instances.find(instance => instance.instanceId === edge.source)?.label ?? '(missing block)',
+          sourceLabel: group ? `group ${group.name}` : (instances.find(instance => instance.instanceId === edge.source)?.label ?? '(missing block)'),
           sourceOrder: orderNumberOf(edge.source)
-        }))
-    : [];
+        };
+      });
+  const incomingArrows = selectedInstance ? incomingArrowsOf(selectedInstance.instanceId) : [];
 
   const propertiesContent = (
     <>
@@ -697,6 +716,27 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
           key={selectedGroup.id}
           group={selectedGroup}
           members={membersOf(selectedGroup.id)}
+          condition={
+            <ConditionSection
+              condition={selectedGroup.condition}
+              scope="this group"
+              classNameOptions={buildClassNameOptions(allInstances, new Map(files.map(file => [file.id, file])), currentFileId)}
+              templateTokens={[]}
+              onEnable={() => dispatch(groupConditionEnabled({ groupId: selectedGroup.id }))}
+              onRemove={() => dispatch(groupConditionRemoved({ groupId: selectedGroup.id }))}
+              onModeChange={mode => dispatch(groupConditionModeChanged({ groupId: selectedGroup.id, mode }))}
+              onClassNameChange={className => dispatch(groupConditionClassNameChanged({ groupId: selectedGroup.id, className }))}
+            />
+          }
+          runsWhen={
+            <RunsWhenSection
+              arrows={incomingArrowsOf(selectedGroup.id)}
+              mode={selectedGroup.incomingMode ?? 'all'}
+              onModeChange={mode => dispatch(groupIncomingModeChanged({ groupId: selectedGroup.id, mode }))}
+              onOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
+              onRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
+            />
+          }
           orderOf={orderNumberOf}
           autoFocusName={freshGroupId === selectedGroup.id}
           onRename={name => dispatch(groupRenamed({ groupId: selectedGroup.id, name }))}

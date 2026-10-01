@@ -35,7 +35,7 @@ import { type ChainOwner, DATA_EDGE_PREFIX, DATA_NODE_WIDTH, type DataChain, der
 import { executionOrder, isSequenced, wouldCreateCycle } from '../canvas/executionOrder';
 import { relationToFileCondition } from '../canvas/fileCondition';
 import { GATE_EDGE_PREFIX, GATE_WIDTH, type Gate, deriveGates } from '../canvas/gates';
-import { type GroupFrame, type Rect, deriveGroupFrames, frameAt, settleGroup } from '../canvas/groupFrames';
+import { GROUP_NODE_PREFIX, type GroupFrame, type Rect, deriveGroupFrames, frameAt, settleGroup } from '../canvas/groupFrames';
 import { GRID_SIZE, NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
 import { defaultOutcomesFor, describeOutcomes } from '../canvas/outcomes';
 import type { BlockInstance } from '../store/canvasSlice/types';
@@ -136,8 +136,8 @@ interface FlowCanvasProps {
   onInvalidConnection: (message: string) => void;
   // `compact`: measured below COMPACT_ZOOM, where cards hide their rows — not sizes to lay out by.
   onMeasured: (sizes: NodeSizes, compact: boolean) => void;
-  // Blocks dropped into (groupId) or out of (null) a group's frame.
-  onMembershipChange: (instanceIds: string[], groupId: string | null) => void;
+  // Blocks dropped into (groupId) or out of (null) a group's frame; false when refused.
+  onMembershipChange: (instanceIds: string[], groupId: string | null) => boolean;
   onMove: (instanceId: string, position: { x: number; y: number }) => void;
   onMultiSelect: (instanceIds: string[]) => void;
   onNodeDragStart: () => void;
@@ -434,15 +434,12 @@ export function FlowCanvas({
     draggingIds
   );
   const frameByNodeId = new Map(frames.map(frame => [frame.nodeId, frame]));
-  // Order numbers of outside blocks running in between a group's members.
-  const outsidersOf = (memberIds: string[]): number[] => {
-    const numbers = memberIds.map(id => orderNumbers.get(id)).filter((number): number is number => number !== undefined);
-    if (numbers.length < 2) return [];
-    return order
-      .slice(Math.min(...numbers) - 1, Math.max(...numbers))
-      .filter(id => !memberIds.includes(id))
-      .map(id => orderNumbers.get(id)!);
-  };
+  // A group takes arrows when it has a block that runs.
+  const runsAnything = (memberIds: string[]) => memberIds.some(id => isSequenced(blockDescriptorsById.get(byId.get(id)?.blockId ?? '')));
+  const groupById = new Map(frames.map(frame => [frame.group.id, frame]));
+  // An arrow end on the canvas: a block's node id, or a frame's for a group.
+  const nodeIdOf = (endpoint: string) => (groupById.has(endpoint) ? `${GROUP_NODE_PREFIX}${endpoint}` : endpoint);
+  const endpointOf = (nodeId: string) => frameByNodeId.get(nodeId)?.group.id ?? nodeId;
   const groupNodes: GroupFrameFlowNode[] = frames.map(frame => ({
     id: frame.nodeId,
     type: 'groupFrame',
@@ -451,10 +448,10 @@ export function FlowCanvas({
     height: frame.rect.height,
     // Sized by us, not by rendering — tell React Flow so it can drag it right away.
     measured: { width: frame.rect.width, height: frame.rect.height },
-    zIndex: -1,
+    zIndex: 0,
     dragHandle: '.group-drag-handle',
     selectable: false,
-    connectable: false,
+    connectable: runsAnything(frame.memberIds),
     // The wrapper lets the pointer through (only the title bar and resize
     // handles take it), and selection lives in `data`, not `selected`, so
     // React Flow doesn't lift a selected frame above the blocks inside it.
@@ -463,7 +460,7 @@ export function FlowCanvas({
       isSelected: frame.group.id === selectedGroupId,
       group: frame.group,
       memberCount: frame.memberIds.length,
-      outsiders: outsidersOf(frame.memberIds),
+      connectable: runsAnything(frame.memberIds),
       dropTarget: frame.group.id === dropGroupId,
       onResizeStart: () => {
         resizingRef.current = true;
@@ -481,8 +478,8 @@ export function FlowCanvas({
     const color = theme.palette[describeOutcomes(edge.outcomes).color].main;
     return {
       id: edge.id,
-      source: edge.source,
-      target: edge.target,
+      source: nodeIdOf(edge.source),
+      target: nodeIdOf(edge.target),
       sourceHandle: 'out',
       targetHandle: 'in',
       type: 'outcome',
@@ -600,7 +597,10 @@ export function FlowCanvas({
       if (unchanged) continue;
       moves.set(target, [...(moves.get(target) ?? []), instance.instanceId]);
     }
-    for (const [groupId, instanceIds] of moves) onMembershipChange(instanceIds, groupId);
+    for (const [groupId, instanceIds] of moves) {
+      if (onMembershipChange(instanceIds, groupId)) continue;
+      for (const id of instanceIds) finalGroup.set(id, byId.get(id)?.groupId);
+    }
     settleDroppedInto(dragged, finalGroup);
   };
 
@@ -673,19 +673,27 @@ export function FlowCanvas({
     return null;
   };
 
-  const connectionProblem = ({ source, target, sourceHandle, targetHandle }: Connection | Edge): string | null => {
-    if (!source || !target || source === target) return 'An arrow needs two different blocks.';
-    const gate = gateByNodeId.get(source);
-    if (gate) return gateLinkProblem(gate, target, targetHandle);
+  // The group an arrow end sits in: a block's, or the group itself for a frame.
+  const groupAt = (endpoint: string) => (groupById.has(endpoint) ? undefined : byId.get(endpoint)?.groupId);
+
+  const connectionProblem = ({ source: sourceNode, target: targetNode, sourceHandle, targetHandle }: Connection | Edge): string | null => {
+    if (!sourceNode || !targetNode || sourceNode === targetNode) return 'An arrow needs two different blocks.';
+    const gate = gateByNodeId.get(sourceNode);
+    if (gate) return gateLinkProblem(gate, targetNode, targetHandle);
     if (sourceHandle !== 'out' || targetHandle !== 'in')
       return 'Arrows go from a block’s bottom dot to another block’s top dot; the left edge is for conditions.';
-    const sourceInstance = byId.get(source);
-    const targetInstance = byId.get(target);
-    if (!isSequenced(blockDescriptorsById.get(targetInstance?.blockId ?? '')) || !isSequenced(blockDescriptorsById.get(sourceInstance?.blockId ?? ''))) {
+    const [source, target] = [endpointOf(sourceNode), endpointOf(targetNode)];
+    const takesArrows = (endpoint: string) => {
+      const frame = groupById.get(endpoint);
+      return frame ? runsAnything(frame.memberIds) : isSequenced(blockDescriptorsById.get(byId.get(endpoint)?.blockId ?? ''));
+    };
+    if (!takesArrows(source) || !takesArrows(target)) {
       return 'Define Variable / Define Class blocks can’t take arrows — use a Condition to react to their classes.';
     }
+    if (groupAt(source) === target || groupAt(target) === source) return 'That block is inside this group — it already runs as part of it.';
+    if (groupAt(source) !== groupAt(target)) return 'Arrows can’t cross a group’s edge: connect to the group’s frame instead (its top and bottom dots).';
     if (edges.some(edge => edge.source === source && edge.target === target))
-      return 'Those blocks are already connected — click the arrow’s label to change what it waits for.';
+      return 'Those are already connected — click the arrow’s label to change what it waits for.';
     if (wouldCreateCycle(edges, source, target)) return 'That arrow would create a loop.';
     return null;
   };
@@ -757,8 +765,12 @@ export function FlowCanvas({
           if (connectionProblem(connection)) return;
           const gate = gateByNodeId.get(connection.source);
           if (gate) return onGateLink(gate, connection.target);
-          const sourceDescriptor = blockDescriptorsById.get(byId.get(connection.source)?.blockId ?? '');
-          onConnect(connection.source, connection.target, defaultOutcomesFor(sourceDescriptor));
+          const [source, target] = [endpointOf(connection.source), endpointOf(connection.target)];
+          // A group's call is kept or repaired when nothing in it failed.
+          const outcomes: BlockOutcome[] = groupById.has(source)
+            ? ['kept', 'repaired']
+            : defaultOutcomesFor(blockDescriptorsById.get(byId.get(source)?.blockId ?? ''));
+          onConnect(source, target, outcomes);
         }}
         isValidConnection={connection => connectionProblem(connection) === null}
         onConnectEnd={(_event, state) => {

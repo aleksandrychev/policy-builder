@@ -154,7 +154,7 @@ test('opens a plain cfbs project with one empty file, keeping its build entries 
   await window.keyboard.press('ControlOrMeta+s');
   await expect
     .poll(() => (existsSync(join(path, '.policy-builder/project.json')) ? builderJson(path).schema_version : null), { timeout: SAVE_TIMEOUT_MS })
-    .toBe(1);
+    .toBe(2);
   const saved = readJson(join(path, 'cfbs.json'));
   expect(saved.build[0]).toEqual(fake);
   expect(saved.build).toHaveLength(2);

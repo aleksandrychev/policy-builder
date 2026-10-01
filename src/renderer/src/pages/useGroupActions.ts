@@ -2,10 +2,11 @@ import { useState } from 'react';
 
 import { GRID_SIZE } from '../canvas/layout';
 import { useAppDispatch, useAppSelector } from '../store';
-import { blockGroupChanged, blockRemoved, blocksMoved } from '../store/canvasSlice';
+import { blockRemoved, blocksMoved } from '../store/canvasSlice';
 import type { BlockInstance } from '../store/canvasSlice/types';
 import { derivedNodesMoved } from '../store/derivedNodesSlice';
-import { groupCreated, groupFrameResized, groupFramesFitted, groupRemoved } from '../store/groupsSlice';
+import { changeMembership, groupBlocks, ungroupBlocks } from '../store/groupArrows';
+import { groupFrameResized, groupFramesFitted, groupRemoved } from '../store/groupsSlice';
 import { selectGroupsForFile } from '../store/groupsSlice/selectors';
 import { type BlockGroup, GROUP_COLORS } from '../store/groupsSlice/types';
 import { inOneStep } from '../store/history';
@@ -52,15 +53,16 @@ export function useGroupActions({
     let number = 1;
     while (names.has(`Group ${number}`)) number += 1;
     const color = GROUP_COLORS[(number - 1) % GROUP_COLORS.length];
-    const action = dispatch(groupCreated({ fileId: currentFileId, instanceIds, name: `Group ${number}`, color }));
+    const groupId = dispatch(groupBlocks({ fileId: currentFileId, instanceIds, name: `Group ${number}`, color }));
+    if (!groupId) return announce('Can’t group these blocks: arrows through the group would make a loop.');
     onGroupCreated();
-    setSelectedGroupId(action.payload.id);
-    setFreshGroupId(action.payload.id);
+    setSelectedGroupId(groupId);
+    setFreshGroupId(groupId);
     announce(`Grouped ${instanceIds.length} ${instanceIds.length === 1 ? 'block' : 'blocks'} — ${undoKey} to undo`);
   };
 
   const ungroup = (groupId: string) => {
-    dispatch(groupRemoved({ groupId }));
+    if (currentFileId) dispatch(ungroupBlocks(currentFileId, groupId));
     setSelectedGroupId(null);
     announce(`Ungrouped — ${undoKey} to undo`);
   };
@@ -94,10 +96,15 @@ export function useGroupActions({
       if (resized) dispatch(groupFrameResized(resized));
     },
     onGroupResize: (groupId: string, rect: Rect) => dispatch(groupFrameResized({ groupId, rect: snapRect(rect) })),
+    // False when refused: the arrows it would re-attach to frames would make a loop.
     onMembershipChange: (instanceIds: string[], groupId: string | null) => {
-      dispatch(blockGroupChanged({ instanceIds, groupId }));
+      if (!currentFileId || !dispatch(changeMembership(currentFileId, instanceIds, groupId))) {
+        announce('Can’t move it there: its arrows would make a loop.');
+        return false;
+      }
       const name = groups.find(group => group.id === groupId)?.name;
       announce(groupId ? `Added to "${name}"` : 'Removed from its group');
+      return true;
     }
   };
 

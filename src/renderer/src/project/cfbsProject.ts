@@ -1,5 +1,6 @@
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { executionOrder, isSequenced } from '../canvas/executionOrder';
+import { attachToFrames } from '../canvas/groupEdges';
 import type { RootState } from '../store';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
@@ -20,7 +21,8 @@ import { moduleNameFor } from './moduleName';
  * also writes the generated .cf files (main process, via the sidecar).
  */
 
-export const SCHEMA_VERSION = 1;
+// 2: groups compile into bundles of their own (`groups`), arrows may end on them.
+export const SCHEMA_VERSION = 2;
 const ROOT = './';
 const OUTPUT_DIR = 'services/cfbs/';
 // Top-level names taken next to cfbs.json: cfbs's build output, and generated templates.
@@ -50,12 +52,14 @@ export interface FileMeta {
   bundle: string;
   condition?: Condition;
   edges: Omit<BlockEdge, 'fileId'>[];
+  // What a group compiles from; its look is in layout.groups.
+  groups: Pick<BlockGroup, 'condition' | 'id' | 'incomingMode' | 'name'>[];
   id: string;
   // Editor-only: nothing here changes the compiled policy.
   layout: {
     // derivedNodes positions, keyed without the `${fileId}|` prefix.
     derived_positions: Record<string, Position>;
-    groups: Omit<BlockGroup, 'fileId'>[];
+    groups: Pick<BlockGroup, 'color' | 'id' | 'rect'>[];
     positions: Record<string, Position>;
   };
   // The display name; the path is a slug.
@@ -132,7 +136,11 @@ function folderPaths(folders: PolicyFolder[]): Map<string, string> {
 function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta {
   const prefix = `${file.id}|`;
   const instances = data.canvas.filter(block => block.fileId === file.id);
-  const edges = data.edges.filter(edge => edge.fileId === file.id);
+  const edges = attachToFrames(
+    data.edges.filter(edge => edge.fileId === file.id),
+    instances
+  );
+  const groups = data.groups.filter(group => group.fileId === file.id);
   const derivedPositions = Object.entries(data.derivedNodes)
     .filter(([key]) => key.startsWith(prefix))
     .map(([key, position]) => [key.slice(prefix.length), position]);
@@ -144,10 +152,16 @@ function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta
     ...(file.condition ? { condition: file.condition } : {}),
     blocks: instances.map(({ fileId: _fileId, position: _position, ...rest }) => rest),
     edges: edges.map(withoutFileId),
+    groups: groups.map(({ condition, id, incomingMode, name }) => ({
+      id,
+      name,
+      ...(condition ? { condition } : {}),
+      ...(incomingMode ? { incomingMode } : {})
+    })),
     order: executionOrder(instances, edges, blockDescriptorsById),
     layout: {
       positions: Object.fromEntries(instances.flatMap(block => (block.position ? [[block.instanceId, block.position]] : []))),
-      groups: data.groups.filter(group => group.fileId === file.id).map(withoutFileId),
+      groups: groups.map(({ color, id, rect }) => ({ id, color, ...(rect ? { rect } : {}) })),
       derived_positions: Object.fromEntries(derivedPositions)
     }
   };
@@ -258,8 +272,6 @@ export function fromBuilderProject(json: unknown): ProjectData {
     name: typeof name === 'string' ? name : id,
     parentId: folderOf(path)?.id ?? null
   }));
-  const perFile = <T>(pick: (file: FileMeta) => T[] | undefined) =>
-    modules.flatMap(({ file }) => listOf(pick(file)).map(item => ({ ...item, fileId: file.id })));
   const canvas = modules.flatMap(({ file }) => {
     const positions = isObject(file.layout?.positions) ? file.layout.positions : {};
     return listOf(file.blocks).map(block => {
@@ -274,12 +286,34 @@ export function fromBuilderProject(json: unknown): ProjectData {
   );
   const currentFileId = files.some(file => file.id === project.current_file_id) ? project.current_file_id : (files[0]?.id ?? null);
 
+  // A group's look (layout.groups; schema 1 kept all of it there) and what it compiles from (groups).
+  const groups = modules.flatMap(({ file }) => {
+    const looks = listOf(isObject(file.layout) ? (file.layout.groups as Partial<BlockGroup>[]) : undefined);
+    const semantics = listOf(file.groups as Partial<BlockGroup>[] | undefined);
+    const ids = [...new Set([...looks, ...semantics].map(group => group.id).filter((id): id is string => typeof id === 'string'))];
+    return ids.map(id => ({
+      color: 'primary' as const,
+      name: '',
+      ...looks.find(group => group.id === id),
+      ...semantics.find(group => group.id === id),
+      id,
+      fileId: file.id
+    })) as BlockGroup[];
+  });
+  // Schema 1 arrows could cross a group's frame; they attach to the group now.
+  const edges = modules.flatMap(({ file }) =>
+    attachToFrames(
+      listOf(file.edges).map(edge => ({ ...edge, fileId: file.id })),
+      canvas.filter(block => block.fileId === file.id)
+    )
+  );
+
   return {
     canvas,
     derivedNodes,
-    edges: perFile(file => file.edges),
+    edges,
     files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
-    groups: perFile(file => (isObject(file.layout) ? file.layout.groups : undefined))
+    groups
   };
 }
 

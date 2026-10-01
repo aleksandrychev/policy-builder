@@ -33,6 +33,7 @@ const TYPING_FIELDS: Record<string, string> = {
   'canvas/inventoryAttributeNameChanged': 'attributeName',
   'canvas/sampleInputChanged': 'value',
   'files/fileConditionClassNameChanged': 'className',
+  'groups/groupConditionClassNameChanged': 'className',
   'groups/groupRenamed': 'name'
 };
 // Change undoable state without being worth a step of their own.

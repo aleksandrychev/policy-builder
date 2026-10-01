@@ -6,7 +6,9 @@
 export type BlockOutcome = 'kept' | 'not_kept' | 'repaired';
 
 /**
- * An arrow on a file's canvas: `target` runs only after `source` ended with
+ * An arrow on a file's canvas, between blocks or groups (`source` / `target`
+ * is an instanceId or a group id; never across a group's frame, see
+ * canvas/groupEdges.ts): `target` runs only after `source` ended with
  * one of `outcomes` (OR-ed; never empty). At most one arrow per
  * source/target pair — its outcomes are edited on the arrow, not by drawing
  * another one. Compiles to the source call's results() classes plus an
