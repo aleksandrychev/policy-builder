@@ -143,7 +143,8 @@ export async function initCfbsProject(options: InitCfbsProjectOptions): Promise<
 
 /**
  * Generates the policy for the builder's project data (cfbs.json's
- * meta["policy-builder"]), resolving with each module path's policy text.
+ * meta["policy-builder"]), resolving with every generated file by project path:
+ * the .cf files, and the templates in ./templates/.
  */
 export async function compilePolicy(meta: unknown): Promise<Record<string, string>> {
   const result = await runSidecar(['compile'], JSON.stringify(meta), COMPILE_TIMEOUT_MS);

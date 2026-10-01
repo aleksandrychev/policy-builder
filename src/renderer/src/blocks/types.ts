@@ -53,6 +53,11 @@ export interface IfSetExpression {
   value: Expression;
 }
 
+// Attributes only: the parameter's text as its own file next to the policy (templates).
+export interface TemplateFileExpression {
+  template_file: string;
+}
+
 export type Expression =
   | Template
   | CallExpression
@@ -64,7 +69,8 @@ export type Expression =
   | BundleExpression
   | VariableExpression
   | PreviousExpression
-  | IfSetExpression;
+  | IfSetExpression
+  | TemplateFileExpression;
 
 export interface BlockStep {
   attributes?: Record<string, Expression>;

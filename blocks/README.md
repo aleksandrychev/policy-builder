@@ -88,6 +88,10 @@ bundle agent <bundle>_<label_slug> { <promise type>: "<promiser>" <attributes>; 
   is a class guard over the whole `methods:` (and `vars`/`classes`) section.
 - **A list parameter** in the promiser (`allow_list`) iterates over a `vars:` slist named after the
   parameter — or, holding just one value, is written in place.
+- **Templates** are files: every Render Template's template goes into `./templates/`, which ships as
+  one directory module (added only when there are templates — an empty one fails `cfbs build`;
+  a file module can't carry extra files). The policy refers to it relative to itself, so it
+  resolves the same in the project and on hosts.
 - **Mustache templates** get an explicit `template_data` with just what they read, rather than
   the whole `datastate()`: local copies of the variables the template names, wrapped by
   `mergedata()` (safe for any value, unlike `"$(x)"` inside inline JSON), plus its classes as
@@ -120,6 +124,7 @@ Every promiser and attribute value is an **expression**:
 | `{"variable": "{{param}}", "as": ...}` | A picked variable, always bundle-qualified (`vars.x` means this file's `<bundle>_vars.x`): `scalar` → `"$(common_vars.x)"`, `list` → `{ @(common_vars.x) }`, `name` → `"common_vars.x"` |
 | `{"previous": "value"}` | Decorators only: the incoming value (see "Chains") |
 | `{"if_set": "param", "value": ...}` | The attribute, or nothing when the parameter is empty (`report_to_file => ""` is a hard error) |
+| `{"template_file": "param"}` | The parameter's text as its own file, `./templates/<block bundle>.mustache`, used as written (no escaping, no `$(…)` expansion); compiles to its path relative to the policy file, `"$(this.promise_dirname)/templates/…"` (`../` per folder the file is nested in) |
 
 **Escaping.** CFEngine strings have exactly two escapes, `\\` and `\"`: every other backslash stays
 literal, so regexes like `\d+` need no special handling, and a real newline can sit inside a string.
@@ -143,8 +148,8 @@ exist — the agent fails at run time instead — so compiled output should also
 
 Mustache templates (`render-template`) are written against `datastate()`'s shape, so variables are
 `{{{vars.<bundle>_vars.<name>}}}` and classes `{{#classes.<name>}}` (the compiler passes only those
-as `template_data`, see "Compiled shape"). CFEngine expands `$(…)` in the
-template text before Mustache sees it.
+as `template_data`, see "Compiled shape"). A template is a file, so there's no `$(…)` expansion in
+it: only Mustache tags are filled in.
 
 ## Chains (decorators)
 

@@ -2,8 +2,9 @@
 
 The contract is blocks/README.md: descriptors (blocks/*.json), decorators and
 builder bodies (blocks/lib/). Input is cfbs.json's meta["policy-builder"];
-output is {file path: formatted policy}. Targets CFEngine 3.24+, in the
-default namespace, next to masterfiles.
+output is {file path: contents} — each .cf, plus the template files its
+blocks render (in ./templates/, one cfbs directory module). Targets CFEngine
+3.24+, in the default namespace, next to masterfiles.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ MUSTACHE_TAG = re.compile(r"\{\{(\{?)\s*([#^/&!>]?)\s*(.*?)\s*\}?\}\}", re.S)
 MUSTACHE_VAR = re.compile(r"vars\.([A-Za-z_]\w*)\.([A-Za-z_]\w*)(\..+)?")
 MUSTACHE_CLASS = re.compile(r"classes\.([A-Za-z_]\w*)")
 LINE_LENGTH = 80
+# Where templates go: one directory module, so they ship whatever kind of module uses them.
+TEMPLATES_DIR = "./templates/"
 
 
 class CompileError(Exception):
@@ -95,6 +98,11 @@ class Context:
     previous: str | None = None
     # Chained values are function arguments: a list can't be a { } literal there.
     as_argument: bool = False
+    # A block's own files in ./templates/ ({"template_file": …}), named after its bundle,
+    # and the way from the policy file's folder there ("../" per folder it's nested in).
+    block_bundle: str = ""
+    files: dict[str, str] = field(default_factory=dict)
+    to_root: str = ""
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -141,6 +149,11 @@ def compile_value(expr, ctx: Context) -> str:
         return ctx.previous
     if "if_set" in expr:
         return compile_value(expr["value"], ctx)
+    if "template_file" in expr:
+        # Relative to the policy file, so it resolves the same in the project and on hosts.
+        name = f"{ctx.block_bundle}.mustache"
+        ctx.files[name] = ctx.params.get(expr["template_file"], "")
+        return quote(f"$(this.promise_dirname)/{ctx.to_root}{TEMPLATES_DIR[2:]}{name}")
     raise CompileError(f"Unknown expression: {json.dumps(expr)}")
 
 
@@ -260,6 +273,8 @@ class FileCompiler:
     # Builder bodies an earlier file already defines: a body may only be defined once.
     written_bodies: set[str] = field(default_factory=set)
     bodies: set[str] = field(default_factory=set)
+    # The file's templates, by name in ./templates/.
+    companions: dict[str, str] = field(default_factory=dict)
 
     @property
     def bundle(self) -> str:
@@ -508,7 +523,8 @@ class FileCompiler:
         if len(steps) != 1:
             raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
         step = steps[0]
-        ctx = Context(self.vars_name, params, self.bodies)
+        to_root = "../" * self.file["path"][2:].count("/")
+        ctx = Context(self.vars_name, params, self.bodies, block_bundle=name, files=self.companions, to_root=to_root)
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
         variables, promiser_params = [line for lines in computed.values() for line in lines], dict(params)
         for param in declared:
@@ -562,7 +578,7 @@ class FileCompiler:
         """Just what an inline Mustache template reads, instead of all of datastate():
         local copies of its variables wrapped by mergedata() (safe for any value), and
         its classes as true/false. Same shape as datastate(), so the template is unchanged."""
-        if step.get("attributes", {}).get("template_method") != "inline_mustache":
+        if step.get("attributes", {}).get("template_method") not in ("mustache", "inline_mustache"):
             return None
         template = next((params[p["name"]] for p in declared if p.get("mustache")), None)
         refs = template_refs(template) if template is not None else None
@@ -622,7 +638,12 @@ def format_policy(text: str) -> str:
 
 
 def compile_project(meta: dict, library: Library | None = None) -> dict[str, str]:
-    """meta["policy-builder"] -> {module path: policy}."""
+    """meta["policy-builder"] -> {path: contents}, every .cf and the files next to it."""
+    return {path: text for files in compile_files(meta, library).values() for path, text in files.items()}
+
+
+def compile_files(meta: dict, library: Library | None = None) -> dict[str, dict[str, str]]:
+    """meta["policy-builder"] -> {policy path: {path: contents}}: each .cf first, then its templates."""
     library = library or Library.load()
     files = meta.get("files")
     if not isinstance(files, list):
@@ -640,7 +661,27 @@ def compile_project(meta: dict, library: Library | None = None) -> dict[str, str
         name for file in files for name in (file["bundle"], f"{file['bundle']}_vars")
     }
     written_bodies: set[str] = set()
-    return {file["path"]: FileCompiler(library, file, types, taken, written_bodies).compile() for file in files}
+    result = {}
+    for file in files:
+        compiler = FileCompiler(library, file, types, taken, written_bodies)
+        policy = compiler.compile()
+        templates = {f"{TEMPLATES_DIR}{name}": text for name, text in compiler.companions.items()}
+        result[file["path"]] = {file["path"]: policy, **templates}
+    return result
+
+
+def templates_module(files: dict[str, str]) -> dict | None:
+    """The ./templates/ directory module (what `cfbs add ./templates/` writes), when there are templates;
+    an empty directory module would fail the build."""
+    if not any(path.startswith(TEMPLATES_DIR) for path in files):
+        return None
+    return {
+        "name": TEMPLATES_DIR,
+        "description": "Local subdirectory added using cfbs command line",
+        "tags": ["local"],
+        "added_by": "cfbs add",
+        "steps": [f"directory ./ services/cfbs/{TEMPLATES_DIR[2:]}"],
+    }
 
 
 def variable_types(files: list[dict], library: Library) -> dict[str, str]:

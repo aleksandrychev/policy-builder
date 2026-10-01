@@ -22,8 +22,8 @@ export const SCHEMA_VERSION = 1;
 export const META_KEY = 'policy-builder';
 const ROOT = './';
 const OUTPUT_DIR = 'services/cfbs/';
-// Top-level names cfbs uses itself, next to cfbs.json.
-const RESERVED_FOLDERS = ['./out/'];
+// Top-level names taken next to cfbs.json: cfbs's build output, and generated templates.
+const RESERVED_FOLDERS = ['./out/', './templates/'];
 
 export type ProjectData = Pick<RootState, UndoableKey>;
 type Position = { x: number; y: number };

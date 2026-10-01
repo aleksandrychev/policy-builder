@@ -291,6 +291,19 @@
               "$ref": "#/$defs/expression"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "template_file"
+          ],
+          "description": "Attributes only: the parameter's text, written to its own file next to the compiled policy (<block bundle>.mustache), and compiled to that file's path, \"$(this.promise_dirname)/<block bundle>.mustache\". The file is used as-is: no CFEngine escaping, and no $(...) expansion.",
+          "properties": {
+            "template_file": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
         }
       ]
     }

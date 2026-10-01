@@ -94,9 +94,18 @@ function checkedFolderName(value: unknown): string {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// A generated policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
+// A policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
 const POLICY_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.cf$/;
 const isPolicyPath = (path: unknown): path is string => typeof path === 'string' && POLICY_PATH.test(path) && !path.startsWith('./out/');
+// Anything a save generates: a policy file, or a template next to one.
+const GENERATED_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.(cf|mustache)$/;
+const isGeneratedPath = (path: unknown): path is string => typeof path === 'string' && GENERATED_PATH.test(path) && !path.startsWith('./out/');
+
+// What the previous save generated (older projects list only their policy files).
+function generatedPaths(meta: unknown): string[] {
+  const generated = isRecord(meta) && isRecord(meta[META_KEY]) ? meta[META_KEY].generated : undefined;
+  return Array.isArray(generated) ? generated.filter(isGeneratedPath) : builderPaths(meta).filter(isPolicyPath);
+}
 
 // The policy file paths the builder's meta lists.
 function builderPaths(meta: unknown): string[] {
@@ -109,7 +118,12 @@ const moduleNameOf = (path: string) => {
   const parts = path.slice(2).split('/');
   return parts.length === 1 ? path : `./${parts[0]}/`;
 };
-const builderModules = (meta: unknown) => new Set(builderPaths(meta).map(moduleNameOf));
+// Plus ./templates/, once a save has generated templates into it.
+const builderModules = (meta: unknown) => {
+  const modules = new Set(builderPaths(meta).map(moduleNameOf));
+  if (generatedPaths(meta).some(path => path.startsWith(TEMPLATES_DIR))) modules.add(TEMPLATES_DIR);
+  return modules;
+};
 
 function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
@@ -127,6 +141,26 @@ function checkedContent(value: unknown): ProjectContent {
   if (!ok) throw new InvalidRequest('Invalid policy module');
   if (JSON.stringify(content).length > MAX_CONTENT_BYTES) throw new InvalidRequest('Project is too large');
   return content as ProjectContent;
+}
+
+// Templates' directory module, as `cfbs add ./templates/` writes it.
+const TEMPLATES_DIR = './templates/';
+const TEMPLATES_MODULE = {
+  name: TEMPLATES_DIR,
+  description: 'Local subdirectory added using cfbs command line',
+  tags: ['local'],
+  added_by: 'cfbs add',
+  steps: ['directory ./ services/cfbs/templates/']
+};
+
+// What a save generated, into the meta (so the next save can remove what it no longer
+// does), and the ./templates/ module when there are templates to ship (an empty one fails the build).
+function withGenerated(content: ProjectContent, generated: string[]): ProjectContent {
+  const templates = generated.some(path => path.startsWith(TEMPLATES_DIR));
+  return {
+    meta: { ...content.meta, [META_KEY]: { ...content.meta[META_KEY], generated } },
+    modules: [...content.modules, ...(templates ? [TEMPLATES_MODULE] : [])]
+  };
 }
 
 // The app's version, into the builder's project meta.
@@ -213,19 +247,23 @@ async function writeProjectContent(projectPath: string, content: ProjectContent)
   const cfbsPath = join(projectPath, 'cfbs.json');
   const existing = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
   if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) throw new Error('cfbs.json is not a JSON object');
-  const paths = builderPaths(content.meta);
-  const policies = await compilePolicy(content.meta[META_KEY]);
-  for (const path of paths) {
-    if (typeof policies[path] !== 'string') throw new Error(`No policy was generated for ${path}`);
+  const files = await compilePolicy(content.meta[META_KEY]);
+  const generated = Object.keys(files);
+  const missing = builderPaths(content.meta).find(path => typeof files[path] !== 'string');
+  if (missing) throw new Error(`No policy was generated for ${missing}`);
+  const outside = generated.find(path => !isGeneratedPath(path));
+  if (outside) throw new Error(`Refusing to write generated policy outside the project: ${outside}`);
+  for (const path of generated) {
     const target = join(projectPath, path);
     await fs.mkdir(dirname(target), { recursive: true });
-    await writeFileAtomic(target, policies[path]);
+    await writeFileAtomic(target, files[path]);
   }
-  for (const stale of builderPaths(existing.meta).filter(path => !paths.includes(path) && isPolicyPath(path))) {
+  for (const stale of generatedPaths(existing.meta).filter(path => !generated.includes(path))) {
     await fs.rm(join(projectPath, stale), { force: true });
     await removeEmptyFolders(projectPath, dirname(stale));
   }
-  await writeFileAtomic(cfbsPath, `${JSON.stringify(mergeCfbsJson(existing, stamped(content)), null, 2)}\n`);
+  const saved = withGenerated(stamped(content), generated);
+  await writeFileAtomic(cfbsPath, `${JSON.stringify(mergeCfbsJson(existing, saved), null, 2)}\n`);
 }
 
 const failure = (error: unknown): OperationResult<never> => ({

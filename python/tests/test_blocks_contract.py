@@ -72,6 +72,10 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
             problems.append(f"{where}: {expr['body']} takes {len(known[expr['body']]['parameters'])} arguments")
     if "list_param" in expr:
         yield expr["list_param"]
+    if "template_file" in expr:
+        if not top_level:
+            problems.append(f"{where}: template_file is only allowed as a whole attribute value")
+        yield expr["template_file"]
     for key in ("variable", "bundle", "class_expression"):
         if key in expr:
             yield from PLACEHOLDER.findall(expr[key])

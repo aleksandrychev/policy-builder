@@ -157,7 +157,9 @@ def test_every_block_source_and_decorator_compiles_without_a_skip():
 
 @pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine")
 def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: Path):
-    (tmp_path / "all.cf").write_text(compile_project(_project())["./all.cf"])
+    for path, text in compile_project(_project()).items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text)
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all" }; }\n'

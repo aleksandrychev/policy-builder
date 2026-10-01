@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from cfpb_compiler import CompileError, compile_project, quote
+from cfpb_compiler import CompileError, compile_project, quote, templates_module
 
 FIXTURES = Path(__file__).parent / "fixtures"
 # The demo project's meta["policy-builder"], as the app saves it.
@@ -32,8 +32,45 @@ def _bundle(policy: str, name: str) -> str:
     return rest.split("\nbundle ")[0].split("\nbody ")[0]
 
 
-def test_compiles_every_file_to_its_path():
-    assert list(compile_project(DEMO)) == [COMMON, WEBSERVER]
+TEMPLATE = "./templates/webserver_render_nginx_config.mustache"
+
+
+def test_compiles_every_file_to_its_path_and_templates_into_templates():
+    assert list(compile_project(DEMO)) == [COMMON, WEBSERVER, TEMPLATE]
+
+
+def test_a_template_is_its_own_file_used_as_written():
+    files = compile_project(DEMO)
+    render = _bundle(files[WEBSERVER], "webserver_render_nginx_config")
+    template = next(b for b in _webserver(DEMO)["blocks"] if b["blockId"] == "render-template")["params"][
+        "template_content"
+    ]
+
+    assert files[TEMPLATE] == template
+    assert 'edit_template => "$(this.promise_dirname)/templates/webserver_render_nginx_config.mustache",' in render
+    assert 'template_method => "mustache",' in render
+
+
+def test_a_nested_file_finds_the_templates_from_its_own_folder():
+    meta = _demo()
+    _webserver(meta)["path"] = "./services/db/webserver.cf"
+
+    policy = compile_project(meta)["./services/db/webserver.cf"]
+
+    assert '"$(this.promise_dirname)/../../templates/webserver_render_nginx_config.mustache"' in policy
+
+
+def test_templates_ship_as_one_directory_module_only_when_there_are_any():
+    assert templates_module(compile_project(DEMO)) == {
+        "name": "./templates/",
+        "description": "Local subdirectory added using cfbs command line",
+        "tags": ["local"],
+        "added_by": "cfbs add",
+        "steps": ["directory ./ services/cfbs/templates/"],
+    }
+    meta = _demo()
+    _webserver(meta)["blocks"] = [b for b in _webserver(meta)["blocks"] if b["blockId"] != "render-template"]
+    assert templates_module(compile_project(meta)) is None
 
 
 def test_the_entry_bundle_is_named_after_the_file_and_calls_blocks_in_order():

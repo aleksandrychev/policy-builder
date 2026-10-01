@@ -26,7 +26,7 @@ from typing import Iterator
 from cfengine_cli.format import format_policy_fin_fout
 from cfengine_cli.lint import PolicySyntaxError
 
-from cfpb_compiler import CompileError, compile_project
+from cfpb_compiler import CompileError, compile_project, templates_module
 
 LINE_LENGTH = 80
 INIT_COMMIT_MESSAGE = "Initialized a new CFEngine Build project"
@@ -158,21 +158,26 @@ def _update_cfbs_json(directory: str, options: dict) -> dict:
     # The builder's own meta and modules, in before the initial commit.
     content = options.get("content")
     if content:
-        config["meta"] = {**config.get("meta", {}), **content["meta"]}
-        config["build"] = [*config.get("build", []), *content["modules"]]
-        _write_policy(directory, content["meta"].get("policy-builder", {}))
+        builder = content["meta"].get("policy-builder", {})
+        files = compile_project(builder)
+        _write_policy(directory, files)
+        # What this save generated, so the next one can remove what it no longer does.
+        meta = {**content["meta"], "policy-builder": {**builder, "generated": list(files)}}
+        config["meta"] = {**config.get("meta", {}), **meta}
+        templates = templates_module(files)
+        config["build"] = [*config.get("build", []), *content["modules"], *([templates] if templates else [])]
     with open(path, "w", encoding="utf-8") as file:
         file.write(pretty(config, CFBS_DEFAULT_SORTING_RULES) + "\n")
     return config
 
 
-def _write_policy(directory: str, meta: dict) -> None:
-    for path, policy in compile_project(meta).items():
+def _write_policy(directory: str, files: dict[str, str]) -> None:
+    for path, policy in files.items():
         target = os.path.normpath(os.path.join(directory, path))
         inside = target.startswith(directory + os.sep) and not target.startswith(
             os.path.join(directory, "out") + os.sep
         )
-        if not inside or not target.endswith(".cf"):
+        if not inside or not target.endswith((".cf", ".mustache")):
             raise InitFailed(f"Refusing to write policy outside the project: {path}")
         os.makedirs(os.path.dirname(target), exist_ok=True)
         with open(target, "w", encoding="utf-8") as file:

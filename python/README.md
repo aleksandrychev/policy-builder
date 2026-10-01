@@ -8,7 +8,7 @@ non-zero exit.
 | --- | --- | --- | --- |
 | `format` (also the default with no subcommand) | policy | formatted policy | 1 syntax error, 2 other |
 | `init` | `{"directory", "name", "description", "masterfiles", "git", "content"?}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
-| `compile` | cfbs.json's `meta["policy-builder"]` | `{"files": {<module path>: <policy>}}` | 1 can't compile, 2 compiler fault |
+| `compile` | cfbs.json's `meta["policy-builder"]` | `{"files": {<path>: <contents>}}` | 1 can't compile, 2 compiler fault |
 
 `init` runs `cfbs init` in-process (non-interactive, `--git=no`) in `directory`,
 which must be absent or empty, with an existing parent. `masterfiles` is an
@@ -19,10 +19,11 @@ cfbs's `cfbs <cfbs@hostname>` identity if git has none). The result's
 `masterfiles` is the build entry cfbs wrote, or `null`. All cfbs output goes to
 stderr; the last stderr line is a one-line summary for the UI. Any failure
 removes what init created. With `content` (the builder's `meta` and modules), it
-also writes them into `cfbs.json` and the compiled `.cf` files, before the commit.
+also writes them into `cfbs.json` and the compiled files, before the commit.
 
 `compile` (`cfpb_compiler.py`) turns the builder's canvases into policy, one
-formatted `.cf` per policy file, following the contract in
+formatted `.cf` per policy file plus the template files its blocks render (in
+`./templates/`, which ships as one directory module), following the contract in
 [`blocks/README.md`](../blocks/README.md). It reads the descriptors from the
 repo's `blocks/`, which the PyInstaller bundle carries as data.
 
