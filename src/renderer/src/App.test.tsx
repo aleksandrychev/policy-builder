@@ -37,7 +37,7 @@ describe('App', () => {
 
     expect(screen.getByText(/project: web server hardening/i)).toBeInTheDocument();
     // Appears in both the top bar's namespace badge and the status bar.
-    expect(screen.getAllByText(/namespace: web_server_hardening/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/bundle: web_server_hardening/i).length).toBeGreaterThan(0);
   });
 
   it('adds a block to the canvas by clicking it in the palette, then edits its properties', () => {

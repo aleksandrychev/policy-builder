@@ -13,7 +13,7 @@ import {
 } from '.';
 import { projectCreated } from '../projectSlice';
 import { addFile, fileOf, makeStore } from '../test/storeTestUtils';
-import { deriveNamespace } from './deriveNamespace';
+import { deriveBundle } from './deriveBundle';
 import { selectCurrentFile } from './selectors';
 
 const addFolder = (store: ReturnType<typeof makeStore>, name: string, parentId: string | null = null) => store.dispatch(folderAdded(name, parentId)).payload.id;
@@ -23,24 +23,24 @@ describe('filesSlice', () => {
     it('adds the file and makes it current', () => {
       const store = makeStore();
       const fileId = addFile(store, 'Web Server');
-      expect(fileOf(store, fileId)).toMatchObject({ name: 'Web Server', namespace: 'web_server', parentId: null });
+      expect(fileOf(store, fileId)).toMatchObject({ name: 'Web Server', bundle: 'web_server', parentId: null });
       expect(selectCurrentFile(store.getState())?.id).toBe(fileId);
     });
 
-    it('keeps namespaces unique project-wide, even across folders', () => {
+    it('keeps bundle names unique project-wide, even across folders', () => {
       const store = makeStore();
       const folder = addFolder(store, 'Sub');
       const first = addFile(store, 'Web');
       const second = addFile(store, 'web', folder);
       const third = addFile(store, 'WEB!', folder);
-      expect([first, second, third].map(id => fileOf(store, id)?.namespace)).toEqual(['web', 'web_2', 'web_3']);
+      expect([first, second, third].map(id => fileOf(store, id)?.bundle)).toEqual(['web', 'web_2', 'web_3']);
     });
 
-    it('never derives an empty or reserved namespace', () => {
+    it('never derives an empty, reserved or masterfiles bundle name', () => {
       const store = makeStore();
-      const ids = ['***', 'Default', 'sys', 'this'].map(name => addFile(store, name));
-      const namespaces = ids.map(id => fileOf(store, id)?.namespace);
-      expect(namespaces).toEqual(['file', 'default_2', 'sys_2', 'this_2']);
+      const ids = ['***', 'Default', 'sys', 'Main', 'inventory'].map(name => addFile(store, name));
+      const bundles = ids.map(id => fileOf(store, id)?.bundle);
+      expect(bundles).toEqual(['file', 'default_2', 'sys_2', 'main_2', 'inventory_2']);
     });
 
     it('names siblings uniquely, case-insensitively, but not across folders', () => {
@@ -57,23 +57,32 @@ describe('filesSlice', () => {
     });
   });
 
-  describe('deriveNamespace', () => {
+  describe('deriveBundle', () => {
     it('slugs, lowercases and trims underscores', () => {
-      expect(deriveNamespace('  My Cool--Policy!  ')).toBe('my_cool_policy');
+      expect(deriveBundle('  My Cool--Policy!  ')).toBe('my_cool_policy');
     });
 
     it('skips taken and reserved suffixed candidates', () => {
-      expect(deriveNamespace('web', ['web', 'web_2'])).toBe('web_3');
-      expect(deriveNamespace('', ['file'])).toBe('file_2');
+      expect(deriveBundle('web', ['web', 'web_2'])).toBe('web_3');
+      expect(deriveBundle('', ['file'])).toBe('file_2');
+    });
+
+    it('starts with a letter', () => {
+      expect(deriveBundle('2024 plan')).toBe('file_2024_plan');
+    });
+
+    it('never meets the _vars bundle of another file', () => {
+      expect(deriveBundle('web vars', ['web'])).toBe('web_vars_2');
+      expect(deriveBundle('web', ['web_vars'])).toBe('web_2');
     });
   });
 
   describe('fileRenamed', () => {
-    it('keeps the namespace', () => {
+    it('keeps the bundle name', () => {
       const store = makeStore();
       const fileId = addFile(store, 'Old');
       store.dispatch(fileRenamed({ fileId, name: 'New' }));
-      expect(fileOf(store, fileId)).toMatchObject({ name: 'New', namespace: 'old' });
+      expect(fileOf(store, fileId)).toMatchObject({ name: 'New', bundle: 'old' });
     });
 
     it('stays unique among siblings, ignoring the file itself', () => {
@@ -177,7 +186,7 @@ describe('filesSlice', () => {
     store.dispatch(projectCreated({ name: 'Web' }));
     store.dispatch(projectFilesInitialized('Web'));
     const { files, folders, currentFileId } = store.getState().files;
-    expect(files).toEqual([{ id: currentFileId, name: 'Web', namespace: 'web', parentId: null }]);
+    expect(files).toEqual([{ id: currentFileId, name: 'Web', bundle: 'web', parentId: null }]);
     expect(folders).toEqual([]);
   });
 });

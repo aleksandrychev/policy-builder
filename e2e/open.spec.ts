@@ -35,11 +35,11 @@ const builderProject = {
   build: [
     { name: 'masterfiles', version: '3.27.1', added_by: 'cfbs init' },
     {
-      name: './policy/web.cf',
+      name: './web.cf',
       description: 'Local policy file added using cfbs command line',
       tags: ['local'],
       added_by: 'cfbs add',
-      steps: ['copy ./policy/web.cf services/cfbs/policy/web.cf', 'policy_files services/cfbs/policy/web.cf', 'bundles web:main']
+      steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web']
     }
   ],
   meta: {
@@ -50,8 +50,8 @@ const builderProject = {
         {
           id: 'file-1',
           name: 'Web',
-          namespace: 'web',
-          path: './policy/web.cf',
+          bundle: 'web',
+          path: './web.cf',
           blocks: [block('block-1', 'Say hello'), block('block-2', 'Say goodbye')],
           edges: [{ id: 'edge-1', source: 'block-1', target: 'block-2', outcomes: ['kept'] }],
           order: ['block-1', 'block-2'],

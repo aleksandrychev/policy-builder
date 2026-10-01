@@ -42,7 +42,7 @@
       "type": "text",
       "required": true,
       "mustache": true,
-      "help": "Mustache: {{{vars.<namespace>:vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<namespace>:<class>}}…{{/classes.<namespace>:<class>}} keeps a section only while the class is set. $(name) is expanded by CFEngine first."
+      "help": "Mustache: {{{vars.<bundle>_vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<class>}}…{{/classes.<class>}} keeps a section only while the class is set. $(name) is expanded by CFEngine first."
     },
     {
       "name": "mode",

@@ -1,34 +1,37 @@
 import { blockDescriptorsById } from '../blocks/loadBlocks';
-import { executionOrder } from '../canvas/executionOrder';
+import { executionOrder, isSequenced } from '../canvas/executionOrder';
 import type { RootState } from '../store';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
 import filesReducer, { projectFilesInitialized } from '../store/filesSlice';
+import { deriveBundle } from '../store/filesSlice/deriveBundle';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
 
 /**
- * The builder's state as it's stored in cfbs.json: a normal cfbs project with
- * one plain local file module per policy file (what `cfbs add ./policy/x.cf`
- * writes), and all of the builder's own data — folders and every file's
- * canvas — in the top-level `meta["policy-builder"]`. Folders are only path
- * prefixes. The .cf files themselves aren't generated yet.
+ * The builder's state as it's stored in cfbs.json: a normal cfbs project that
+ * mirrors the file tree — each top-level policy file is a local file module,
+ * each top-level folder one local directory module (what `cfbs add` writes
+ * for them) — with all of the builder's own data, folders and every file's
+ * canvas, in the top-level `meta["policy-builder"]`.
  */
 
 export const SCHEMA_VERSION = 1;
 export const META_KEY = 'policy-builder';
-const POLICY_DIR = './policy/';
-const OUTPUT_DIR = 'services/cfbs/policy/';
+const ROOT = './';
+const OUTPUT_DIR = 'services/cfbs/';
+// Top-level names cfbs uses itself, next to cfbs.json.
+const RESERVED_FOLDERS = ['./out/'];
 
 export type ProjectData = Pick<RootState, UndoableKey>;
 type Position = { x: number; y: number };
 
 export interface ProjectMeta {
   current_file_id: string | null;
-  // In build order; each file's `path` is its module's name.
+  // In file order; each file's `path` is where its policy is written.
   files: FileMeta[];
-  // `path` is the folder's directory, e.g. "./policy/services/".
+  // `path` is the folder's directory, e.g. "./services/".
   folders: (PolicyFolder & { path: string })[];
   schema_version: number;
   // Stamped by the main process on save (the app's version).
@@ -37,6 +40,8 @@ export interface ProjectMeta {
 
 export interface FileMeta {
   blocks: Omit<BlockInstance, 'fileId' | 'position'>[];
+  // The entry bundle, and the prefix of the file's other bundles.
+  bundle: string;
   condition?: Condition;
   edges: Omit<BlockEdge, 'fileId'>[];
   id: string;
@@ -49,10 +54,9 @@ export interface FileMeta {
   };
   // The display name; the path is a slug.
   name: string;
-  namespace: string;
   // The methods: call order, resolved here so a compiler needs no canvas.
   order: string[];
-  // The file's module in `build`, e.g. "./policy/services/cron_jobs.cf".
+  // The generated policy file, e.g. "./services/db/postgres.cf".
   path: string;
 }
 
@@ -71,13 +75,17 @@ export interface CfbsProjectContent {
 
 const withoutFileId = <T extends { fileId: string }>({ fileId: _fileId, ...rest }: T): Omit<T, 'fileId'> => rest;
 
-const slug = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '') || 'folder';
+// A folder's directory name. cfbs wants a module's last path part to start with a letter.
+const slug = (name: string) => {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || 'folder';
+  return /^[a-z]/.test(base) ? base : `folder-${base}`;
+};
 
 // Folder id → its directory; sibling folders whose slugs clash get -2, -3….
 function folderPaths(folders: PolicyFolder[]): Map<string, string> {
@@ -86,8 +94,8 @@ function folderPaths(folders: PolicyFolder[]): Map<string, string> {
     const known = paths.get(folder.id);
     if (known) return known;
     const parent = folders.find(item => item.id === folder.parentId);
-    const base = parent ? resolve(parent) : POLICY_DIR;
-    const taken = new Set([...paths.values()]);
+    const base = parent ? resolve(parent) : ROOT;
+    const taken = new Set([...RESERVED_FOLDERS, ...paths.values()]);
     let path = `${base}${slug(folder.name)}/`;
     for (let suffix = 2; taken.has(path); suffix += 1) path = `${base}${slug(folder.name)}-${suffix}/`;
     paths.set(folder.id, path);
@@ -96,9 +104,6 @@ function folderPaths(folders: PolicyFolder[]): Map<string, string> {
   folders.forEach(resolve);
   return paths;
 }
-
-// cfbs wants a module's file name to start with a lowercase letter.
-const fileNameOf = (namespace: string) => `${/^[a-z]/.test(namespace) ? '' : 'file_'}${namespace}.cf`;
 
 function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta {
   const prefix = `${file.id}|`;
@@ -110,7 +115,7 @@ function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta
   return {
     id: file.id,
     name: file.name,
-    namespace: file.namespace,
+    bundle: file.bundle,
     path,
     ...(file.condition ? { condition: file.condition } : {}),
     blocks: instances.map(({ fileId: _fileId, position: _position, ...rest }) => rest),
@@ -124,21 +129,51 @@ function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta
   };
 }
 
-// Exactly what `cfbs add` writes, except the namespaced bundle (it would write `bundles main`).
-function toModule(file: PolicyFile, path: string): PolicyModule {
-  const output = `${OUTPUT_DIR}${path.slice(POLICY_DIR.length)}`;
+// The module a policy file belongs to: "./nginx.cf" itself, or its top-level folder "./services/".
+export const moduleNameOf = (path: string) => {
+  const parts = path.slice(ROOT.length).split('/');
+  return parts.length === 1 ? path : `${ROOT}${parts[0]}/`;
+};
+
+// cfbs's MAX_BUILD_STEP_LENGTH.
+const MAX_STEP_LENGTH = 256;
+
+// `bundles a b c`, split over as many steps as cfbs's step length limit needs.
+function bundlesSteps(bundles: string[]): string[] {
+  const steps: string[] = [];
+  for (const bundle of bundles) {
+    const last = steps.at(-1);
+    if (last && last.length + 1 + bundle.length <= MAX_STEP_LENGTH) steps[steps.length - 1] = `${last} ${bundle}`;
+    else steps.push(`bundles ${bundle}`);
+  }
+  return steps;
+}
+
+// Exactly what `cfbs add` writes for a file or a directory, except the `bundles`
+// step: it lists every file's entry bundle (cfbs would pick one), and a file of
+// only variables and classes has none to list.
+function toModule(name: string, entryBundles: string[]): PolicyModule {
+  const output = `${OUTPUT_DIR}${name.slice(ROOT.length)}`;
+  const isDirectory = name.endsWith('/');
   return {
-    name: path,
-    description: 'Local policy file added using cfbs command line',
+    name,
+    description: isDirectory ? 'Local subdirectory added using cfbs command line' : 'Local policy file added using cfbs command line',
     tags: ['local'],
     added_by: 'cfbs add',
-    steps: [`copy ${path} ${output}`, `policy_files ${output}`, `bundles ${file.namespace}:main`]
+    steps: [isDirectory ? `directory ./ ${output}` : `copy ${name} ${output}`, `policy_files ${output}`, ...bundlesSteps(entryBundles)]
   };
 }
 
 export function toCfbsProject(data: ProjectData): CfbsProjectContent {
   const paths = folderPaths(data.files.folders);
-  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || POLICY_DIR}${fileNameOf(file.namespace)}`;
+  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.bundle}.cf`;
+  const callsBlocks = (file: PolicyFile) => data.canvas.some(block => block.fileId === file.id && isSequenced(blockDescriptorsById.get(block.blockId)));
+  // Modules in the order their first file appears; a folder's bundles in file order.
+  const modules = new Map<string, string[]>();
+  for (const file of data.files.files) {
+    const name = moduleNameOf(pathOf(file));
+    modules.set(name, [...(modules.get(name) ?? []), ...(callsBlocks(file) ? [file.bundle] : [])]);
+  }
   return {
     meta: {
       [META_KEY]: {
@@ -148,7 +183,7 @@ export function toCfbsProject(data: ProjectData): CfbsProjectContent {
         current_file_id: data.files.currentFileId
       }
     },
-    modules: data.files.files.map(file => toModule(file, pathOf(file)))
+    modules: [...modules].map(([name, bundles]) => toModule(name, bundles))
   };
 }
 
@@ -185,11 +220,11 @@ export function fromCfbsProject(json: unknown): ProjectData {
 
   // A file's folder is the one whose directory holds it.
   const folderOf = (path: string) => folders.find(folder => typeof folder.path === 'string' && path === `${folder.path}${path.split('/').pop()}`);
-  const files: PolicyFile[] = modules.map(({ file: { condition, id, name, namespace }, path }) => ({
+  const files: PolicyFile[] = modules.map(({ file: { bundle, condition, id, name }, path }) => ({
+    bundle: typeof bundle === 'string' && bundle ? bundle : deriveBundle(typeof name === 'string' ? name : ''),
     ...(condition ? { condition } : {}),
     id,
     name: typeof name === 'string' ? name : id,
-    namespace: typeof namespace === 'string' ? namespace : id,
     parentId: folderOf(path)?.id ?? null
   }));
   const perFile = <T>(pick: (file: FileMeta) => T[] | undefined) =>

@@ -38,29 +38,60 @@ describe('cfbsProject', () => {
     expect(restored.derivedNodes).toEqual(state.derivedNodes);
   });
 
-  it('writes one plain local file module per policy file, its folder as a path', () => {
-    const { fileId, state } = buildProject();
+  it('mirrors the file tree: a top-level file is a file module, a top-level folder a directory module', () => {
+    const { fileId, folderId, state } = buildProject();
     const { meta, modules } = toCfbsProject(state);
     const file = state.files.files.find(item => item.id === fileId)!;
-    const path = `policy/services/${file.namespace}.cf`;
 
-    expect(modules).toHaveLength(state.files.files.length);
-    // Exactly what `cfbs add` writes, but for the namespaced bundle; no builder data on it.
-    expect(modules.find(item => item.name === `./${path}`)).toEqual({
-      name: `./${path}`,
+    // Exactly what `cfbs add` writes, but for the bundles step; no builder data on modules.
+    expect(modules.map(module => module.name)).toEqual(['./common.cf', './webserver.cf', './services/']);
+    expect(modules[1]).toEqual({
+      name: './webserver.cf',
       description: 'Local policy file added using cfbs command line',
       tags: ['local'],
       added_by: 'cfbs add',
-      steps: [`copy ./${path} services/cfbs/${path}`, `policy_files services/cfbs/${path}`, `bundles ${file.namespace}:main`]
+      steps: ['copy ./webserver.cf services/cfbs/webserver.cf', 'policy_files services/cfbs/webserver.cf', 'bundles webserver']
     });
-    expect(meta[META_KEY]).toMatchObject({ schema_version: SCHEMA_VERSION, folders: [{ name: 'Services', path: './policy/services/' }] });
-    expect(meta[META_KEY].files.map(item => item.path)).toEqual(modules.map(item => item.name));
+    expect(modules[2]).toEqual({
+      name: './services/',
+      description: 'Local subdirectory added using cfbs command line',
+      tags: ['local'],
+      added_by: 'cfbs add',
+      steps: ['directory ./ services/cfbs/services/', 'policy_files services/cfbs/services/', `bundles ${file.bundle}`]
+    });
+    expect(meta[META_KEY]).toMatchObject({ schema_version: SCHEMA_VERSION, folders: [{ id: folderId, name: 'Services', path: './services/' }] });
     expect(meta[META_KEY].files.find(item => item.id === fileId)).toMatchObject({
       name: 'Cron jobs',
-      namespace: file.namespace,
-      path: `./${path}`,
+      bundle: 'cron_jobs',
+      path: './services/cron_jobs.cf',
       condition: { className: 'linux' }
     });
+  });
+
+  it('lists the files of a folder in one bundles step, nested ones included, in file order', () => {
+    const store = makeStore();
+    const top = store.dispatch(folderAdded('Services')).payload.id;
+    const nested = store.dispatch(folderAdded('DB', top)).payload.id;
+    const empty = store.dispatch(folderAdded('Empty')).payload.id;
+    addBlock(store, store.dispatch(fileAdded('Cron', top)).payload.id);
+    addBlock(store, store.dispatch(fileAdded('Postgres', nested)).payload.id);
+    store.dispatch(fileAdded('Only vars', top));
+
+    const { meta, modules } = toCfbsProject(store.getState());
+
+    expect(modules.map(module => module.name)).toEqual(['./services/']);
+    expect(modules[0].steps.at(-1)).toBe('bundles cron postgres');
+    expect(meta[META_KEY].files.map(file => file.path)).toEqual(['./services/cron.cf', './services/db/postgres.cf', './services/only_vars.cf']);
+    expect(meta[META_KEY].folders.find(folder => folder.id === empty)?.path).toBe('./empty/');
+  });
+
+  it('gives a file of only variables and classes no bundles step: it has no entry bundle', () => {
+    const store = makeStore();
+    createNginxDemoProject(store.dispatch);
+    const [common, webserver] = toCfbsProject(store.getState()).modules;
+
+    expect(common.steps).toEqual(['copy ./common.cf services/cfbs/common.cf', 'policy_files services/cfbs/common.cf']);
+    expect(webserver.steps.at(-1)).toBe('bundles webserver');
   });
 
   it('keeps editor-only data in layout, and resolves the execution order', () => {
@@ -75,16 +106,17 @@ describe('cfbsProject', () => {
     expect(files.some(file => file.order.length > 1)).toBe(true);
   });
 
-  it('gives paths cfbs accepts: slugged, unique folders; file names starting with a letter', () => {
+  it('gives paths cfbs accepts: slugged, unique folders starting with a letter, never out/', () => {
     const store = makeStore();
     const first = store.dispatch(folderAdded('Web Servers!')).payload.id;
     const second = store.dispatch(folderAdded('web servers')).payload.id;
-    store.dispatch(fileAdded('2024 plan', first));
-    store.dispatch(fileAdded('Main', second));
+    const numbered = store.dispatch(folderAdded('2024')).payload.id;
+    const out = store.dispatch(folderAdded('Out')).payload.id;
+    for (const folder of [first, second, numbered, out]) store.dispatch(fileAdded('Plan', folder));
 
     const names = toCfbsProject(store.getState()).modules.map(module => module.name);
 
-    expect(names).toEqual(['./policy/web-servers/file_2024_plan.cf', './policy/web-servers-2/main.cf']);
+    expect(names).toEqual(['./web-servers/', './web-servers-2/', './folder-2024/', './out-2/']);
   });
 
   it('refuses a newer schema version', () => {
@@ -140,9 +172,9 @@ describe('loadCfbsProject', () => {
   });
 
   it('tolerates corrupt per-file lists', () => {
-    const file = { id: 'f1', name: 'A', namespace: 'a', path: './policy/a.cf', blocks: 'oops', layout: 'oops' };
+    const file = { id: 'f1', name: 'A', bundle: 'a', path: './a.cf', blocks: 'oops', layout: 'oops' };
     const { data } = loadCfbsProject({ build: [], meta: { [META_KEY]: { schema_version: SCHEMA_VERSION, files: [file] } } }, 'x');
     expect(data.canvas).toEqual([]);
-    expect(data.files.files).toEqual([{ id: 'f1', name: 'A', namespace: 'a', parentId: null }]);
+    expect(data.files.files).toEqual([{ bundle: 'a', id: 'f1', name: 'A', parentId: null }]);
   });
 });

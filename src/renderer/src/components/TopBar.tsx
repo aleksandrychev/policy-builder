@@ -7,12 +7,13 @@ export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results &
 interface TopBarProps {
   activeTab: number;
   blockCount: number;
+  // The open file's entry bundle.
+  bundle: string;
   // Unsaved changes since the last save.
   dirty: boolean;
   // "runs only if linux", when the open file is gated.
   fileGate?: string;
   masterfiles: string | null;
-  namespace: string;
   onTabChange: (index: number) => void;
   projectName: string;
 }
@@ -33,7 +34,7 @@ const chipSx = {
   maxWidth: 200
 } as const;
 
-export function TopBar({ projectName, dirty, masterfiles, namespace, fileGate, blockCount, activeTab, onTabChange }: TopBarProps) {
+export function TopBar({ projectName, dirty, masterfiles, bundle, fileGate, blockCount, activeTab, onTabChange }: TopBarProps) {
   return (
     <Box
       component="header"
@@ -60,7 +61,7 @@ export function TopBar({ projectName, dirty, masterfiles, namespace, fileGate, b
             )}
           </Typography>
           {masterfiles && <Typography sx={chipSx}>masterfiles {masterfiles}</Typography>}
-          <Typography sx={chipSx}>namespace: {namespace}</Typography>
+          <Typography sx={chipSx}>bundle: {bundle}</Typography>
           {fileGate && (
             <Typography title="The whole file is gated by this condition" sx={chipSx}>
               {fileGate}

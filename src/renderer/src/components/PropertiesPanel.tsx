@@ -200,10 +200,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   const { noun, noun_plural } = descriptor.entries;
   const entries = instance.entries ?? [];
   const definesVariables = primaryPromiseType(descriptor) === 'vars';
-  const duplicateKeys = duplicateDefinitionKeys(
-    allInstances.filter(candidate => candidate.fileId === instance.fileId),
-    blockDescriptorsById
-  );
+  const duplicateKeys = duplicateDefinitionKeys(allInstances, blockDescriptorsById, instance.fileId);
   const isDuplicate = (name: string) => duplicateKeys.has(`${instance.blockId}:${name}`);
 
   const handleAddEntry = () => setOpenEntryId(props.onEntryAdd());

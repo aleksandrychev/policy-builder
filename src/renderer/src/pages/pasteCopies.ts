@@ -2,17 +2,6 @@ import { entryName } from '../blocks/definitionEntries';
 import type { BlockDescriptor } from '../blocks/types';
 import type { BlockInstance, EditableSubject } from '../store/canvasSlice/types';
 
-// A class/variable reference (Condition.className, ClassReference.name) with
-// no ":" means "defined in this same file" (see projectDefinedTokens in
-// PropertiesPanel.tsx). Pasting into a different file moves the *reference*
-// but not what it refers to, so an unqualified name would otherwise silently
-// point at nothing in the new file — prefixing the source file's namespace
-// keeps it pointing at the (unmoved) original.
-function requalifyReference(name: string, sourceNamespace: string | undefined): string {
-  if (!name || !sourceNamespace || name.includes(':')) return name;
-  return `${sourceNamespace}:${name}`;
-}
-
 // Defined names (each entry's variable_name/class_name) are only warned
 // about, never enforced unique — but a same-file paste guarantees an
 // immediate collision with the block it was copied from, so auto-suffixing
@@ -46,26 +35,14 @@ export function copyParamBindings(bindings: BlockInstance['paramBindings']): Blo
 }
 
 // The reference-bearing fields of a pasted subject (the instance itself, or
-// one of its entries), copied with fresh ids.
-export function copySubjectFields(
-  subject: EditableSubject,
-  sourceNamespace: string | undefined,
-  crossFile: boolean
-): Pick<EditableSubject, 'classRefs' | 'condition' | 'decorators' | 'inventory'> {
-  const requalify = (name: string) => (crossFile ? requalifyReference(name, sourceNamespace) : name);
+// one of its entries), copied with fresh ids. References need no rewriting
+// across files: class names are project-wide, variables name their file's
+// `<bundle>_vars`.
+export function copySubjectFields(subject: EditableSubject): Pick<EditableSubject, 'classRefs' | 'condition' | 'decorators' | 'inventory'> {
   return {
-    classRefs: subject.classRefs?.map(ref => ({ ...ref, id: crypto.randomUUID(), name: requalify(ref.name) })),
+    classRefs: subject.classRefs?.map(ref => ({ ...ref, id: crypto.randomUUID() })),
     decorators: subject.decorators?.map(decorator => ({ ...decorator, id: crypto.randomUUID(), params: { ...decorator.params } })),
-    // A 'class' condition is a namespace-scoped name, so it needs
-    // requalifying across files like any other class reference. A
-    // 'change-signal' condition points at a specific instanceId — that
-    // doesn't change meaning across files, so it's copied through as-is.
-    condition:
-      subject.condition?.kind === 'class'
-        ? { ...subject.condition, className: requalify(subject.condition.className) }
-        : subject.condition
-          ? { ...subject.condition }
-          : undefined,
+    condition: subject.condition ? { ...subject.condition } : undefined,
     inventory: subject.inventory ? { ...subject.inventory } : undefined
   };
 }

@@ -13,32 +13,18 @@ import { specialVariables } from '../editor/specialVariables';
 import type { TemplateToken } from '../editor/templateTokens';
 
 // Other blocks across the project that define a class or variable the user
-// might reference from a template. Classes default to namespace scope in
-// CFEngine (visible from any bundle within the same namespace unqualified),
-// so a class defined in the same file needs only its bare name — but one
-// namespace per file (see architecture-plan.md's Namespaces section) means a
-// class defined in a *different* file needs a "namespace:name" qualifier.
-// Variables are bundle-scoped: Define Variable instances all compile into
-// one shared "vars" bundle per file (see Block-to-policy compilation in
-// architecture-plan.md — this is an exception to the usual one-bundle-per-
-// instance rule, chosen for shorter references at the cost of variable names
-// having to be unique within a file), so a same-file reference only needs
-// "vars.name", and a cross-file one needs "namespace:vars.name".
-// Mustache always needs the namespace, even same-file: templates render
-// against datastate(), keyed "vars.<ns>:vars.<name>" / "classes.<ns>:<name>".
-function definitionToken(
-  promiseType: string | undefined,
-  definedName: string,
-  file: { namespace: string; sameFile: boolean },
-  label: string,
-  group: string
-): TemplateToken | undefined {
-  const prefix = file.sameFile ? '' : `${file.namespace}:`;
+// might reference from a template. The policy is in the default namespace:
+// a class (defined in a common bundle) is one name for the whole project,
+// and a variable lives in its file's `<bundle>_vars` bundle, so every
+// reference names that bundle — blocks compile to bundles of their own.
+// Mustache paths follow datastate(): "vars.<bundle>_vars.<name>" /
+// "classes.<name>".
+function definitionToken(promiseType: string | undefined, definedName: string, bundle: string, label: string, group: string): TemplateToken | undefined {
   if (promiseType === 'classes') {
-    return { name: `${prefix}${definedName}`, mustachePath: `classes.${file.namespace}:${definedName}`, label, group, kind: 'class' };
+    return { name: definedName, mustachePath: `classes.${definedName}`, label, group, kind: 'class' };
   }
   if (promiseType === 'vars') {
-    return { name: `${prefix}vars.${definedName}`, mustachePath: `vars.${file.namespace}:vars.${definedName}`, label, group, kind: 'variable' };
+    return { name: `${bundle}_vars.${definedName}`, mustachePath: `vars.${bundle}_vars.${definedName}`, label, group, kind: 'variable' };
   }
   return undefined;
 }
@@ -69,7 +55,7 @@ function projectDefinedTokens(
     for (const entry of instance.entries ?? []) {
       const definedName = entryName(descriptor, entry);
       if (!definedName || entry.id === excludeEntryId) continue;
-      const token = definitionToken(promiseType, definedName, { namespace: definingFile.namespace, sameFile }, instance.label, group);
+      const token = definitionToken(promiseType, definedName, definingFile.bundle, instance.label, group);
       if (token) tokens.push(token);
     }
   }

@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { projectLoaded } from '../projectSlice';
-import { deriveNamespace } from './deriveNamespace';
+import { deriveBundle } from './deriveBundle';
 import { collectFolderDescendants, sanitizeFileSystemName, uniqueSiblingName } from './fileTree';
 import type { PolicyFile, PolicyFolder } from './types';
 
@@ -32,7 +32,7 @@ const filesSlice = createSlice({
     projectFilesInitialized: {
       reducer(_state, action: PayloadAction<{ id: string; name: string }>) {
         const name = sanitizeFileSystemName(action.payload.name) || DEFAULT_NAME;
-        const file: PolicyFile = { id: action.payload.id, name, namespace: deriveNamespace(name), parentId: null };
+        const file: PolicyFile = { id: action.payload.id, name, bundle: deriveBundle(name), parentId: null };
         return { files: [file], folders: [], currentFileId: file.id };
       },
       prepare(name: string) {
@@ -46,9 +46,9 @@ const filesSlice = createSlice({
         const file: PolicyFile = {
           id: action.payload.id,
           name,
-          namespace: deriveNamespace(
+          bundle: deriveBundle(
             name,
-            state.files.map(item => item.namespace)
+            state.files.map(item => item.bundle)
           ),
           parentId: action.payload.parentId
         };
@@ -88,7 +88,7 @@ const filesSlice = createSlice({
     fileSelected(state, action: PayloadAction<{ fileId: string }>) {
       state.currentFileId = action.payload.fileId;
     },
-    // Renaming never touches namespace — see the field comment in types.ts.
+    // Renaming never touches the bundle name — see the field comment in types.ts.
     fileRenamed(state, action: PayloadAction<{ fileId: string; name: string }>) {
       const file = state.files.find(item => item.id === action.payload.fileId);
       if (!file) return;

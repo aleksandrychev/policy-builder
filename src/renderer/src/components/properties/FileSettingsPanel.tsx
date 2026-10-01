@@ -31,7 +31,7 @@ export function FileSettingsPanel({
       <Box>
         <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.muted' }}>FILE</Typography>
         <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{file.name}</Typography>
-        <Typography sx={{ fontSize: 12, color: 'text.muted', fontFamily: 'monospace' }}>namespace: {file.namespace}</Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.muted', fontFamily: 'monospace' }}>bundle: {file.bundle}</Typography>
       </Box>
       <Divider />
       <ConditionSection

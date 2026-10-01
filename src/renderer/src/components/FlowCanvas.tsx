@@ -73,22 +73,20 @@ export interface DataChainCallbacks {
 
 export type NodeSizes = Record<string, { height: number; width: number }>;
 
-// Where a condition's class is defined: a Define Class entry on this canvas
-// (bare name, or qualified with this file's own namespace), or another
-// file's namespace. Hard classes and unknown names have no source.
-function conditionSourceOf(className: string, instances: BlockInstance[], files: PolicyFile[], currentFileId: string | null): ConditionSource | undefined {
+// Where a condition's class is defined: a Define Class entry on this canvas,
+// or in another file (classes are project-wide names). Hard classes and
+// unknown names have no source.
+function conditionSourceOf(className: string, allInstances: BlockInstance[], files: PolicyFile[], currentFileId: string | null): ConditionSource | undefined {
   if (!className) return undefined;
-  const separator = className.indexOf(':');
-  const namespace = separator === -1 ? null : className.slice(0, separator);
-  const bareName = separator === -1 ? className : className.slice(separator + 1);
-  const file = namespace ? files.find(candidate => candidate.namespace === namespace) : undefined;
-  if (file && file.id !== currentFileId) return { fileLabel: `${file.name}.cf` };
-  for (const instance of instances) {
+  const definers = allInstances.filter(instance => {
     const descriptor = blockDescriptorsById.get(instance.blockId);
-    if (!descriptor?.entries || primaryPromiseType(descriptor) !== 'classes') continue;
-    if ((instance.entries ?? []).some(entry => entryName(descriptor, entry) === bareName)) return { instanceId: instance.instanceId };
-  }
-  return undefined;
+    if (!descriptor?.entries || primaryPromiseType(descriptor) !== 'classes') return false;
+    return (instance.entries ?? []).some(entry => entryName(descriptor, entry) === className);
+  });
+  const here = definers.find(instance => instance.fileId === currentFileId);
+  if (here) return { instanceId: here.instanceId };
+  const file = files.find(candidate => candidate.id === definers[0]?.fileId);
+  return file ? { fileLabel: `${file.name}.cf` } : undefined;
 }
 
 // The toolbar's zoom actions, shared with the app's keyboard shortcuts.
@@ -100,6 +98,8 @@ export interface ZoomControls {
 }
 
 interface FlowCanvasProps {
+  // Every file's blocks: a condition's class may be defined in another file.
+  allInstances: BlockInstance[];
   currentFileId: string | null;
   // The block cut to the clipboard and not pasted yet: shown muted, not draggable.
   cutPendingId: string | null;
@@ -268,6 +268,7 @@ function CanvasToolbar({
  * compiled execution order (canvas/executionOrder.ts), shown as #n.
  */
 export function FlowCanvas({
+  allInstances,
   instances,
   cutPendingId,
   edges,
@@ -385,7 +386,7 @@ export function FlowCanvas({
     measured: measured[gate.nodeId],
     data: {
       gate,
-      source: conditionSourceOf(gate.condition.className, instances, files, currentFileId),
+      source: conditionSourceOf(gate.condition.className, allInstances, files, currentFileId),
       fileRelation: relationToFileCondition(gate.condition, fileCondition),
       onHighlight: setHighlightedId,
       onModeChange: mode => onGateModeChange(gate, mode),

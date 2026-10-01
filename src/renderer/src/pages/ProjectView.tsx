@@ -584,7 +584,6 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
     announce,
     asOneStep,
     currentFileId,
-    files,
     instances,
     onPasted: selectOnly,
     sizeOf
@@ -600,7 +599,7 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
 
   useEffect(() => () => clearTimeout(statusMessageTimeoutRef.current), []);
 
-  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(instances, blockDescriptorsById), [instances]);
+  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId), [allInstances, currentFileId]);
 
   const handleEscape = () => {
     if (selectedGroup) setSelectedGroupId(null);
@@ -819,7 +818,7 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
           projectName={project.name}
           dirty={dirty}
           masterfiles={project.masterfiles}
-          namespace={currentFile?.namespace ?? ''}
+          bundle={currentFile?.bundle ?? ''}
           fileGate={describeFileCondition(currentFile?.condition)}
           blockCount={instances.length}
           activeTab={activeTab}
@@ -869,6 +868,7 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
             <FlowCanvas
               // One React Flow per file: remounting fits the view to the file just opened.
               key={currentFileId ?? 'none'}
+              allInstances={allInstances}
               instances={instances}
               edges={edges}
               files={files}
@@ -1065,7 +1065,7 @@ export default function ProjectView({ dirty, onSave }: ProjectViewProps) {
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>File: {currentFile ? `${currentFile.name}.cf` : '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Namespace: {currentFile?.namespace ?? '—'}</Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Bundle: {currentFile?.bundle ?? '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{PROJECT_TABS[activeTab]}</Typography>
             </Stack>

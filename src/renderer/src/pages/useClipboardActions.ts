@@ -1,18 +1,18 @@
 import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import { GRID_SIZE, nextStackPosition } from '../canvas/layout';
 import { useAppDispatch, useAppSelector } from '../store';
 import { blockAdded, blockRemoved } from '../store/canvasSlice';
+import { selectCanvasBlocks } from '../store/canvasSlice/selectors';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { clipboardCopied, clipboardCut, clipboardDowngradedToCopy } from '../store/clipboardSlice';
 import { selectClipboard } from '../store/clipboardSlice/selectors';
-import type { PolicyFile } from '../store/filesSlice/types';
 import { copyParamBindings, copySubjectFields, definedNames, uniqueParamValue } from './pasteCopies';
 
 interface ClipboardDeps {
   announce: (message: string) => void;
   asOneStep: (run: () => void) => void;
   currentFileId: string | null;
-  files: PolicyFile[];
   // The open file's blocks.
   instances: BlockInstance[];
   onPasted: (instanceId: string) => void;
@@ -20,9 +20,10 @@ interface ClipboardDeps {
 }
 
 // Copy / cut / paste of one block through the single-slot clipboard.
-export function useClipboardActions({ announce, asOneStep, currentFileId, files, instances, onPasted, sizeOf }: ClipboardDeps) {
+export function useClipboardActions({ announce, asOneStep, currentFileId, instances, onPasted, sizeOf }: ClipboardDeps) {
   const dispatch = useAppDispatch();
   const clipboard = useAppSelector(selectClipboard);
+  const allInstances = useAppSelector(selectCanvasBlocks);
 
   const handleCopyBlock = (instanceId: string) => {
     const instance = instances.find(item => item.instanceId === instanceId);
@@ -43,21 +44,24 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, files,
     const snapshot = clipboard.snapshot;
     if (!snapshot || !currentFileId) return;
     const crossFile = snapshot.fileId !== currentFileId;
-    const sourceNamespace = files.find(file => file.id === snapshot.fileId)?.namespace;
     const descriptor = blockDescriptorsById.get(snapshot.blockId);
 
     // Same-file paste immediately collides with the block it was copied
     // from; cross-file paste only sometimes does. Either way, only fix up
     // what this paste just created — not a repo-wide uniqueness pass.
+    // Variables are per file; classes are project-wide names. A cut's own
+    // original goes away, so it doesn't count.
     const nameParam = descriptor?.entries?.name_param;
-    const taken = descriptor ? definedNames(instances, snapshot.blockId, descriptor) : new Set<string>();
+    const scope = descriptor && primaryPromiseType(descriptor) === 'classes' ? allInstances : instances;
+    const others = scope.filter(item => clipboard.mode !== 'cut' || item.instanceId !== snapshot.instanceId);
+    const taken = descriptor ? definedNames(others, snapshot.blockId, descriptor) : new Set<string>();
     const entries: DefinitionEntry[] | undefined = snapshot.entries?.map(entry => {
       const params = { ...entry.params };
       if (nameParam && params[nameParam]) {
         params[nameParam] = uniqueParamValue(params[nameParam], taken);
         taken.add(params[nameParam]);
       }
-      return { ...entry, ...copySubjectFields(entry, sourceNamespace, crossFile), id: crypto.randomUUID(), params };
+      return { ...entry, ...copySubjectFields(entry), id: crypto.randomUUID(), params };
     });
 
     let pastedId = '';
@@ -75,7 +79,7 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, files,
               ? { x: snapshot.position.x + 2 * GRID_SIZE, y: snapshot.position.y + 2 * GRID_SIZE }
               : nextStackPosition(instances, sizeOf),
           valueSourceId: snapshot.valueSourceId,
-          ...copySubjectFields(snapshot, sourceNamespace, crossFile),
+          ...copySubjectFields(snapshot),
           entries,
           incomingMode: snapshot.incomingMode,
           paramBindings: copyParamBindings(snapshot.paramBindings)

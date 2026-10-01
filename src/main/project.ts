@@ -94,11 +94,22 @@ function checkedFolderName(value: unknown): string {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// The module paths the builder's meta says are its own.
+// A policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
+const POLICY_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.cf$/;
+const isPolicyPath = (path: unknown): path is string => typeof path === 'string' && POLICY_PATH.test(path) && !path.startsWith('./out/');
+
+// The policy file paths the builder's meta lists.
 function builderPaths(meta: unknown): string[] {
   const files = isRecord(meta) && isRecord(meta[META_KEY]) ? meta[META_KEY].files : undefined;
   return Array.isArray(files) ? files.flatMap(file => (isRecord(file) && typeof file.path === 'string' ? [file.path] : [])) : [];
 }
+
+// The modules those files make up: a top-level file is its own, a top-level folder ("./services/") one.
+const moduleNameOf = (path: string) => {
+  const parts = path.slice(2).split('/');
+  return parts.length === 1 ? path : `./${parts[0]}/`;
+};
+const builderModules = (meta: unknown) => new Set(builderPaths(meta).map(moduleNameOf));
 
 function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
@@ -106,18 +117,14 @@ function checkedContent(value: unknown): ProjectContent {
     throw new InvalidRequest('Invalid project content');
   }
   const paths = builderPaths(content.meta);
-  if (paths.length !== content.modules.length) throw new InvalidRequest('Invalid project content');
-  for (const [index, module] of content.modules.entries()) {
-    const name = isRecord(module) ? module.name : undefined;
-    const ok =
-      name === paths[index] &&
-      typeof name === 'string' &&
-      name.startsWith('./policy/') &&
-      name.endsWith('.cf') &&
-      !name.split('/').includes('..') &&
-      Array.isArray((module as Record<string, unknown>).steps);
-    if (!ok) throw new InvalidRequest('Invalid policy module');
-  }
+  if (!paths.every(isPolicyPath) || new Set(paths).size !== paths.length) throw new InvalidRequest('Invalid policy file path');
+  const modules = builderModules(content.meta);
+  const names = content.modules.map(module => (isRecord(module) ? module.name : undefined));
+  const ok =
+    names.length === modules.size &&
+    names.every(name => typeof name === 'string' && modules.has(name)) &&
+    content.modules.every(module => isRecord(module) && Array.isArray(module.steps));
+  if (!ok) throw new InvalidRequest('Invalid policy module');
   if (JSON.stringify(content).length > MAX_CONTENT_BYTES) throw new InvalidRequest('Project is too large');
   return content as ProjectContent;
 }
@@ -177,13 +184,12 @@ async function fetchMasterfilesVersions(): Promise<MasterfilesVersions> {
 
 /**
  * Merges builder state into an existing cfbs.json: our `meta` entry replaced,
- * our modules (the paths it lists, before and after) replaced after everything
- * else, other tools' meta and all other keys and entries kept. .cf files
- * aren't written yet — no compiler.
+ * our modules (the ones its files make up, before and after) replaced after
+ * everything else, other tools' meta and all other keys and entries kept.
  */
 export function mergeCfbsJson(existing: Record<string, unknown>, content: ProjectContent): Record<string, unknown> {
   const build = Array.isArray(existing.build) ? existing.build : [];
-  const ours = new Set([...builderPaths(existing.meta), ...builderPaths(content.meta)]);
+  const ours = new Set([...builderModules(existing.meta), ...builderModules(content.meta)]);
   const meta = { ...(isRecord(existing.meta) ? existing.meta : {}), ...content.meta };
   return { ...existing, meta, build: [...build.filter(entry => !(isRecord(entry) && ours.has(entry.name as string))), ...content.modules] };
 }

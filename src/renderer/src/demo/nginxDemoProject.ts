@@ -55,10 +55,10 @@ function buildCommonBlocks(): DemoBlock[] {
   ];
 }
 
-const NGINX_CONF_TEMPLATE = `worker_processes {{{vars.common:vars.worker_processes}}};
+const NGINX_CONF_TEMPLATE = `worker_processes {{{vars.common_vars.worker_processes}}};
 
 events {
-    worker_connections {{{vars.common:vars.worker_connections}}};
+    worker_connections {{{vars.common_vars.worker_connections}}};
 }
 
 http {
@@ -77,14 +77,14 @@ function buildWebserverBlocksBeforeTemplate(): DemoBlock[] {
     {
       blockId: 'install-package',
       label: 'Install web server package',
-      params: { package_name: '$(common:vars.webserver_package)' },
-      condition: { mode: 'if', kind: 'class', className: 'common:webserver_role' }
+      params: { package_name: '$(common_vars.webserver_package)' },
+      condition: { mode: 'if', kind: 'class', className: 'webserver_role' }
     },
     {
       blockId: 'remove-package',
       label: 'Remove conflicting Apache',
       params: { package_name: 'apache2' },
-      condition: { mode: 'if', kind: 'class', className: 'common:webserver_role' }
+      condition: { mode: 'if', kind: 'class', className: 'webserver_role' }
     }
   ];
 }

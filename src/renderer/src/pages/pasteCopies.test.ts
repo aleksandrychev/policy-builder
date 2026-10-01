@@ -6,32 +6,20 @@ const subject = (overrides: Partial<EditableSubject> = {}): EditableSubject => (
 
 const refs = [
   { id: 'r1', name: 'web_ready', negate: false },
-  { id: 'r2', name: 'other:db_ready', negate: true }
+  { id: 'r2', name: 'db_ready', negate: true }
 ];
 
 describe('copySubjectFields', () => {
-  it('qualifies same-file class references with the source namespace across files', () => {
-    const copy = copySubjectFields(subject({ classRefs: refs, condition: { kind: 'class', mode: 'if', className: 'web_ready' } }), 'src_ns', true);
-    expect(copy.classRefs?.map(ref => ref.name)).toEqual(['src_ns:web_ready', 'other:db_ready']);
+  it('copies class references as they are: class names are project-wide', () => {
+    const copy = copySubjectFields(subject({ classRefs: refs, condition: { kind: 'class', mode: 'if', className: 'web_ready' } }));
+    expect(copy.classRefs?.map(ref => ref.name)).toEqual(['web_ready', 'db_ready']);
     expect(copy.classRefs?.map(ref => ref.negate)).toEqual([false, true]);
-    expect(copy.condition).toEqual({ kind: 'class', mode: 'if', className: 'src_ns:web_ready' });
-  });
-
-  it('leaves already-qualified names alone', () => {
-    const copy = copySubjectFields(subject({ condition: { kind: 'class', mode: 'unless', className: 'other:db_ready' } }), 'src_ns', true);
-    expect(copy.condition?.className).toBe('other:db_ready');
-  });
-
-  it('leaves names alone within the same file, without a namespace, or when empty', () => {
-    const input = subject({ classRefs: refs, condition: { kind: 'class', mode: 'if', className: 'web_ready' } });
-    expect(copySubjectFields(input, 'src_ns', false).classRefs?.[0].name).toBe('web_ready');
-    expect(copySubjectFields(input, undefined, true).condition?.className).toBe('web_ready');
-    expect(copySubjectFields(subject({ condition: { kind: 'class', mode: 'if', className: '' } }), 'src_ns', true).condition?.className).toBe('');
+    expect(copy.condition).toEqual({ kind: 'class', mode: 'if', className: 'web_ready' });
   });
 
   it('gives class references and steps fresh ids, keeping their content', () => {
     const decorators = [{ id: 'd1', decoratorId: 'string-trim', params: { a: '1' } }];
-    const copy = copySubjectFields(subject({ classRefs: refs, decorators }), 'src_ns', false);
+    const copy = copySubjectFields(subject({ classRefs: refs, decorators }));
     expect(copy.classRefs?.map(ref => ref.id)).not.toContain('r1');
     expect(copy.decorators?.[0].id).not.toBe('d1');
     expect(copy.decorators?.[0]).toMatchObject({ decoratorId: 'string-trim', params: { a: '1' } });
@@ -43,7 +31,7 @@ describe('copySubjectFields', () => {
       condition: { kind: 'class', mode: 'if', className: 'x' },
       inventory: { attributeName: 'Role' }
     });
-    const copy = copySubjectFields(original, 'src_ns', false);
+    const copy = copySubjectFields(original);
     copy.decorators![0].params.a = 'changed';
     copy.inventory!.attributeName = 'changed';
     copy.condition!.className = 'changed';
@@ -53,7 +41,7 @@ describe('copySubjectFields', () => {
   });
 
   it('keeps missing fields missing', () => {
-    expect(copySubjectFields(subject(), 'src_ns', true)).toEqual({ classRefs: undefined, condition: undefined, decorators: undefined, inventory: undefined });
+    expect(copySubjectFields(subject())).toEqual({ classRefs: undefined, condition: undefined, decorators: undefined, inventory: undefined });
   });
 });
 
