@@ -343,7 +343,7 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
   const hasMasterfiles = build.some(entry => isRecord(entry) && entry.name === 'masterfiles');
   const masterfiles = storage.type === 'policy-set' && !hasMasterfiles && storage.masterfiles ? await masterfilesEntry(storage.masterfiles) : null;
   const previous = await readBuilderProject(projectPath, existing);
-  const files = await compilePolicy(content.project);
+  const { files } = await compilePolicy(content.project);
   const generated = Object.keys(files);
   const missing = builderPaths(content.project).find(path => typeof files[path] !== 'string');
   if (missing) throw new Error(`No policy was generated for ${missing}`);

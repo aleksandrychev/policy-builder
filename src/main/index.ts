@@ -5,7 +5,7 @@ import { basename, join } from 'path';
 import { pathToFileURL } from 'url';
 
 import type { RecentProject } from '../preload/api';
-import { formatPolicy } from './backend';
+import { compilePolicy, formatPolicy } from './backend';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 
 const APP_TITLE = 'CFEngine Policy Builder';
@@ -233,6 +233,13 @@ app.whenReady().then(() => {
     // renderer: check the type here rather than handing it to spawn.
     if (typeof source !== 'string') throw new Error('policy source must be a string');
     return formatPolicy(source);
+  });
+
+  // The Generated Policy tab's preview: the same compile as a save, nothing written.
+  ipcMain.handle('policy:compile', (event, project: unknown) => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    if (typeof project !== 'object' || project === null || Array.isArray(project)) throw new Error('project data must be an object');
+    return compilePolicy(project);
   });
 
   // 1 MB is plenty for config/template/script text and keeps a single

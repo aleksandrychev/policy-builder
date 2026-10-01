@@ -3,6 +3,8 @@ import { app } from 'electron';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
+import type { CompiledPolicy } from '../preload/api';
+
 /**
  * Runs the bundled Python sidecar (see `python/`): one short-lived process per
  * action, input on stdin, result on stdout, diagnostics on stderr.
@@ -145,17 +147,20 @@ export async function initCfbsProject(options: InitCfbsProjectOptions): Promise<
 
 /**
  * Generates the policy for the builder's project data (.policy-builder/project.json),
- * resolving with every generated file by project path: the .cf files, and the
- * templates in ./templates/.
+ * resolving with every generated file by project path (the .cf files, and the
+ * templates in ./templates/) and where each block landed in them.
  */
-export async function compilePolicy(project: unknown): Promise<Record<string, string>> {
+export async function compilePolicy(project: unknown): Promise<CompiledPolicy> {
   const result = await runSidecar(['compile'], JSON.stringify(project), COMPILE_TIMEOUT_MS);
   logStderr(result.stderr);
   if (result.code !== 0) throw sidecarError(result, COMPILE_TIMEOUT_MS);
   try {
-    const { files } = JSON.parse(result.stdout) as { files: Record<string, string> };
-    if (typeof files !== 'object' || files === null) throw new Error('no files');
-    return files;
+    const parsed = JSON.parse(result.stdout) as {
+      files: Record<string, string>;
+      source_map?: CompiledPolicy['sourceMap'];
+    };
+    if (typeof parsed.files !== 'object' || parsed.files === null) throw new Error('no files');
+    return { files: parsed.files, sourceMap: parsed.source_map ?? {} };
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable compile result'), { details: result.stdout });
   }

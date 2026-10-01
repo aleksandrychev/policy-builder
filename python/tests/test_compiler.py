@@ -359,3 +359,19 @@ def test_compiled_groups_pass_cf_promises(tmp_path: Path):
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_the_source_map_points_at_each_block_and_group():
+    meta = _grouped_demo()
+    source_map: dict = {}
+    lines = compile_project(meta, source_map=source_map)[WEBSERVER].splitlines()
+    ids = {block["label"]: block["instanceId"] for block in _webserver(meta)["blocks"]}
+    where = source_map[WEBSERVER]
+
+    [[first, last]] = where[ids["Keep nginx running"]]
+    assert lines[first - 1] == "  # Keep nginx running"
+    assert lines[last - 1].endswith('";')
+    call, bundle = where["g1"]
+    assert lines[call[0] - 1] == "  # Group: Configure nginx"
+    assert lines[bundle[0] : bundle[1]][0] == "bundle agent webserver_configure_nginx"
+    assert lines[bundle[1] - 1] == "}"

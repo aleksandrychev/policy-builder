@@ -326,14 +326,15 @@ def compile_command() -> int:
         meta = json.loads(sys.stdin.read())
         if not isinstance(meta, dict):
             raise CompileError("Expected a JSON object on stdin")
-        files = compile_project(meta)
+        source_map: dict = {}
+        files = compile_project(meta, source_map=source_map)
     except (json.JSONDecodeError, CompileError) as error:
         print(f"Couldn't generate the policy: {error}", file=sys.stderr)
         return 1
     except Exception as error:
         print(f"Policy compiler failed: {type(error).__name__}: {error}", file=sys.stderr)
         return 2
-    print(json.dumps({"files": files}))
+    print(json.dumps({"files": files, "source_map": source_map}))
     return 0
 
 

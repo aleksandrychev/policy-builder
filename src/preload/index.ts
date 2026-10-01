@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type {
+  CompiledPolicy,
   CreateProjectRequest,
   MasterfilesVersions,
   OpenedProject,
@@ -110,6 +111,7 @@ const api = {
 
   /** Formats CFEngine policy text with the bundled `cfengine format` engine. */
   formatPolicy: (source: string): Promise<string> => invoke('policy:format', source),
+  compilePolicy: (project: object): Promise<CompiledPolicy> => invoke('policy:compile', project),
 
   /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
   importTextFile: (): Promise<{ content: string; fileName: string } | null> => invoke('file:import-text'),

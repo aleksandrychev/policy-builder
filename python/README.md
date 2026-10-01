@@ -9,7 +9,7 @@ non-zero exit.
 | `format` (also the default with no subcommand) | policy | formatted policy | 1 syntax error, 2 other |
 | `init` | `{"directory", "name", "description", "masterfiles", "git", "content"?}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
 | `masterfiles` | `{"version"}` (`3.27.1` or `master`) | the masterfiles `build` entry `cfbs init` writes | 1 failed, 2 invalid input |
-| `compile` | the project's `.policy-builder/project.json` | `{"files": {<path>: <contents>}}` | 1 can't compile, 2 compiler fault |
+| `compile` | the project's `.policy-builder/project.json` | `{"files": {<path>: <contents>}, "source_map": {<path>: {<block or group id>: [[first, last], …]}}}` | 1 can't compile, 2 compiler fault |
 
 `init` runs `cfbs init` in-process (non-interactive, `--git=no`) in `directory`,
 which must be absent or empty, with an existing parent. `masterfiles` is an

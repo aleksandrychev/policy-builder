@@ -276,6 +276,10 @@ class FileCompiler:
     bodies: set[str] = field(default_factory=set)
     # The file's templates, by name in ./templates/.
     companions: dict[str, str] = field(default_factory=dict)
+    # (block or group id, its `# ...` comment) in output order, for source_map.
+    chunks: list[tuple[str, str]] = field(default_factory=list)
+    # Block or group id -> its [first, last] line ranges (1-based) in the compiled file.
+    source_map: dict[str, list[list[int]]] = field(default_factory=dict)
 
     @property
     def bundle(self) -> str:
@@ -309,7 +313,9 @@ class FileCompiler:
         new_bodies = sorted(self.bodies - self.written_bodies)
         sections.extend(self.builder_body(name) for name in new_bodies)
         self.written_bodies.update(new_bodies)
-        return format_policy("\n\n".join(sections) + "\n")
+        policy = format_policy("\n\n".join(sections) + "\n")
+        self.source_map = locate_chunks(policy, self.chunks)
+        return policy
 
     def descriptor(self, block: dict) -> dict:
         descriptor = self.library.descriptors.get(block.get("blockId"))
@@ -368,15 +374,19 @@ class FileCompiler:
     # bundle common <bundle>_vars: every Define Variable / Define Class entry.
     def vars_bundle(self, blocks: list[dict]) -> str | None:
         sections: dict[str, list[str]] = {"vars": [], "classes": []}
+        chunks: dict[str, list[tuple[str, str]]] = {kind: [] for kind in sections}
         for block in blocks:
             descriptor = self.descriptor(block)
             first = {kind: True for kind in sections}
             for entry in block.get("entries") or []:
                 kind, lines = self.entry_promises(block, descriptor, entry)
                 if first[kind]:
-                    lines = [f"# {block.get('label') or descriptor['name']}", *lines]
+                    label = block.get("label") or descriptor["name"]
+                    lines = [f"# {label}", *lines]
+                    chunks[kind].append((block["instanceId"], label))
                     first[kind] = False
                 sections[kind].extend(lines)
+        self.chunks += [*chunks["vars"], *chunks["classes"]]
         if not any(sections.values()):
             return None
         guard = self.file_guard()
@@ -520,8 +530,10 @@ class FileCompiler:
         # Locals are prefixed with the block's own name: blocks share a bundle.
         parts = self.block_parts(block, name, prefix=f"{name[len(self.bundle) + 1:]}_", owner=owner)
         if isinstance(parts, str):
+            self.chunks.append((block["instanceId"], parts))
             return [f"  # {parts}", ""]
         variables, promise_type, promiser, attributes = parts
+        self.chunks.append((block["instanceId"], label))
         body = [f"  # {label}"]
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
@@ -546,6 +558,7 @@ class FileCompiler:
                     quote(group.get("name") or "group"),
                     [f"usebundle => {names[group['id']]}", *self.gating(node, names, edges)],
                 )
+                self.chunks.append((group["id"], f"Group: {group.get('name') or 'group'}"))
                 body += [f"  # Group: {group.get('name') or 'group'}", "  methods:", *guarded]
                 body += [*[f"      {line}" for line in lines], ""]
         return f"bundle agent {self.bundle}\n{{\n" + "\n".join(body).rstrip() + "\n}"
@@ -556,6 +569,7 @@ class FileCompiler:
         members = [b for b in blocks if b.get("groupId") == group["id"]]
         edges = self.scoped_edges({b["instanceId"] for b in members})
         comment = f'# Group "{group.get("name") or "group"}", run as one step of {self.bundle}.'
+        self.chunks.append((group["id"], comment[2:]))
         body = [line for block in members for line in self.block_lines(block, names, edges, name, [])]
         return f"{comment}\nbundle agent {name}\n{{\n" + "\n".join(body).rstrip() + "\n}"
 
@@ -711,12 +725,40 @@ def format_policy(text: str) -> str:
     return out.getvalue()
 
 
-def compile_project(meta: dict, library: Library | None = None) -> dict[str, str]:
-    """.policy-builder/project.json -> {path: contents}, every .cf and its templates."""
-    return {path: text for files in compile_files(meta, library).values() for path, text in files.items()}
+def locate_chunks(policy: str, chunks: list[tuple[str, str]]) -> dict[str, list[list[int]]]:
+    """Where each chunk landed after formatting: from its comment to the next chunk's (or its
+    bundle's end), without trailing blank lines or bare section headers. 1-based, inclusive."""
+    lines = policy.splitlines()
+    starts, at = [], 0
+    for owner, text in chunks:
+        found = next((i for i in range(at, len(lines)) if lines[i].strip() == f"# {text}"), None)
+        if found is not None:
+            starts.append((owner, found))
+            at = found + 1
+    ranges: dict[str, list[list[int]]] = {}
+    for index, (owner, start) in enumerate(starts):
+        close = next((i for i in range(start + 1, len(lines)) if lines[i] == "}"), len(lines) - 1)
+        # A comment above a bundle covers the whole bundle, blocks and all.
+        top_level = not lines[start].startswith(" ")
+        end = close if top_level else close - 1
+        if index + 1 < len(starts) and not top_level:
+            end = min(end, starts[index + 1][1] - 1)
+        while end > start and (not lines[end].strip() or re.fullmatch(r"\s+[a-z_]+:", lines[end])):
+            end -= 1
+        ranges.setdefault(owner, []).append([start + 1, end + 1])
+    return ranges
 
 
-def compile_files(meta: dict, library: Library | None = None) -> dict[str, dict[str, str]]:
+def compile_project(meta: dict, library: Library | None = None, source_map: dict | None = None) -> dict[str, str]:
+    """.policy-builder/project.json -> {path: contents}, every .cf and its templates.
+    `source_map`, if given, gets {policy path: {block or group id: [[first, last], ...]}}."""
+    files = compile_files(meta, library, source_map)
+    return {path: text for files in files.values() for path, text in files.items()}
+
+
+def compile_files(
+    meta: dict, library: Library | None = None, source_map: dict | None = None
+) -> dict[str, dict[str, str]]:
     """.policy-builder/project.json -> {policy path: {path: contents}}: each .cf first, then its templates."""
     library = library or Library.load()
     files = meta.get("files")
@@ -741,6 +783,8 @@ def compile_files(meta: dict, library: Library | None = None) -> dict[str, dict[
         policy = compiler.compile()
         templates = {f"{TEMPLATES_DIR}{name}": text for name, text in compiler.companions.items()}
         result[file["path"]] = {file["path"]: policy, **templates}
+        if source_map is not None:
+            source_map[file["path"]] = compiler.source_map
     return result
 
 

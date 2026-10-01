@@ -19,6 +19,13 @@ export interface ProjectContent {
 
 export type ProjectType = 'module' | 'policy-set';
 
+// The generated files by project path (.cf and ./templates/), and where each block or group
+// landed in each .cf: id → [first, last] line ranges, 1-based.
+export interface CompiledPolicy {
+  files: Record<string, string>;
+  sourceMap: Record<string, Record<string, [number, number][]>>;
+}
+
 // How cfbs.json is stored on save; a different type than on disk converts it.
 export interface ProjectStorage {
   // Wanted when a module becomes a policy set without masterfiles: "3.27.1", "master", or null.
@@ -71,6 +78,8 @@ declare global {
     api?: {
       /** Checks whether a project folder can be created at parent/folderName. */
       checkProjectTarget: (parent: string, folderName: string) => Promise<TargetCheck>;
+      /** Compiles the builder's project data (.policy-builder/project.json) without saving it. */
+      compilePolicy: (project: object) => Promise<CompiledPolicy>;
       /** Tells main the user agreed to close the window despite unsaved changes. */
       confirmWindowClose: () => Promise<void>;
       /** Runs `cfbs init` into parent/folderName, then writes the builder's content into its cfbs.json. */

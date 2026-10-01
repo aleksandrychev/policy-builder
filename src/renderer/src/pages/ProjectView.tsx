@@ -20,6 +20,7 @@ import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosi
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
 import { CANVAS_DROPPABLE_ID, type CanvasEdge, type CanvasNode, FlowCanvas, type NodeSizes, type ZoomControls } from '../components/FlowCanvas';
+import { GeneratedPolicyView } from '../components/GeneratedPolicyView';
 import { GroupPanel } from '../components/GroupPanel';
 import { PolicyFileExplorer } from '../components/PolicyFileExplorer';
 import { ProjectStatusLabel } from '../components/ProjectStatusLabel';
@@ -42,6 +43,7 @@ import {
   clamp,
   useLayoutSettings
 } from '../hooks/useLayoutSettings';
+import { useCompiledPolicy } from '../project/useCompiledPolicy';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
   blockAdded,
@@ -124,7 +126,15 @@ const GROUP_KEY = navigator.platform.startsWith('Mac') ? '⌘G' : 'Ctrl+G';
 const selectionOf = (multiSelectedIds: string[], selectedInstanceId: string | null): string[] =>
   multiSelectedIds.length > 0 ? multiSelectedIds : selectedInstanceId ? [selectedInstanceId] : [];
 
-const TAB_PLACEHOLDER_TEXT = ['', 'Generated policy view coming soon.', 'Test results view coming soon.'];
+// The tabs besides the canvas.
+function OtherTab({ tab, ...policy }: { tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
+  if (tab === 1) return <GeneratedPolicyView {...policy} />;
+  return (
+    <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Typography sx={{ color: 'text.muted' }}>Test results view coming soon.</Typography>
+    </Box>
+  );
+}
 function initialParams(descriptor: BlockDescriptor): Record<string, string> {
   const { parameters } = resolveBlockShape(descriptor, undefined);
   return Object.fromEntries(parameters.map(parameter => [parameter.name, String(parameter.default ?? '')]));
@@ -234,6 +244,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   const edges = useMemo(() => allEdges.filter(edge => edge.fileId === currentFileId), [allEdges, currentFileId]);
   const derivedPositions = useAppSelector(selectDerivedNodePositions);
   const [activeTab, setActiveTab] = useState(0);
+  const compiled = useCompiledPolicy(activeTab === 1);
   const {
     selectedInstanceId,
     setSelectedInstanceId,
@@ -1014,9 +1025,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
               }
             />
           ) : (
-            <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography sx={{ color: 'text.muted' }}>{TAB_PLACEHOLDER_TEXT[activeTab]}</Typography>
-            </Box>
+            <OtherTab tab={activeTab} compiled={compiled} currentFileId={currentFileId} selectedId={selectedGroupId ?? selectedInstanceId} />
           )}
 
           {!maximized && (
