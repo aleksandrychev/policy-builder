@@ -10,6 +10,9 @@ non-zero exit.
 | `init` | `{"directory", "name", "description", "masterfiles", "git", "content"?}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
 | `masterfiles` | `{"version"}` (`3.27.1` or `master`) | the masterfiles `build` entry `cfbs init` writes | 1 failed, 2 invalid input |
 | `compile` | the project's `.policy-builder/project.json` | `{"files": {<path>: <contents>}, "source_map": {<path>: {<block or group id>: [[first, last], …]}}}` | 1 can't compile, 2 compiler fault |
+| `testenv doctor` / `images` | nothing | one JSON object: Docker's state / the base images and which are pulled | 1 can't answer |
+| `testenv package` | `{edition, version, platform, arch, hub}` | `{url, sha256, version, filename}` from CFEngine's release data | 1 no such package |
+| `testenv pull` | `{image}` | streamed: one JSON event per line (`progress`, `log`, then `done` or `error`) | 1 failed |
 
 `init` runs `cfbs init` in-process (non-interactive, `--git=no`) in `directory`,
 which must be absent or empty, with an existing parent. `masterfiles` is an

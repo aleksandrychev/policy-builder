@@ -14,6 +14,8 @@ const FORMAT_TIMEOUT_MS = 30_000;
 const COMPILE_TIMEOUT_MS = 30_000;
 // Downloading masterfiles on a slow network can take a while.
 const INIT_TIMEOUT_MS = 120_000;
+// Docker queries and the release-data lookup (a network fetch).
+const TESTENV_TIMEOUT_MS = 60_000;
 
 const isWindows = process.platform === 'win32';
 const executableName = isWindows ? 'cfpb-backend.exe' : 'cfpb-backend';
@@ -81,6 +83,76 @@ function runSidecar(args: string[], input: string, timeoutMs: number): Promise<S
 
     child.stdin.end(input, 'utf8');
   });
+}
+
+/** A streaming sidecar run: one JSON event per stdout line, until the process ends. */
+export interface SidecarStream {
+  cancel: () => void;
+  // Resolves when the process exits: ok, or the last stderr line as the message.
+  done: Promise<{ message?: string; ok: boolean }>;
+}
+
+/**
+ * Spawns the sidecar for a long action (test environments): no timeout, each
+ * stdout line parsed as one event and handed to `onEvent` as it arrives.
+ */
+export function startSidecarStream(args: string[], input: string, onEvent: (event: Record<string, unknown>) => void): SidecarStream {
+  const { command, commandArgs } = resolveCommand();
+  if (!existsSync(command)) {
+    return { cancel: () => {}, done: Promise.resolve({ ok: false, message: `Python backend not found at ${command}` }) };
+  }
+  const child = spawn(command, [...commandArgs, ...args], { windowsHide: true });
+  let buffered = '';
+  let stderr = '';
+  let cancelled = false;
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk: string) => {
+    buffered += chunk;
+    const lines = buffered.split('\n');
+    buffered = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        onEvent(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        onEvent({ t: 'log', line });
+      }
+    }
+  });
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  child.stdin.on('error', () => {});
+  child.stdin.end(input, 'utf8');
+  const done = new Promise<{ message?: string; ok: boolean }>(resolve => {
+    child.on('error', error => resolve({ ok: false, message: error.message }));
+    child.on('close', code => {
+      logStderr(stderr);
+      if (cancelled) return resolve({ ok: false, message: 'Cancelled' });
+      const lastLine = stderr.trim().split(/\r?\n/).filter(Boolean).pop();
+      resolve(code === 0 ? { ok: true } : { ok: false, message: lastLine ?? `Process failed (exit ${code})` });
+    });
+  });
+  return {
+    cancel: () => {
+      cancelled = true;
+      child.kill('SIGTERM');
+    },
+    done
+  };
+}
+
+/** A one-shot test-environment query (`testenv doctor|images|package`), resolving with its JSON answer. */
+export async function testEnvQuery(action: 'doctor' | 'images' | 'package', input: unknown = {}): Promise<unknown> {
+  const result = await runSidecar(['testenv', action], JSON.stringify(input), TESTENV_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, TESTENV_TIMEOUT_MS);
+  try {
+    return JSON.parse(result.stdout) as unknown;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable answer'), { details: result.stdout });
+  }
 }
 
 // Maps a failed sidecar outcome to an Error: the last stderr line as the

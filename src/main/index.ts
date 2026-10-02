@@ -7,6 +7,7 @@ import { pathToFileURL } from 'url';
 import type { RecentProject } from '../preload/api';
 import { compilePolicy, formatPolicy, warmUpSidecar } from './backend';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
+import { registerTestEnvHandlers } from './testenv';
 
 const APP_TITLE = 'CFEngine Policy Builder';
 const MAX_TITLE_LENGTH = 200;
@@ -229,6 +230,7 @@ app.whenReady().then(() => {
   });
 
   registerProjectHandlers(isTrustedFrame);
+  registerTestEnvHandlers(isTrustedFrame);
   // The File menu and the start screen both list recent projects.
   onRecentsChanged(() => {
     void refreshMenu();

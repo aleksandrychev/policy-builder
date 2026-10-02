@@ -28,6 +28,7 @@ import { FileSettingsPanel, PropertiesPanel } from '../components/PropertiesPane
 import type { NewClassDefinition } from '../components/PropertiesPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
+import { TestResultsView } from '../components/TestResultsView';
 import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ConditionSection } from '../components/properties/ConditionSection';
@@ -128,13 +129,9 @@ const selectionOf = (multiSelectedIds: string[], selectedInstanceId: string | nu
 
 // The tabs besides the canvas.
 function OtherTab({ tab, ...policy }: { tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
-  if (tab === 1) return <GeneratedPolicyView {...policy} />;
-  return (
-    <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Typography sx={{ color: 'text.muted' }}>Test results view coming soon.</Typography>
-    </Box>
-  );
+  return tab === 1 ? <GeneratedPolicyView {...policy} /> : <TestResultsView />;
 }
+
 function initialParams(descriptor: BlockDescriptor): Record<string, string> {
   const { parameters } = resolveBlockShape(descriptor, undefined);
   return Object.fromEntries(parameters.map(parameter => [parameter.name, String(parameter.default ?? '')]));

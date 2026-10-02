@@ -19,6 +19,32 @@ export interface ProjectContent {
 
 export type ProjectType = 'module' | 'policy-set';
 
+// The Docker Engine as the test environments see it (`testenv doctor`).
+export interface DockerStatus {
+  arch?: string;
+  available: boolean;
+  host: string | null;
+  message: string;
+  problem: 'not_installed' | 'not_running' | null;
+  version?: string;
+}
+
+// A base image a test host can run, and whether it's pulled.
+export interface BaseImage {
+  id: string;
+  image: string;
+  label: string;
+  present: boolean;
+}
+
+// One event of a streaming test-environment run; `exit` always comes last.
+export type TestEnvEvent =
+  | { current: number; t: 'progress'; total: number }
+  | { line: string; t: 'log' }
+  | { t: 'done' }
+  | { message: string; t: 'error' }
+  | { message?: string; ok: boolean; t: 'exit' };
+
 // The generated files by project path (.cf and ./templates/), and where each block or group
 // landed in each .cf: id → [first, last] line ranges, 1-based.
 export interface CompiledPolicy {
@@ -76,6 +102,8 @@ declare global {
     // Optional on purpose: the bridge only exists inside Electron. Renderer
     // code runs without it under vitest/jsdom (and any future browser mode),
     api?: {
+      /** Stops a streaming test-environment run (its last event is an `exit`). */
+      cancelTestEnvRun: (runId: string) => Promise<void>;
       /** Checks whether a project folder can be created at parent/folderName. */
       checkProjectTarget: (parent: string, folderName: string) => Promise<TargetCheck>;
       /** Compiles the builder's project data (.policy-builder/project.json) without saving it. */
@@ -102,6 +130,8 @@ declare global {
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
       /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
       onMenuAction: (callback: (action: MenuAction, path?: string) => void) => () => void;
+      /** Subscribes to the events of streaming test-environment runs; call the returned function to unsubscribe. */
+      onTestEnvEvent: (callback: (runId: string, event: TestEnvEvent) => void) => () => void;
       /** Reads a project's cfbs.json: `path` is its folder or the cfbs.json; without one, a native picker asks (null: cancelled). */
       openProject: (request?: { path?: string }) => Promise<OperationResult<OpenedProject> | null>;
       /** Opens a native folder picker, or null if cancelled. */
@@ -115,6 +145,12 @@ declare global {
       /** Persists sidebar/palette sizes so they survive an app restart. */
       setLayoutSettings: (settings: LayoutSettings) => Promise<void>;
       shouldUseDarkColors: () => Promise<boolean>;
+      /** Docker's state for test environments: available, or not installed / not running. */
+      testEnvDoctor: () => Promise<DockerStatus>;
+      /** The base images test hosts run, and which are pulled. */
+      testEnvImages: () => Promise<{ platforms: BaseImage[] }>;
+      /** Starts pulling a base image; resolves with the run id its events (onTestEnvEvent) carry. */
+      testEnvPull: (image: string) => Promise<string>;
     };
   }
 }

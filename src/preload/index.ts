@@ -1,15 +1,18 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type {
+  BaseImage,
   CompiledPolicy,
   CreateProjectRequest,
+  DockerStatus,
   MasterfilesVersions,
   OpenedProject,
   OperationResult,
   ProjectContent,
   ProjectStorage,
   RecentProject,
-  TargetCheck
+  TargetCheck,
+  TestEnvEvent
 } from './api';
 
 // Everything the renderer can ask the main process to do goes through this
@@ -62,12 +65,24 @@ function onMenuAction(callback: (action: MenuAction, path?: string) => void): ()
   };
 }
 
+// Events of streaming test-environment runs (image pulls, later container setup and agent runs).
+function onTestEnvEvent(callback: (runId: string, event: TestEnvEvent) => void): () => void {
+  const listener = (_event: unknown, runId: string, payload: TestEnvEvent) => callback(runId, payload);
+  ipcRenderer.on('testenv:event', listener);
+  return () => ipcRenderer.removeListener('testenv:event', listener);
+}
+
 const api = {
   /** Returns whether the OS currently prefers a dark color scheme. */
   shouldUseDarkColors: (): Promise<boolean> => invoke('theme:should-use-dark'),
 
   /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
   onMenuAction,
+  onTestEnvEvent,
+  testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
+  testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
+  testEnvPull: (image: string): Promise<string> => invoke('testenv:pull', image),
+  cancelTestEnvRun: (runId: string): Promise<void> => invoke('testenv:cancel', runId),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */
   setDocument: (document: { edited: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
