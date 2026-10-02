@@ -144,7 +144,7 @@ export function startSidecarStream(args: string[], input: string, onEvent: (even
 }
 
 /** A one-shot test-environment query (`testenv doctor|images|package|status`), resolving with its JSON answer. */
-export async function testEnvQuery(action: 'doctor' | 'images' | 'package' | 'platforms' | 'status', input: unknown = {}): Promise<unknown> {
+export async function testEnvQuery(action: 'doctor' | 'images' | 'package' | 'platforms' | 'search' | 'status', input: unknown = {}): Promise<unknown> {
   const result = await runSidecar(['testenv', action], JSON.stringify(input), TESTENV_TIMEOUT_MS);
   logStderr(result.stderr);
   if (result.code !== 0) throw sidecarError(result, TESTENV_TIMEOUT_MS);

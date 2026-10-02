@@ -2,6 +2,9 @@
 export interface TestHost {
   env: Record<string, string>;
   id: string;
+  // A custom Docker image to run instead of the platform's ("rockylinux:9"); `platform` then
+  // says which CFEngine package it takes.
+  image?: string;
   name: string;
   // A key of cfpb_testenv.PLATFORMS: "ubuntu-22", "ubuntu-24", "debian-12".
   platform: string;

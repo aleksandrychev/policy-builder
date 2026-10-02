@@ -7,12 +7,14 @@ export interface AddHostMenuProps {
   // The platform offered first: the last host's.
   last?: string;
   onClose: () => void;
+  // Opens the custom image dialog.
+  onOther: () => void;
   onSelect: (platform: string) => void;
   support: PlatformSupport | null;
 }
 
 /** Picks the platform a new client host runs; platforms without a client package are disabled. */
-export function AddHostMenu({ anchor, last, onClose, onSelect, support }: AddHostMenuProps) {
+export function AddHostMenu({ anchor, last, onClose, onOther, onSelect, support }: AddHostMenuProps) {
   const item = (platform: (typeof PLATFORMS)[number], key: string = platform.id) => {
     const missing = support?.[platform.id] && !support[platform.id].client;
     return (
@@ -28,6 +30,10 @@ export function AddHostMenu({ anchor, last, onClose, onSelect, support }: AddHos
       <ListSubheader sx={{ lineHeight: '32px' }}>New client host runs</ListSubheader>
       {same && [item(same, 'last'), <Divider key="divider" />]}
       {PLATFORMS.filter(platform => platform !== same).map(platform => item(platform))}
+      <Divider />
+      <MenuItem onClick={onOther} sx={{ fontSize: 14 }}>
+        Other image…
+      </MenuItem>
     </Menu>
   );
 }

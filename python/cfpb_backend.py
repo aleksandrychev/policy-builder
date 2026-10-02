@@ -339,7 +339,7 @@ def compile_command() -> int:
 
 
 def testenv_command(action: str) -> int:
-    """Test environments (cfpb_testenv): `doctor`, `images`, `package`, `status` answer with one JSON
+    """Test environments (cfpb_testenv): `doctor`, `images`, `package`, `platforms`, `search`, `status` answer with one JSON
     object; the rest stream events, one JSON object per line, ending with a `done` or `error` event."""
     import cfpb_testenv
 
@@ -365,13 +365,21 @@ def testenv_command(action: str) -> int:
             "start": cfpb_testenv.start,
             "destroy": cfpb_testenv.destroy,
         }
+        if action == "inspect":
+            cfpb_testenv.inspect(query)
+            return 0
         if action in streaming:
             if not isinstance(query.get("environment"), dict):
                 raise cfpb_testenv.RunnerError('"environment" must be an object')
             streaming[action](query)
             return 0
         answers = {"doctor": cfpb_testenv.doctor, "images": cfpb_testenv.images}
-        queries = {"package": cfpb_testenv.package, "status": cfpb_testenv.status, "platforms": cfpb_testenv.platforms}
+        queries = {
+            "package": cfpb_testenv.package,
+            "status": cfpb_testenv.status,
+            "platforms": cfpb_testenv.platforms,
+            "search": cfpb_testenv.search,
+        }
         result = answers[action]() if action in answers else queries[action](query)
         print(json.dumps(result))
         return 0
@@ -379,7 +387,7 @@ def testenv_command(action: str) -> int:
         message = str(error)
     except Exception as error:  # Docker SDK / network errors: one line for the UI
         message = f"{type(error).__name__}: {error}"
-    if action in ("pull", "up", "run", "test", "exec", "start", "stop", "destroy"):
+    if action in ("pull", "inspect", "up", "run", "test", "exec", "start", "stop", "destroy"):
         cfpb_testenv.emit("error", message=message)
     print(message, file=sys.stderr)
     return 1
@@ -406,6 +414,8 @@ def main(argv: list[str] | None = None) -> int:
             "package",
             "platforms",
             "pull",
+            "inspect",
+            "search",
             "status",
             "up",
             "run",

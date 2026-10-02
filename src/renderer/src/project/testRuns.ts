@@ -10,7 +10,8 @@ import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
  */
 
 type Api = NonNullable<Window['api']>;
-type Action = Parameters<Api['testEnvStart']>[0];
+// An environment's actions (checking a custom image isn't one).
+type Action = Exclude<Parameters<Api['testEnvStart']>[0], 'inspect'>;
 type Request = Parameters<Api['testEnvStatus']>[0];
 type TestEnvEvent = Parameters<Parameters<Api['onTestEnvEvent']>[0]>[1];
 export type TestProblem = Extract<TestEnvEvent, { t: 'problems' }>['problems'][number];

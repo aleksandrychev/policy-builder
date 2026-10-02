@@ -32,6 +32,12 @@ export interface DockerStatus {
 }
 
 // A base image a test host can run, and whether it's pulled.
+export interface ImageSearch {
+  hub: { description: string; name: string; official: boolean; stars: number }[];
+  hubError: string | null;
+  local: string[];
+}
+
 export interface BaseImage {
   id: string;
   image: string;
@@ -97,6 +103,7 @@ export type TestEnvEvent =
   | { container?: string; converged?: boolean; host: string; ip?: string; state: string; t: 'host' }
   | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
   | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
+  | { image: string; os: string | null; platform: string | null; t: 'detected' }
   | { exit: number; host: string; t: 'exec' }
   | { host: string; problems: TestProblem[]; t: 'problems' }
   | { t: 'done' }
@@ -215,10 +222,12 @@ declare global {
         edition: string;
         version: string;
       }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
+      /** Images for a custom host: pulled ones matching `term`, and Docker Hub's when `hub`. */
+      testEnvSearch: (query: { hub: boolean; term: string }) => Promise<ImageSearch>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */
       testEnvStart: (
-        action: 'destroy' | 'exec' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
-        request: TestEnvRequest | { image: string }
+        action: 'destroy' | 'exec' | 'inspect' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
+        request: TestEnvRequest | { arch?: string; image: string }
       ) => Promise<string>;
       /** Each host's container as Docker sees it: running, exited, absent… */
       testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }>;

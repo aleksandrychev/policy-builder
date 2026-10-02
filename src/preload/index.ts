@@ -5,6 +5,7 @@ import type {
   CompiledPolicy,
   CreateProjectRequest,
   DockerStatus,
+  ImageSearch,
   MasterfilesVersions,
   OpenedProject,
   OperationResult,
@@ -83,14 +84,15 @@ const api = {
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
   testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
   testEnvStart: (
-    action: 'destroy' | 'exec' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
-    request: TestEnvRequest | { image: string }
+    action: 'destroy' | 'exec' | 'inspect' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
+    request: TestEnvRequest | { arch?: string; image: string }
   ): Promise<string> => invoke('testenv:start', action, request),
   testEnvPlatforms: (query: {
     arch: string;
     edition: string;
     version: string;
   }): Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
+  testEnvSearch: (query: { hub: boolean; term: string }): Promise<ImageSearch> => invoke('testenv:search', query),
   testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }> =>
     invoke('testenv:status', request),
   cancelTestEnvRun: (runId: string): Promise<void> => invoke('testenv:cancel', runId),

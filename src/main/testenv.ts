@@ -10,8 +10,10 @@ import { type SidecarStream, startSidecarStream, testEnvQuery } from './backend'
  */
 
 const BASE_IMAGES = new Set(['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']);
-// The streaming actions: pulling a base image, and an environment's Start / Run / Stop / Destroy.
-const STREAMING = new Set(['pull', 'up', 'run', 'test', 'exec', 'start', 'stop', 'destroy']);
+// The streaming actions: pulling a base image, checking a custom one, and an environment's Start / Run / Stop / Destroy.
+const STREAMING = new Set(['pull', 'inspect', 'up', 'run', 'test', 'exec', 'start', 'stop', 'destroy']);
+// [registry[:port]/]name[:tag][@digest], as the sidecar checks it.
+const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$/;
 const runs = new Map<string, SidecarStream>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -22,6 +24,11 @@ function sidecarRequest(action: string, request: unknown): Record<string, unknow
   if (action === 'pull') {
     if (typeof request.image !== 'string' || !BASE_IMAGES.has(request.image)) throw new Error('Not a supported base image');
     return { image: request.image };
+  }
+  if (action === 'inspect') {
+    if (typeof request.image !== 'string' || !IMAGE_REFERENCE.test(request.image)) throw new Error('Not an image reference');
+    if (request.arch !== 'x86_64' && request.arch !== 'aarch64') throw new Error('Unknown architecture');
+    return { image: request.image, arch: request.arch };
   }
   if (!isRecord(request.environment)) throw new Error('The request needs an environment');
   if (request.envFile !== undefined && request.envFile !== null && (typeof request.envFile !== 'string' || !isAbsolute(request.envFile))) {
@@ -52,6 +59,13 @@ export function registerTestEnvHandlers(isTrustedFrame: (frame: WebFrameMain | n
       if (!isRecord(query) || ![query.arch, query.edition, query.version].every(value => typeof value === 'string')) throw new Error('Invalid platforms query');
       const { arch, edition, version } = query;
       return testEnvQuery('platforms', { arch, edition, version, cacheDir: join(app.getPath('userData'), 'testenv') });
+    })
+  );
+  ipcMain.handle(
+    'testenv:search',
+    trusted((_event, query: unknown) => {
+      if (!isRecord(query) || typeof query.term !== 'string' || query.term.length > 100) throw new Error('Invalid image search');
+      return testEnvQuery('search', { term: query.term, hub: query.hub === true });
     })
   );
   ipcMain.handle(

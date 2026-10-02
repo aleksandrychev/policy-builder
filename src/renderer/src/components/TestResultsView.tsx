@@ -26,6 +26,7 @@ import {
 import type { PlatformSupport, TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { useMasterfilesVersions } from './dialogs/NewProjectDialog';
 import { AddHostMenu } from './testenv/AddHostMenu';
+import { CustomImageDialog } from './testenv/CustomImageDialog';
 import { EnvironmentSettingsDialog } from './testenv/EnvironmentSettingsDialog';
 import { HostCard } from './testenv/HostCard';
 import { HostSettingsDialog } from './testenv/HostSettingsDialog';
@@ -70,6 +71,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
   const [editingHost, setEditingHost] = useState<string | null>(null);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
   const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
   const [logView, setLogView] = useState<LogView>({ hosts: [], filter: '' });
   const [terminalHosts, setTerminalHosts] = useState<string[]>([]);
   const terminalInput = useRef<HTMLInputElement | null>(null);
@@ -292,7 +294,22 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
           setAddAnchor(null);
           dispatch(hostAdded({ environmentId: id, platform }));
         }}
+        onOther={() => {
+          setAddAnchor(null);
+          setCustomOpen(true);
+        }}
       />
+      {customOpen && (
+        <CustomImageDialog
+          arch={environment.arch}
+          support={platformSupport}
+          onClose={() => setCustomOpen(false)}
+          onAdd={(image, platform) => {
+            setCustomOpen(false);
+            dispatch(hostAdded({ environmentId: id, image, platform }));
+          }}
+        />
+      )}
       {editing && (
         <HostSettingsDialog
           host={editing}

@@ -112,7 +112,8 @@ export function HostCard(props: HostCardProps) {
   const exists = Boolean(runtime?.container) && runtime?.state !== 'absent';
   const stopped = exists && (runtime?.state === 'exited' || runtime?.state === 'created');
   const up = exists && !stopped;
-  const platform = PLATFORMS.find(item => item.id === host.platform)?.label ?? host.platform;
+  const label = PLATFORMS.find(item => item.id === host.platform)?.label ?? host.platform;
+  const platform = host.image ? `${host.image} (${label} package)` : label;
 
   return (
     <Paper variant="outlined" sx={{ p: 1.5, borderColor: isHub ? 'primary.main' : 'divider' }}>

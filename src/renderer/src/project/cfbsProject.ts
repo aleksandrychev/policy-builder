@@ -366,7 +366,8 @@ export function environmentsFrom(value: unknown): TestEnvironment[] {
             .filter(isObject)
             .filter(port => Number.isInteger(port.host) && Number.isInteger(port.container))
             .map(port => ({ host: port.host as number, container: port.container as number })),
-          env: stringMap(host.env)
+          env: stringMap(host.env),
+          ...(typeof host.image === 'string' && host.image ? { image: host.image } : {})
         }));
       if (typeof environment.id !== 'string' || hosts.length === 0) return [];
       const hub = hosts.some(host => host.id === environment.hub) ? (environment.hub as string) : hosts[0].id;

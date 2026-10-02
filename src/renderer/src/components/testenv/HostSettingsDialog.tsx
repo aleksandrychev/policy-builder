@@ -26,7 +26,7 @@ export interface HostSettingsDialogProps {
   exists: boolean;
   host: TestHost;
   isHub: boolean;
-  onChange: (changes: Partial<Pick<TestHost, 'env' | 'platform' | 'ports'>>) => void;
+  onChange: (changes: Partial<Pick<TestHost, 'env' | 'image' | 'platform' | 'ports'>>) => void;
   onClose: () => void;
   onMakeHub: () => void;
   onRemove: () => void;
@@ -86,7 +86,7 @@ export function HostSettingsDialog(props: HostSettingsDialogProps) {
             />
             <TextField
               select
-              label="Platform"
+              label={host.image ? 'CFEngine package for' : 'Platform'}
               size="small"
               value={host.platform}
               disabled={busy}
@@ -109,6 +109,19 @@ export function HostSettingsDialog(props: HostSettingsDialogProps) {
               })}
             </TextField>
           </Stack>
+          {host.image && (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <Typography sx={{ fontSize: 13 }}>
+                Image{' '}
+                <Typography component="span" sx={{ fontSize: 13, fontFamily: 'monospace' }}>
+                  {host.image}
+                </Typography>
+              </Typography>
+              <Button size="small" disabled={busy} onClick={() => props.onChange({ image: '' })} title="Run the platform's own image instead">
+                Use the standard image
+              </Button>
+            </Stack>
+          )}
           <Stack spacing={0.5}>
             <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Role</Typography>
             <ToggleButtonGroup
@@ -128,7 +141,7 @@ export function HostSettingsDialog(props: HostSettingsDialogProps) {
           </Stack>
           <PortsField ports={host.ports} taken={props.otherPorts} disabled={busy} onChange={ports => props.onChange({ ports })} />
           <EnvVarsField label="Environment variables (this host)" env={host.env} onChange={env => props.onChange({ env })} />
-          <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Changing the platform or ports recreates the container on the next run.</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Changing the platform, image or ports recreates the container on the next run.</Typography>
           {props.container && <ShellCommand container={props.container} />}
         </Stack>
       </DialogContent>

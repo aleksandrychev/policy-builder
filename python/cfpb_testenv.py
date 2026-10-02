@@ -167,14 +167,29 @@ def images() -> dict:
     }
 
 
+# A Docker image reference: [registry[:port]/]name[:tag][@digest].
+REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$")
+
+
+def split_reference(image: str) -> tuple[str, str]:
+    """(repository, tag or digest) of an image reference; a registry's port isn't a tag."""
+    if "@" in image:
+        return tuple(image.split("@", 1))  # type: ignore[return-value]
+    name, slash, last = image.rpartition("/")
+    if ":" in last:
+        last, tag = last.split(":", 1)
+        return f"{name}{slash}{last}", tag
+    return image, "latest"
+
+
 def pull(image: str, arch: str | None = None) -> None:
     """Pulls an image (for `arch`, else the engine's own), streaming `progress` events (bytes over
     all layers) and `log` lines."""
-    repository, _, tag = image.partition(":")
+    repository, tag = split_reference(image)
     layers: dict[str, tuple[int, int]] = {}
     last = -1
     platform = DOCKER_PLATFORM.get(arch) if arch else None
-    for status in client().api.pull(repository, tag=tag or "latest", stream=True, decode=True, platform=platform):
+    for status in client().api.pull(repository, tag=tag, stream=True, decode=True, platform=platform):
         if "error" in status:
             raise RunnerError(status["error"])
         detail = status.get("progressDetail") or {}
@@ -374,24 +389,42 @@ def _has_image(engine, image: str, arch: str) -> bool:
 
 
 def ensure_image(
-    engine, platform: str, edition: str, version: str, hub: bool, arch: str, host_id: str | None = None
+    engine,
+    platform: str,
+    edition: str,
+    version: str,
+    hub: bool,
+    arch: str,
+    host_id: str | None = None,
+    base: str | None = None,
 ) -> str:
-    """A local image with CFEngine installed (built once per platform, edition, role, version and arch)."""
+    """A local image with CFEngine installed (built once per platform, edition, role, version and arch).
+    `base` is a custom image to build on instead of the platform's; `platform` then says which
+    package it takes and how it installs."""
     if platform not in PLATFORMS:
         raise RunnerError(f"Unknown platform: {platform}")
+    if base is not None and not REFERENCE.match(base):
+        raise RunnerError(f"Not an image reference: {base}")
     role = "hub" if edition == "enterprise" and hub else "agent"
     spec = PLATFORMS[platform]
+    image = base or spec["image"]
     found = package({"edition": edition, "version": version, "platform": platform, "arch": arch, "hub": hub})
-    repository, tag = f"cfpb-cache/{platform}", f"{edition}-{role}-{found['version']}-{DOCKER_ARCH[arch]}"
+    repository = f"cfpb-cache/{platform}"
+    if base:
+        repository = f"cfpb-cache/custom-{hashlib.sha256(base.encode()).hexdigest()[:12]}-{platform}"
+    tag = f"{edition}-{role}-{found['version']}-{DOCKER_ARCH[arch]}"
     if _has_image(engine, f"{repository}:{tag}", arch):
         return f"{repository}:{tag}"
-    label = f"{spec['label']} ({arch}) with CFEngine {edition} {found['version']} ({role})"
+    label = f"{base or spec['label']} ({arch}) with CFEngine {edition} {found['version']} ({role})"
     emit("step", host=host_id, step="image", message=f"Preparing {label}")
-    if not _has_image(engine, spec["image"], arch):
-        pull(spec["image"], arch)
+    if not _has_image(engine, image, arch):
+        pull(image, arch)
+    # Custom images may set an entrypoint or a non-root user: the cached image drops both.
     builder = engine.containers.run(
-        spec["image"],
-        "sleep infinity",
+        image,
+        ["infinity"],
+        entrypoint=["sleep"],
+        user="root",
         detach=True,
         init=True,
         labels={"cfpb.build": "1"},
@@ -403,10 +436,106 @@ def ensure_image(
         file = f"/tmp/{found['filename']}"
         command = f"curl -fsSL -o {file} {found['url']} && {install.format(file=file)} && rm {file}"
         _check(run_in(engine, builder, command, None, "setup"), "Installing CFEngine")
-        builder.commit(repository=repository, tag=tag)
+        builder.commit(
+            repository=repository, tag=tag, changes=['ENTRYPOINT [""]', 'CMD ["sleep", "infinity"]', "USER root"]
+        )
     finally:
         builder.remove(force=True)
     return f"{repository}:{tag}"
+
+
+# os-release codenames of releases whose derivatives (Mint, Pop!_OS, …) name them.
+CODENAMES = {
+    "focal": "ubuntu-20",
+    "jammy": "ubuntu-22",
+    "noble": "ubuntu-24",
+    "bookworm": "debian-12",
+    "trixie": "debian-13",
+}
+RHEL_LIKE = {"rhel", "centos", "rocky", "almalinux", "ol", "redhat"}
+
+
+def parse_os_release(text: str) -> dict[str, str]:
+    fields = {}
+    for line in text.splitlines():
+        key, equals, value = line.partition("=")
+        if equals:
+            fields[key.strip()] = value.strip().strip("'\"")
+    return fields
+
+
+def platform_of(fields: dict[str, str]) -> str | None:
+    """The PLATFORMS key whose package an OS takes, from its os-release; None if unsure."""
+    ids = {fields.get("ID", "").lower(), *fields.get("ID_LIKE", "").lower().split()}
+    major = fields.get("VERSION_ID", "").split(".")[0]
+    found = None
+    if fields.get("ID") in ("ubuntu", "debian"):
+        found = f"{fields['ID']}-{major}"
+    elif ids & RHEL_LIKE and major:
+        found = f"rhel-{major}"
+    else:
+        found = CODENAMES.get(fields.get("UBUNTU_CODENAME") or fields.get("VERSION_CODENAME") or "")
+    return found if found in PLATFORMS else None
+
+
+def inspect(request: dict) -> None:
+    """Pulls a custom image if needed and reads its /etc/os-release: emits `detected` with the
+    OS and the platform whose package it takes (null when that has to be picked)."""
+    image, arch = request.get("image"), request.get("arch") or "x86_64"
+    if not isinstance(image, str) or not REFERENCE.match(image):
+        raise RunnerError(f"Not an image reference: {image}")
+    if arch not in DOCKER_PLATFORM:
+        raise RunnerError(f"Unknown architecture: {arch}")
+    engine = client()
+    if not _has_image(engine, image, arch):
+        emit("step", step="pull", message=f"Pulling {image}")
+        pull(image, arch)
+    output = engine.containers.run(
+        image,
+        ["/etc/os-release"],
+        entrypoint=["cat"],
+        user="root",
+        remove=True,
+        platform=DOCKER_PLATFORM[arch],
+    )
+    fields = parse_os_release(output.decode("utf-8", "replace"))
+    emit(
+        "detected",
+        image=image,
+        os=fields.get("PRETTY_NAME") or fields.get("NAME") or None,
+        platform=platform_of(fields),
+    )
+    emit("done")
+
+
+def search(query: dict) -> dict:
+    """Images matching `term`: pulled ones, and Docker Hub's when `hub` (its error, if any, as `hubError`)."""
+    term = str(query.get("term") or "").strip().lower()
+    engine = client()
+    local = sorted(
+        {
+            tag
+            for image in engine.images.list()
+            for tag in image.tags
+            if not tag.startswith("cfpb-cache/") and term in tag.lower()
+        }
+    )
+    result: dict = {"local": local[:50], "hub": [], "hubError": None}
+    if query.get("hub") and term:
+        try:
+            found = engine.images.search(term, limit=25)
+            result["hub"] = [
+                {
+                    "name": item.get("name"),
+                    "description": item.get("description") or "",
+                    "stars": item.get("star_count", 0),
+                    "official": bool(item.get("is_official")),
+                }
+                for item in found
+            ]
+        except Exception as error:  # offline, rate limited
+            result["hubError"] = f"Docker Hub search failed: {error}"
+    return result
 
 
 def platforms(query: dict) -> dict:
@@ -550,7 +679,9 @@ def up(request: dict, finish: bool = True) -> str:
     containers = {}
     for host in sorted(hosts, key=lambda h: h is not hub_host):
         emit("host", host=host["id"], state="provisioning")
-        image = ensure_image(engine, host["platform"], edition, version, host is hub_host, arch, host["id"])
+        image = ensure_image(
+            engine, host["platform"], edition, version, host is hub_host, arch, host["id"], host.get("image") or None
+        )
         containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
     hub = containers[hub_host["id"]]
     _deploy(engine, hub, masterfiles_dir)

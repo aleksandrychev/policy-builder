@@ -168,3 +168,21 @@ def test_errors_outside_the_project_keep_their_own_location():
 
     assert problem["block"] is None
     assert (problem["file"], problem["line"]) == ("/var/cfengine/inputs/update.cf", 9)
+
+
+def test_custom_images_take_the_package_of_the_os_they_are():
+    def platform(text: str):
+        return cfpb_testenv.platform_of(cfpb_testenv.parse_os_release(text))
+
+    assert platform('ID=rocky\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.4"') == "rhel-9"
+    assert platform('ID="ol"\nID_LIKE="fedora"\nVERSION_ID="8.10"') == "rhel-8"
+    assert platform('ID=ubuntu\nVERSION_ID="24.04"') == "ubuntu-24"
+    assert platform('ID=linuxmint\nID_LIKE="ubuntu debian"\nVERSION_ID=21.3\nUBUNTU_CODENAME=jammy') == "ubuntu-22"
+    assert platform("ID=alpine\nVERSION_ID=3.20.0") is None
+    assert platform("ID=debian\nVERSION_ID=11") is None
+
+
+def test_a_registry_port_is_not_a_tag():
+    assert cfpb_testenv.split_reference("registry.corp:5000/base/rhel9") == ("registry.corp:5000/base/rhel9", "latest")
+    assert cfpb_testenv.split_reference("registry.corp:5000/base/rhel9:1.2") == ("registry.corp:5000/base/rhel9", "1.2")
+    assert cfpb_testenv.split_reference("rockylinux:9") == ("rockylinux", "9")

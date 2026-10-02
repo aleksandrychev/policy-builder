@@ -31,13 +31,14 @@ const testEnvironmentsSlice = createSlice({
       const environment = find(state, action.payload.environmentId);
       if (environment?.hosts.some(host => host.id === action.payload.hostId)) environment.hub = action.payload.hostId;
     },
-    hostAdded(state, action: PayloadAction<{ environmentId: string; platform?: string }>) {
+    hostAdded(state, action: PayloadAction<{ environmentId: string; image?: string; platform?: string }>) {
       const environment = find(state, action.payload.environmentId);
       if (!environment) return;
       const names = new Set(environment.hosts.map(host => host.name));
       let number = environment.hosts.length;
       while (names.has(`client${number}`)) number += 1;
-      environment.hosts.push(newHost(`client${number}`, action.payload.platform ?? environment.hosts.at(-1)?.platform));
+      const host = newHost(`client${number}`, action.payload.platform ?? environment.hosts.at(-1)?.platform);
+      environment.hosts.push(action.payload.image ? { ...host, image: action.payload.image } : host);
     },
     hostRemoved(state, action: PayloadAction<{ environmentId: string; hostId: string }>) {
       const environment = find(state, action.payload.environmentId);
@@ -49,9 +50,11 @@ const testEnvironmentsSlice = createSlice({
       const host = find(state, action.payload.environmentId)?.hosts.find(item => item.id === action.payload.hostId);
       if (host) host.name = action.payload.name;
     },
-    hostChanged(state, action: PayloadAction<{ changes: Partial<Pick<TestHost, 'platform' | 'ports'>>; environmentId: string; hostId: string }>) {
+    hostChanged(state, action: PayloadAction<{ changes: Partial<Pick<TestHost, 'image' | 'platform' | 'ports'>>; environmentId: string; hostId: string }>) {
       const host = find(state, action.payload.environmentId)?.hosts.find(item => item.id === action.payload.hostId);
-      if (host) Object.assign(host, action.payload.changes);
+      if (!host) return;
+      Object.assign(host, action.payload.changes);
+      if (!host.image) delete host.image;
     },
     // The environment's variables (no hostId), or one host's own.
     envVarsChanged(state, action: PayloadAction<{ env: Record<string, string>; environmentId: string; hostId?: string }>) {
