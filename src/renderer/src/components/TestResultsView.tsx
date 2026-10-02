@@ -127,6 +127,12 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
     return { environment: environment!, content, masterfiles, envFile, ...(hosts ? { hosts } : {}) };
   };
 
+  // New output shows unfiltered: a filter left from "Show in log" would hide it.
+  const act = (action: Parameters<typeof startAction>[1], payload: Parameters<typeof startAction>[2]) => {
+    setLogView({ hosts: [], filter: '' });
+    return startAction(environment!, action, payload);
+  };
+
   const idle = Boolean(environment) && !runtime.action;
   useEffect(() => {
     if (idle && environment && docker?.available) void refreshStatus(environment, request());
@@ -173,18 +179,13 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
             variant="contained"
             startIcon={<PlayArrowIcon />}
             disabled={!docker?.available || Boolean(problem)}
-            onClick={() => void startAction(environment, 'test', request())}
+            onClick={() => void act('test', request())}
             title="Create and bootstrap any host that isn't up yet, then run the policy on all of them"
           >
             Deploy &amp; run
           </Button>
         )}
-        <Button
-          variant="outlined"
-          startIcon={<StopOutlinedIcon />}
-          disabled={busy || !docker?.available || !anyUp}
-          onClick={() => void startAction(environment, 'stop', request())}
-        >
+        <Button variant="outlined" startIcon={<StopOutlinedIcon />} disabled={busy || !docker?.available || !anyUp} onClick={() => void act('stop', request())}>
           Stop
         </Button>
         <RunSummary
@@ -231,9 +232,9 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
                   lastResult={lastResults.get(host.id)}
                   onOpenSettings={() => setEditingHost(host.id)}
                   actionsDisabled={busy || !docker?.available}
-                  onRunPolicy={() => void startAction(environment, 'run', request([host.id]))}
-                  onStart={() => void startAction(environment, 'start', request([host.id]))}
-                  onStop={() => void startAction(environment, 'stop', request([host.id]))}
+                  onRunPolicy={() => void act('run', request([host.id]))}
+                  onStart={() => void act('start', request([host.id]))}
+                  onStop={() => void act('stop', request([host.id]))}
                   problems={(runtime.problems[host.id] ?? []).length}
                   onTerminal={() => {
                     setTerminalHosts([host.id]);
@@ -256,12 +257,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
                 {network}
               </Box>
             </Typography>
-            <Button
-              size="small"
-              color="error"
-              disabled={busy || !docker?.available || !anyExists}
-              onClick={() => void startAction(environment, 'destroy', request())}
-            >
+            <Button size="small" color="error" disabled={busy || !docker?.available || !anyExists} onClick={() => void act('destroy', request())}>
               Purge all
             </Button>
           </Stack>
@@ -281,7 +277,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
             onSelect={setTerminalHosts}
             inputRef={terminalInput}
             disabled={busy || !docker?.available || !anyUp}
-            onRun={(command, hosts) => void startAction(environment, 'exec', { ...request(hosts), command })}
+            onRun={(command, hosts) => void act('exec', { ...request(hosts), command })}
           />
         </Stack>
       </Box>
@@ -333,7 +329,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
           }}
           onReset={() => {
             setEditingHost(null);
-            void startAction(environment, 'destroy', request([editing.id]));
+            void act('destroy', request([editing.id]));
           }}
         />
       )}
@@ -349,7 +345,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
           onEnvChange={env => dispatch(envVarsChanged({ environmentId: id, env }))}
           onDestroy={() => {
             setEnvironmentOpen(false);
-            void startAction(environment, 'destroy', request());
+            void act('destroy', request());
           }}
         />
       )}
