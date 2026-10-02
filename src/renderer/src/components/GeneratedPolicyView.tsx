@@ -1,14 +1,55 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography, alpha, useTheme } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Stack, type Theme, Typography, alpha, useTheme } from '@mui/material';
 
 import { RangeSetBuilder } from '@codemirror/state';
 import { Decoration, EditorView } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 
+import { entryName } from '../blocks/definitionEntries';
+import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import type { CompiledPolicyState } from '../project/useCompiledPolicy';
+import { useAppSelector } from '../store';
 import { cfengineLanguage } from './editor/cfengineLanguage';
+import { type PolicyReference, type PolicyRegion, policyBlocks } from './editor/policyBlocks';
+
+type Palette = Theme['palette'];
+// A bar colour per kind of promise, so a file's structure reads at a glance.
+const barColor = (palette: Palette, promiseType: string | undefined) =>
+  ({
+    vars: palette.info.main,
+    classes: palette.info.main,
+    files: palette.primary.main,
+    packages: palette.success.main,
+    services: palette.warning.main,
+    processes: palette.warning.main,
+    commands: palette.secondary.main,
+    users: palette.success.dark
+  })[promiseType ?? ''] ?? palette.text.disabled;
+
+// The classes and variables the project defines: Define Class entries are global names, Define
+// Variable entries live in their file's `<bundle>_vars`.
+function useProjectReferences(): PolicyReference[] {
+  const canvas = useAppSelector(state => state.canvas);
+  const files = useAppSelector(state => state.files.files);
+  return useMemo(() => {
+    const bundles = new Map(files.map(file => [file.id, file.bundle]));
+    return canvas.flatMap(instance => {
+      const descriptor = blockDescriptorsById.get(instance.blockId);
+      const kind = descriptor && primaryPromiseType(descriptor);
+      if (!descriptor || (kind !== 'classes' && kind !== 'vars')) return [];
+      return (instance.entries ?? []).flatMap(entry => {
+        const name = entryName(descriptor, entry);
+        if (!name) return [];
+        const qualified = kind === 'vars' ? `${bundles.get(instance.fileId)}_vars.${name}` : name;
+        return [{ name: qualified, id: instance.instanceId, fileId: instance.fileId }];
+      });
+    });
+  }, [canvas, files]);
+}
 
 const selectedLine = Decoration.line({ class: 'cm-selected-block' });
 
@@ -26,16 +67,23 @@ function highlightLines(ranges: [number, number][]) {
 
 /**
  * The Generated Policy tab: the open file's compiled .cf, read-only, as a
- * save would write it (the file tree picks the file). The selected block or group is tinted
- * and scrolled into view.
+ * save would write it (the file tree picks the file). Each block has a bar in the gutter; a click
+ * selects it, the selected one is tinted and scrolled into view, and the project's classes and
+ * variables link to the block that defines them.
  */
 export function GeneratedPolicyView({
   compiled,
   currentFileId,
+  onFollow,
+  onSelect,
   selectedId
 }: {
   compiled: CompiledPolicyState;
   currentFileId: string | null;
+  // A class or variable link: the block that defines it, maybe in another file.
+  onFollow: (fileId: string, id: string) => void;
+  // A click on a block's (or group's) code.
+  onSelect: (id: string) => void;
   // The selected block's instanceId or group's id.
   selectedId: string | null;
 }) {
@@ -44,18 +92,79 @@ export function GeneratedPolicyView({
   const policyPath = currentFileId ? pathOf[currentFileId] : undefined;
   const text = policyPath ? result?.files[policyPath] : undefined;
   const ranges = useMemo(() => (policyPath && selectedId ? (result?.sourceMap[policyPath]?.[selectedId] ?? []) : []), [policyPath, selectedId, result]);
+  const canvas = useAppSelector(state => state.canvas);
+  const groups = useAppSelector(state => state.groups);
+  const references = useProjectReferences();
+  const regions = useMemo((): PolicyRegion[] => {
+    const map = (policyPath && result?.sourceMap[policyPath]) || {};
+    return Object.entries(map).flatMap(([id, ranges]) => {
+      const block = canvas.find(item => item.instanceId === id);
+      const group = block ? undefined : groups.find(item => item.id === id);
+      const descriptor = block && blockDescriptorsById.get(block.blockId);
+      if (!block && !group) return [];
+      return [
+        {
+          id,
+          ranges: ranges as [number, number][],
+          isGroup: Boolean(group),
+          label: block ? block.label : `Group ${group!.name}`,
+          type: descriptor?.name ?? 'Group',
+          color: group ? theme.palette.text.secondary : barColor(theme.palette, descriptor && primaryPromiseType(descriptor))
+        }
+      ];
+    });
+  }, [policyPath, result, canvas, groups, theme]);
   const [view, setView] = useState<EditorView | null>(null);
   const [copied, setCopied] = useState<'copied' | 'failed' | null>(null);
+  // A block picked by clicking its code is already in view: don't scroll to its start.
+  const [picked, setPicked] = useState<string | null>(null);
+  const pick = (id: string) => {
+    setPicked(id);
+    onSelect(id);
+  };
+  // Where links were followed from, for Back.
+  const [trail, setTrail] = useState<{ fileId: string; id: string }[]>([]);
+  const follow = (fileId: string, id: string) => {
+    if (currentFileId && selectedId) setTrail(previous => [...previous, { fileId: currentFileId, id: selectedId }].slice(-20));
+    setPicked(null);
+    onFollow(fileId, id);
+  };
+  const back = () => {
+    const previous = trail.at(-1);
+    if (!previous) return;
+    setTrail(trail.slice(0, -1));
+    setPicked(null);
+    onFollow(previous.fileId, previous.id);
+  };
 
   const extensions = useMemo(
-    () => [cfengineLanguage, highlightLines(ranges), EditorView.theme({ '.cm-selected-block': { backgroundColor: alpha(theme.palette.primary.main, 0.16) } })],
-    [ranges, theme]
+    () => [
+      cfengineLanguage,
+      highlightLines(ranges),
+      policyBlocks(regions, references, pick, reference => follow(reference.fileId, reference.id)),
+      EditorView.theme({
+        '.cm-selected-block': { backgroundColor: alpha(theme.palette.primary.main, 0.16) },
+        '.cm-hovered-block': { backgroundColor: alpha(theme.palette.text.primary, 0.04) },
+        '.cm-project-ref': { color: theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main }
+      })
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the callbacks are new each render; their targets aren't
+    [ranges, regions, references, theme, currentFileId, selectedId]
   );
 
   useEffect(() => {
+    if (picked && picked === selectedId) return;
     if (!view || ranges.length === 0 || ranges[0][0] > view.state.doc.lines) return;
     view.dispatch({ effects: EditorView.scrollIntoView(view.state.doc.line(ranges[0][0]).from, { y: 'start', yMargin: 48 }) });
-  }, [view, ranges, text]);
+  }, [view, ranges, text, picked, selectedId]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.altKey && event.key === 'ArrowLeft') back();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const copy = () => {
     if (!text) return;
@@ -85,6 +194,17 @@ export function GeneratedPolicyView({
           spacing={1}
           sx={{ position: 'absolute', top: 8, right: 20, zIndex: 1, alignItems: 'center', bgcolor: 'background.default', borderRadius: 1, px: 0.5 }}
         >
+          {trail.length > 0 && (
+            <Button
+              size="small"
+              startIcon={<ArrowBackIcon sx={{ fontSize: 16 }} />}
+              onClick={back}
+              title="Back to where the link was followed from (Alt+←)"
+              sx={{ textTransform: 'none' }}
+            >
+              Back
+            </Button>
+          )}
           <Status error={Boolean(error)} pending={pending} />
           <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />} onClick={copy} disabled={!text} sx={{ textTransform: 'none' }}>
             {copied === 'copied' ? 'Copied' : copied === 'failed' ? 'Copy failed' : 'Copy'}

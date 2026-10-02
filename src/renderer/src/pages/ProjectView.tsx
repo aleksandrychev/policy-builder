@@ -604,6 +604,15 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
     setSelectedGateKey(null);
   };
 
+  // A block or group of the open file, selected (Generated Policy and Problems link to them).
+  const selectInFile = (id: string) => {
+    if (groups.some(group => group.id === id)) handleSelectGroup(id);
+    else {
+      handleSelectGroup(null);
+      setSelectedInstanceId(id);
+    }
+  };
+
   const handleTidy = () => {
     asOneStep(() => {
       dispatch(blocksMoved({ positions: tidyPositions(instances, edges, groups, currentFileId, sizeOf, nodeId => measured[nodeId]?.height) }));
@@ -1046,15 +1055,16 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
               compiled={compiled}
               currentFileId={currentFileId}
               selectedId={selectedGroupId ?? selectedInstanceId}
+              onSelect={id => selectInFile(id)}
+              onFollow={(fileId, id) => {
+                dispatch(fileSelected({ fileId }));
+                selectInFile(id);
+              }}
               onShowBlock={(fileId, id) => {
                 // A problem's block (or group) on the canvas, selected.
                 dispatch(fileSelected({ fileId }));
                 setActiveTab(0);
-                if (groups.some(group => group.id === id)) handleSelectGroup(id);
-                else {
-                  handleSelectGroup(null);
-                  setSelectedInstanceId(id);
-                }
+                selectInFile(id);
               }}
             />
           )}
