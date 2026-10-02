@@ -53,6 +53,8 @@ interface PropertiesPanelProps {
   onConditionRemove: (entryId?: string) => void;
   // Run Command only: replace the action with a Define Variable reading its output.
   onConvertToData?: () => void;
+  // Adds a Define Class block without pointing a condition at it.
+  onCreateClass: (definition: NewClassDefinition) => void;
   onDecoratorAdd: (decoratorId: string, entryId?: string) => void;
   onDecoratorMove: (fromIndex: number, toIndex: number, entryId?: string) => void;
   onDecoratorParamChange: (decoratorInstanceId: string, paramName: string, value: string, entryId?: string) => void;
@@ -99,6 +101,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
     onClassRefAdd: () => props.onClassRefAdd(entryId),
     onClassRefRemove: classRefId => props.onClassRefRemove(classRefId, entryId),
     onClassRefChange: (classRefId, patch) => props.onClassRefChange(classRefId, patch, entryId),
+    onCreateClass: props.onCreateClass,
     onInventoryEnable: () => props.onInventoryEnable(entryId),
     onInventoryRemove: () => props.onInventoryRemove(entryId),
     onInventoryAttributeNameChange: attributeName => props.onInventoryAttributeNameChange(attributeName, entryId)

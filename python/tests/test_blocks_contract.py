@@ -74,6 +74,9 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
         yield expr["list_param"]
     if "array_param" in expr:
         yield expr["array_param"]
+    if "cases_param" in expr:
+        yield expr["cases_param"]
+        yield from _walk(expr["otherwise"], top_level=False, in_decorator=in_decorator, problems=problems, where=where)
     if "choose" in expr:
         yield expr["choose"]
         for case in expr["cases"].values():

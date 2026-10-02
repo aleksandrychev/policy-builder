@@ -60,9 +60,10 @@
             "string",
             "number",
             "boolean",
-            "text"
+            "text",
+            "cases"
           ],
-          "description": "\"text\" is a multiline \"string\". Values are stored as strings; booleans as \"true\"/\"false\"."
+          "description": "\"text\" is a multiline \"string\". \"cases\" is a list of condition + value rows (JSON: [{\"className\", \"mode\", \"value\"}]), read by cases_param. Values are stored as strings; booleans as \"true\"/\"false\"."
         },
         "required": {
           "type": "boolean",
@@ -310,6 +311,23 @@
               "additionalProperties": {
                 "$ref": "#/$defs/expression"
               }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cases_param",
+            "otherwise"
+          ],
+          "description": "A cases parameter's rows as ifelse(\"<condition>\", \"<value>\", …, <otherwise>): the first row whose condition holds wins.",
+          "properties": {
+            "cases_param": {
+              "$ref": "#/$defs/identifier"
+            },
+            "otherwise": {
+              "$ref": "#/$defs/expression"
             }
           }
         },

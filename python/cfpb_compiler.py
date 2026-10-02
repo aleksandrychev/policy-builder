@@ -80,6 +80,21 @@ def lines_of(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
 
 
+def cases_of(value: str) -> list[dict]:
+    """A cases parameter's rows that have a condition (it's JSON; anything unreadable is no rows)."""
+    try:
+        rows = json.loads(value or "[]")
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(rows, list):
+        return []
+    return [
+        row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("className"), str) and row["className"].strip()
+    ]
+
+
 def class_expression(condition: dict) -> str:
     name = condition["className"].strip()
     return f"!{name}" if condition.get("mode") == "unless" else name
@@ -163,6 +178,17 @@ def compile_value(expr, ctx: Context) -> str:
         if picked not in expr["cases"]:
             raise CompileError(f"{expr['choose']}: {picked!r} isn't one of {', '.join(expr['cases'])}")
         return compile_value(expr["cases"][picked], ctx)
+    if "cases_param" in expr:
+        # ifelse(class, value, …, otherwise): the first row whose condition holds.
+        args = []
+        for row in cases_of(ctx.params.get(expr["cases_param"], "")):
+            name = row["className"]
+            condition = (
+                (f"!({name})" if re.search(r"[|.&!]", name) else f"!{name}") if row.get("mode") == "unless" else name
+            )
+            args += [quote(condition), quote(row.get("value", ""))]
+        otherwise = compile_value(expr["otherwise"], ctx)
+        return f"ifelse({', '.join([*args, otherwise])})" if args else otherwise
     if "array_param" in expr:
         # One `key value` / `key=value` line per entry, as a local array; the qualified name is passed.
         local = f"{ctx.prefix}{expr['array_param']}"

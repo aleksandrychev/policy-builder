@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { SvgIconComponent } from '@mui/icons-material';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
 import CallMergeOutlinedIcon from '@mui/icons-material/CallMergeOutlined';
 import CallSplitOutlinedIcon from '@mui/icons-material/CallSplitOutlined';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
@@ -19,6 +20,7 @@ import { Box, ListItemIcon, ListItemText, MenuItem, Typography } from '@mui/mate
 export const VALUE_SOURCE_ICONS: Record<string, SvgIconComponent> = {
   literal: FormatQuoteIcon,
   list: FormatListBulletedIcon,
+  'per-condition': AltRouteIcon,
   'structured-data-literal': DataObjectIcon,
   'command-output': TerminalIcon,
   'file-lines': FormatListBulletedIcon,

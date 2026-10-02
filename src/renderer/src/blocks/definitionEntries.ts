@@ -1,4 +1,5 @@
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
+import { describeCases } from './cases';
 import { primaryPromiseType, resolveBlockShape } from './resolveBlockShape';
 import { type BlockDescriptor, classRefsAttribute } from './types';
 
@@ -31,7 +32,8 @@ export function entrySummary(descriptor: BlockDescriptor, entry: DefinitionEntry
   const nameParam = descriptor.entries?.name_param;
   for (const parameter of source?.parameters ?? []) {
     if (parameter.name === nameParam) continue;
-    const value = (entry.params[parameter.name] ?? '').replace(/\s+/g, ' ').trim();
+    const raw = entry.params[parameter.name] ?? '';
+    const value = (parameter.type === 'cases' ? describeCases(raw) : raw).replace(/\s+/g, ' ').trim();
     if (value) return value;
   }
   return source?.label ?? '';

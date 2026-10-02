@@ -4,6 +4,7 @@ decorator. After an intended change, regenerate with CFPB_UPDATE_SNAPSHOTS=1 and
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -71,6 +72,12 @@ def _definition_cases(block_id: str) -> list[tuple[str, dict]]:
     for i, source in enumerate(descriptor["value_sources"]):
         name = source["id"].replace("-", "_")
         overrides = {"from_variable": FROM_VARIABLE[source["id"]]} if source["id"] in FROM_VARIABLE else {}
+        if source["id"] == "per-condition":
+            rows = [
+                {"className": "debian", "mode": "if", "value": "www-data"},
+                {"className": "redhat", "mode": "if", "value": "nginx"},
+            ]
+            overrides = {"cases": json.dumps(rows), "otherwise": "nobody"}
         extra = {}
         if source["id"].startswith("combine"):
             extra["classRefs"] = [

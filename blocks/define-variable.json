@@ -76,6 +76,41 @@
       ]
     },
     {
+      "id": "per-condition",
+      "label": "Per condition",
+      "badge": "ifelse()",
+      "value_type": "string",
+      "literal": true,
+      "parameters": [
+        {
+          "name": "cases",
+          "label": "Values",
+          "type": "cases",
+          "required": false,
+          "help": "The first row whose condition holds gives the value."
+        },
+        {
+          "name": "otherwise",
+          "label": "Otherwise",
+          "type": "string",
+          "required": false,
+          "help": "When no condition holds."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "cases_param": "cases",
+              "otherwise": "{{otherwise}}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "structured-data-literal",
       "label": "Structured data (literal)",
       "badge": "parsejson()",

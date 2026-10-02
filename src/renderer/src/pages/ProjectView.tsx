@@ -427,26 +427,31 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   // change selectedInstanceId — unlike the palette's addBlockToCanvas, the
   // user's focus should stay on the block whose condition they're editing,
   // not jump to the class they just created.
-  const handleConditionCreateClass = (forInstanceId: string, definition: NewClassDefinition, entryId?: string) => {
+  const addClassBlock = (definition: NewClassDefinition) => {
     const defineClass = blockDescriptorsById.get('define-class');
     if (!currentFileId || !defineClass) return;
+    dispatch(
+      blockAdded({
+        blockId: 'define-class',
+        fileId: currentFileId,
+        label: definition.className,
+        params: {},
+        position: nextStackPosition(instances, sizeOf),
+        entries: [
+          newDefinitionEntry(defineClass, {
+            params: { [defineClass.entries?.name_param ?? 'class_name']: definition.className, ...definition.params },
+            valueSourceId: definition.valueSourceId,
+            classRefs: definition.classRefs
+          })
+        ]
+      })
+    );
+  };
+
+  const handleConditionCreateClass = (forInstanceId: string, definition: NewClassDefinition, entryId?: string) => {
+    if (!currentFileId || !blockDescriptorsById.get('define-class')) return;
     asOneStep(() => {
-      dispatch(
-        blockAdded({
-          blockId: 'define-class',
-          fileId: currentFileId,
-          label: definition.className,
-          params: {},
-          position: nextStackPosition(instances, sizeOf),
-          entries: [
-            newDefinitionEntry(defineClass, {
-              params: { [defineClass.entries?.name_param ?? 'class_name']: definition.className, ...definition.params },
-              valueSourceId: definition.valueSourceId,
-              classRefs: definition.classRefs
-            })
-          ]
-        })
-      );
+      addClassBlock(definition);
       dispatch(conditionClassNameChanged({ instanceId: forInstanceId, entryId, className: definition.className }));
     });
   };
@@ -861,6 +866,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
               selectedInstance && dispatch(conditionClassNameChanged({ instanceId: selectedInstance.instanceId, entryId, className }))
             }
             onConditionCreateClass={(definition, entryId) => selectedInstance && handleConditionCreateClass(selectedInstance.instanceId, definition, entryId)}
+            onCreateClass={addClassBlock}
             onInventoryEnable={entryId => selectedInstance && dispatch(inventoryEnabled({ instanceId: selectedInstance.instanceId, entryId }))}
             onInventoryRemove={entryId => selectedInstance && dispatch(inventoryRemoved({ instanceId: selectedInstance.instanceId, entryId }))}
             onInventoryAttributeNameChange={(attributeName, entryId) =>

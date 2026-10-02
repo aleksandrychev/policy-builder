@@ -6,40 +6,45 @@
     # Case 1
     "list" slist => { "a", "b" };
 
-### source structured-data-literal
+### source per-condition
     # Case 2
+    "per_condition"
+      string => ifelse("debian", "www-data", "redhat", "nginx", "nobody");
+
+### source structured-data-literal
+    # Case 3
     "structured_data_literal" data => parsejson("{\"a\": 1}");
 
 ### source variable
-    # Case 3
+    # Case 4
     "variable" string => "$(snap_vars.literal)";
 
 ### source list-variable
-    # Case 4
+    # Case 5
     "list_variable" slist => { @(snap_vars.list) };
 
 ### source command-output
-    # Case 5
+    # Case 6
     "command_output"
       string => execresult("/bin/echo hello", "noshell", "stdout");
 
 ### source file-lines
-    # Case 6
+    # Case 7
     "file_lines"
       slist => readstringlist("/etc/hosts", "x", "\n", "1000", "1048576");
 
 ### source file-content
-    # Case 7
+    # Case 8
     "file_content" string => readfile("/etc/hosts", "16384");
 
 ### source file-metadata
-    # Case 8
+    # Case 9
     "file_metadata" string => filestat("/etc/hosts", "size");
 
 ### source environment-variable
-    # Case 9
+    # Case 10
     "environment_variable" string => getenv("HOME", "1024");
 
 ### source structured-data-json
-    # Case 10
+    # Case 11
     "structured_data_json" data => readjson("/etc/hosts", "1048576");

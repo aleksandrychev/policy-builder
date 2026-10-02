@@ -4,15 +4,20 @@ import { Autocomplete, Box, Checkbox, FormControlLabel, InputAdornment, MenuItem
 
 import { type BlockParameter, optionHelp, optionLabel, optionValue } from '../../blocks/types';
 import type { TemplateToken } from '../editor/templateTokens';
-import { buildVariableNameOptions, classAutocompleteSlotProps, renderClassOption, renderClassOptionGroup } from './classOptions';
+import { CasesField } from './CasesField';
+import type { NewClassDefinition } from './NewClassModal';
+import { type ClassNameOption, buildVariableNameOptions, classAutocompleteSlotProps, renderClassOption, renderClassOptionGroup } from './classOptions';
 import { acceptsNumberInput, filterAllowedChars, numberError, pathError } from './inputFilters';
 import { autocompleteSx, inputSx } from './styles';
 
 interface FieldProps {
+  // A cases parameter's condition pickers.
+  classNameOptions?: ClassNameOption[];
   // Validation message, shown instead of the help text.
   error?: string;
   label: string;
   onChange: (value: string) => void;
+  onCreateClass?: (definition: NewClassDefinition) => void;
   onOpenEditor?: () => void;
   parameter: BlockParameter;
   templateTokens?: TemplateToken[];
@@ -147,6 +152,20 @@ function renderPlainField({ parameter, value, onChange, label, error }: FieldPro
 
 // Checked in order, first match wins; anything unmatched is a plain text/number field.
 const FIELD_FACTORIES: FieldFactory[] = [
+  {
+    matches: parameter => parameter.type === 'cases',
+    render: props => (
+      <CasesField
+        parameter={props.parameter}
+        label={props.label}
+        value={props.value}
+        onChange={props.onChange}
+        classNameOptions={props.classNameOptions ?? []}
+        templateTokens={props.templateTokens ?? []}
+        onCreateClass={props.onCreateClass}
+      />
+    )
+  },
   { matches: parameter => parameter.references === 'variable', render: renderVariableReferenceField },
   { matches: parameter => Boolean(parameter.options), render: renderOptionsField },
   { matches: parameter => parameter.type === 'boolean', render: renderBooleanField },

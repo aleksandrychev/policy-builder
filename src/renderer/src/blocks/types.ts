@@ -59,6 +59,12 @@ export interface ChooseExpression {
   choose: string;
 }
 
+// A cases parameter's rows as ifelse(condition, value, …, otherwise).
+export interface CasesParamExpression {
+  cases_param: string;
+  otherwise: Expression;
+}
+
 // `key value` lines as a local array, passed by its qualified name.
 export interface ArrayParamExpression {
   array_param: string;
@@ -73,6 +79,7 @@ export type Expression =
   | Template
   | ChooseExpression
   | ArrayParamExpression
+  | CasesParamExpression
   | CallExpression
   | BodyExpression
   | ListExpression
@@ -114,7 +121,8 @@ export interface BlockParameter {
   path?: 'absolute';
   references?: 'variable';
   required: boolean;
-  type: 'boolean' | 'number' | 'string' | 'text';
+  // "cases": condition + value rows as JSON (blocks/cases.ts).
+  type: 'boolean' | 'cases' | 'number' | 'string' | 'text';
 }
 
 export type ValueType = 'data' | 'slist' | 'string';

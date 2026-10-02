@@ -15,6 +15,7 @@ import { ClassCombinationEditor } from './ClassCombinationEditor';
 import { CollapsibleSectionTitle } from './CollapsibleSectionTitle';
 import { ConditionSection, type ConditionSlot } from './ConditionSection';
 import { InventorySection } from './InventorySection';
+import type { NewClassDefinition } from './NewClassModal';
 import type { ClassNameOption } from './classOptions';
 import { AddDecoratorButton, DecoratorRow } from './decorators';
 import { ParameterField } from './paramFields';
@@ -29,6 +30,8 @@ export interface SubjectCallbacks {
   onClassRefAdd: () => void;
   onClassRefChange: (classRefId: string, patch: { name?: string; negate?: boolean }) => void;
   onClassRefRemove: (classRefId: string) => void;
+  // Adds a Define Class block (a Per condition row's "New class").
+  onCreateClass?: (definition: NewClassDefinition) => void;
   onDecoratorAdd: (decoratorId: string) => void;
   onDecoratorMove: (fromIndex: number, toIndex: number) => void;
   onDecoratorParamChange: (decoratorInstanceId: string, paramName: string, value: string) => void;
@@ -145,6 +148,8 @@ export function SubjectEditor({
             onChange={value => callbacks.onParamChange(parameter.name, value)}
             onOpenEditor={() => setEditingParam(parameter)}
             templateTokens={templateTokens}
+            classNameOptions={classNameOptions}
+            onCreateClass={callbacks.onCreateClass}
           />
         ))
       )}
