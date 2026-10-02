@@ -141,8 +141,12 @@ function TestActivityBadge() {
 }
 
 // The tabs besides the canvas.
-function OtherTab({ tab, ...policy }: { tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
-  return tab === 1 ? <GeneratedPolicyView {...policy} /> : <TestResultsView />;
+function OtherTab({
+  tab,
+  onShowBlock,
+  ...policy
+}: { onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
+  return tab === 1 ? <GeneratedPolicyView {...policy} /> : <TestResultsView onShowBlock={onShowBlock} />;
 }
 
 function initialParams(descriptor: BlockDescriptor): Record<string, string> {
@@ -1031,7 +1035,22 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
               }
             />
           ) : (
-            <OtherTab tab={activeTab} compiled={compiled} currentFileId={currentFileId} selectedId={selectedGroupId ?? selectedInstanceId} />
+            <OtherTab
+              tab={activeTab}
+              compiled={compiled}
+              currentFileId={currentFileId}
+              selectedId={selectedGroupId ?? selectedInstanceId}
+              onShowBlock={(fileId, id) => {
+                // A problem's block (or group) on the canvas, selected.
+                dispatch(fileSelected({ fileId }));
+                setActiveTab(0);
+                if (groups.some(group => group.id === id)) handleSelectGroup(id);
+                else {
+                  handleSelectGroup(null);
+                  setSelectedInstanceId(id);
+                }
+              }}
+            />
           )}
 
           {showSidebars && (

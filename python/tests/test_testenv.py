@@ -132,3 +132,39 @@ def test_platforms_say_which_have_client_and_hub_packages(monkeypatch):
     assert support["ubuntu-20"] == (True, False)
     assert support["rhel-7"] == (True, False)
     assert support["rhel-9"] == (True, True)
+
+
+def test_errors_are_traced_back_to_the_block_that_made_them():
+    lines = [
+        "    info: Could not get GID for group 'shadow', (getgrnam: not found)",
+        "    info: Promise belongs to bundle 'security_account_protection' in file "
+        "'/var/cfengine/inputs/services/cfbs/security.cf' near line 74",
+        "   error: None of the promised groups for '/etc/shadow' exist -- see INFO logs for more",
+        "    info: Could not get GID for group 'shadow', (getgrnam: not found)",
+        "    info: Promise belongs to bundle 'security_account_protection' in file "
+        "'/var/cfengine/inputs/services/cfbs/security.cf' near line 74",
+        "   error: None of the promised groups for '/etc/shadow' exist -- see INFO logs for more",
+        "   error: Errors encountered when actuating files promise '/etc/shadow'",
+        "R: Web server provisioning complete",
+    ]
+    source_map = {"./security.cf": {"group": [[60, 90]], "shadow-block": [[70, 76]]}}
+
+    [problem] = cfpb_testenv.find_problems(lines, source_map, {"shadow-block": "file-1"})
+
+    assert problem["block"] == "shadow-block"
+    assert problem["fileId"] == "file-1"
+    assert problem["count"] == 2
+    assert problem["message"].startswith("None of the promised groups for '/etc/shadow' exist")
+    assert problem["cause"] == ["Could not get GID for group 'shadow', (getgrnam: not found)"]
+
+
+def test_errors_outside_the_project_keep_their_own_location():
+    lines = [
+        "    info: Promise belongs to bundle 'cfe_internal_update' in file '/var/cfengine/inputs/update.cf' near line 9",
+        "   error: Something failed",
+    ]
+
+    [problem] = cfpb_testenv.find_problems(lines, {}, {})
+
+    assert problem["block"] is None
+    assert (problem["file"], problem["line"]) == ("/var/cfengine/inputs/update.cf", 9)

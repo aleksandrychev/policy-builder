@@ -27,6 +27,8 @@ export interface BlockNodeData extends Record<string, unknown> {
   descriptor: BlockDescriptor | undefined;
   // `${blockId}:${name}` keys of names defined more than once in this file.
   duplicateKeys: Set<string>;
+  // Hosts its promises failed on in the last test run.
+  failedOn?: string[];
   // A data chain flows into this block (its variable, or a data-fed parameter).
   hasDataInput?: boolean;
   // Set while a condition gate is hovered whose class this block defines.
@@ -69,8 +71,30 @@ const headerSx = (hasBody: boolean) => ({
   ...(hasBody ? { borderBottom: '1px solid', borderColor: 'divider' } : {})
 });
 
+// "Failed on client1": some of the block's promises weren't kept in the last test run.
+function FailedOnBadge({ compact, hosts }: { compact: boolean; hosts?: string[] }) {
+  if (!hosts?.length) return null;
+  return (
+    <Typography
+      title="Some of its promises weren’t kept in the last test run — see Test Results & Logs"
+      sx={{
+        display: 'inline-block',
+        mb: 0.5,
+        px: 0.75,
+        borderRadius: 0.5,
+        fontSize: compact ? 20 : 11,
+        fontWeight: 700,
+        color: 'error.contrastText',
+        bgcolor: 'error.main'
+      }}
+    >
+      Failed on {hosts.join(', ')}
+    </Typography>
+  );
+}
+
 export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
-  const { instance, descriptor, duplicateKeys, orderNumber, onRemove, highlighted, hasDataInput, cutPending = false } = data;
+  const { instance, descriptor, duplicateKeys, orderNumber, onRemove, highlighted, hasDataInput, failedOn, cutPending = false } = data;
   const theme = useTheme();
   const compact = useStore(state => state.transform[2] < COMPACT_ZOOM);
   const sequenced = isSequenced(descriptor);
@@ -134,6 +158,7 @@ export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
         {!compact && conditionalEntries > 0 && (
           <EntryConditionsLine conditional={conditionalEntries} total={entryCount} noun={descriptor?.entries?.noun_plural} />
         )}
+        <FailedOnBadge hosts={failedOn} compact={compact} />
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
             <Box

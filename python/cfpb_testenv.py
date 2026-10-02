@@ -325,8 +325,8 @@ def read_dotenv(path: str | None) -> dict[str, str]:
 class _Lines:
     """Turns streamed output chunks into whole lines, emitted as `log` events."""
 
-    def __init__(self, host: str | None, stream: str):
-        self.host, self.stream, self.partial = host, stream, ""
+    def __init__(self, host: str | None, stream: str, keep: list[str] | None = None):
+        self.host, self.stream, self.partial, self.keep = host, stream, "", keep
 
     def feed(self, chunk: bytes | str | None) -> None:
         if not chunk:
@@ -334,18 +334,25 @@ class _Lines:
         text = self.partial + (chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk)
         *lines, self.partial = text.split("\n")
         for line in lines:
-            emit("log", host=self.host, stream=self.stream, line=line.rstrip("\r"))
+            self.line(line.rstrip("\r"))
+
+    def line(self, line: str) -> None:
+        emit("log", host=self.host, stream=self.stream, line=line)
+        if self.keep is not None:
+            self.keep.append(line)
 
     def close(self) -> None:
         if self.partial:
-            emit("log", host=self.host, stream=self.stream, line=self.partial)
+            self.line(self.partial)
             self.partial = ""
 
 
-def run_in(engine, container, command: str, host: str | None, stream: str, environment: dict | None = None) -> int:
-    """Runs a shell command in a container, streaming its output; returns its exit code."""
+def run_in(
+    engine, container, command: str, host: str | None, stream: str, environment: dict | None = None, keep=None
+) -> int:
+    """Runs a shell command in a container, streaming its output (also into `keep`); returns its exit code."""
     exec_id = engine.api.exec_create(container.id, ["bash", "-lc", command], environment=environment or None)["Id"]
-    lines = _Lines(host, stream)
+    lines = _Lines(host, stream, keep)
     for out, err in engine.api.exec_start(exec_id, stream=True, demux=True):
         lines.feed(out)
         lines.feed(err)
@@ -581,6 +588,70 @@ def _setup_code(engine, hub, hub_host: dict) -> None:
     )
 
 
+# cf-agent's own location for what it's reporting on, e.g.
+# "info: Promise belongs to bundle 'x' in file '/var/cfengine/inputs/services/cfbs/security.cf' near line 74".
+BELONGS = re.compile(r"Promise belongs to bundle '([^']+)' in file '([^']+)' near line (\d+)")
+# Roll-ups of an error already reported on its own line.
+ROLLUP = re.compile(r"Method '[^']+' failed in some repairs|Errors encountered when actuating|Not all promises")
+INPUTS = "/var/cfengine/inputs/services/cfbs/"
+
+
+def _where(file: str) -> str | None:
+    """A deployed policy file's path in the project ("./security.cf"), if it's one of ours."""
+    return "./" + file[len(INPUTS) :] if file.startswith(INPUTS) else None
+
+
+def find_problems(lines: list[str], source_map: dict, block_files: dict) -> list[dict]:
+    """The errors of one agent run, each with what caused it (the info lines just before) and the
+    block it comes from (cf-agent's file and line, through the compiler's source map)."""
+    problems: dict[tuple, dict] = {}
+    context: list[str] = []
+    location: tuple[str, str, int] | None = None
+    for raw in lines:
+        line = raw.strip()
+        belongs = BELONGS.search(line)
+        if belongs:
+            location = (belongs.group(1), belongs.group(2), int(belongs.group(3)))
+            continue
+        if line.startswith("info:"):
+            context.append(line[len("info:") :].strip())
+            context = context[-4:]
+            continue
+        if not line.startswith("error:"):
+            continue
+        message = line[len("error:") :].strip()
+        if ROLLUP.search(message) and problems:
+            continue
+        path = _where(location[1]) if location else None
+        block = _block_at(source_map.get(path or "", {}), location[2]) if path and location else None
+        key = (block or (location and location[1:]) or None, message)
+        if key in problems:
+            problems[key]["count"] += 1
+        else:
+            problems[key] = {
+                "message": message,
+                "cause": list(dict.fromkeys(c for c in context if c != message)),
+                "count": 1,
+                "block": block,
+                "fileId": block_files.get(block) if block else None,
+                "bundle": location[0] if location else None,
+                "file": path or (location[1] if location else None),
+                "line": location[2] if location else None,
+            }
+        context, location = [], None
+    return list(problems.values())
+
+
+def _block_at(ranges_by_block: dict, line: int) -> str | None:
+    """The block (or group) whose lines hold `line`: the narrowest range wins."""
+    best, size = None, None
+    for block, ranges in ranges_by_block.items():
+        for first, last in ranges:
+            if first <= line <= last and (size is None or last - first < size):
+                best, size = block, last - first
+    return best
+
+
 def _compliance(engine, container) -> dict | None:
     command = "grep -v 'version update.cf' /var/cfengine/promise_summary.log | tail -n 1"
     exec_id = engine.api.exec_create(container.id, ["bash", "-c", command])["Id"]
@@ -604,6 +675,17 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
     _deploy(engine, containers[hub_host["id"]], masterfiles_dir)
+    # Where each block's lines are, to trace errors back to blocks.
+    from cfpb_compiler import compile_project
+
+    source_map: dict = {}
+    project = request["content"]["project"]
+    compile_project(project, source_map=source_map)
+    block_files = {
+        item: file["id"]
+        for file in project.get("files", [])
+        for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
+    }
     dotenv = read_dotenv(request.get("envFile"))
     only = set(request.get("hosts") or [h["id"] for h in hosts])
     for host in sorted(hosts, key=lambda h: h is not hub_host):
@@ -615,11 +697,14 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         for number in range(1, MAX_RUNS + 1):
             emit("step", host=host["id"], step="run", message=f"Run {number} of {MAX_RUNS}")
             run_in(engine, container, f"{CFENGINE}/cf-agent -KI -f update.cf", host["id"], "agent", environment)
-            code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment)
+            output: list[str] = []
+            code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment, output)
             result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
             emit("result", host=host["id"], **result)
             if code != 0 or result.get("repaired", 0) == 0:
                 break
+        # What went wrong in the last pass (earlier passes may have been fixed by later ones).
+        emit("problems", host=host["id"], problems=find_problems(output if result else [], source_map, block_files))
         # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
         # Enterprise hub repairs a little on every run).
         converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0

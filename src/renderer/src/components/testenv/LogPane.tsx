@@ -43,10 +43,29 @@ function entriesOf(lines: LogLine[]): Entry[] {
 const clock = (time: number) => new Date(time).toLocaleTimeString([], { hour12: false });
 
 /** The environment's log: per host or all, coloured by host and by what each line is. */
-export function LogPane({ hosts, lines, onClear }: { hosts: TestHost[]; lines: LogLine[]; onClear: () => void }) {
+export interface LogView {
+  filter: string;
+  // One host, or none for all.
+  hosts: string[];
+}
+
+export function LogPane({
+  hosts,
+  lines,
+  onClear,
+  onViewChange,
+  view
+}: {
+  hosts: TestHost[];
+  lines: LogLine[];
+  onClear: () => void;
+  onViewChange: (view: LogView) => void;
+  view: LogView;
+}) {
   const theme = useTheme();
-  const [selected, setSelected] = useState<string[]>([]);
-  const [filter, setFilter] = useState('');
+  const { hosts: selected, filter } = view;
+  const setSelected = (next: string[]) => onViewChange({ ...view, hosts: next });
+  const setFilter = (next: string) => onViewChange({ ...view, filter: next });
   const [open, setOpen] = useState<Set<string>>(new Set());
   const end = useRef<HTMLDivElement | null>(null);
   const indexOf = new Map(hosts.map((host, index) => [host.id, index]));
@@ -95,7 +114,7 @@ export function LogPane({ hosts, lines, onClear }: { hosts: TestHost[]; lines: L
           placeholder="Filter logs…"
           value={filter}
           onChange={event => setFilter(event.target.value)}
-          sx={{ width: 220 }}
+          sx={{ width: 220, minWidth: 140, flexShrink: 1 }}
           slotProps={{
             input: {
               startAdornment: (

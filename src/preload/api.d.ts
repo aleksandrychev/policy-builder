@@ -77,6 +77,18 @@ export interface TestEnvRequest {
   masterfiles?: string;
 }
 
+// An error of a host's last agent run, traced to the block (or group) that made it when it's ours.
+export interface TestProblem {
+  block: string | null;
+  bundle: string | null;
+  cause: string[];
+  count: number;
+  file: string | null;
+  fileId: string | null;
+  line: number | null;
+  message: string;
+}
+
 // One event of a streaming test-environment run; `exit` always comes last.
 export type TestEnvEvent =
   | { current: number; t: 'progress'; total: number }
@@ -86,6 +98,7 @@ export type TestEnvEvent =
   | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
   | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
   | { exit: number; host: string; t: 'exec' }
+  | { host: string; problems: TestProblem[]; t: 'problems' }
   | { t: 'done' }
   | { message: string; t: 'error' }
   | { message?: string; ok: boolean; t: 'exit' };

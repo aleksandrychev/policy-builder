@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutlined';
@@ -28,7 +28,8 @@ import { useMasterfilesVersions } from './dialogs/NewProjectDialog';
 import { EnvironmentSettingsDialog } from './testenv/EnvironmentSettingsDialog';
 import { HostCard } from './testenv/HostCard';
 import { HostSettingsDialog } from './testenv/HostSettingsDialog';
-import { LogPane } from './testenv/LogPane';
+import { LogPane, type LogView } from './testenv/LogPane';
+import { ProblemsPanel } from './testenv/ProblemsPanel';
 import { TerminalBar } from './testenv/TerminalBar';
 
 type Api = NonNullable<Window['api']>;
@@ -57,7 +58,7 @@ function problemOf(environment: TestEnvironment, support: PlatformSupport | null
  * bootstraps the hosts; Run policy rebuilds, deploys to the hub and runs the
  * agent everywhere until it converges.
  */
-export function TestResultsView() {
+export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string, id: string) => void }) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const environment = useAppSelector(state => state.testEnvironments[0]) as TestEnvironment | undefined;
@@ -67,6 +68,21 @@ export function TestResultsView() {
   const [checks, setChecks] = useState(0);
   const [editingHost, setEditingHost] = useState<string | null>(null);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [logView, setLogView] = useState<LogView>({ hosts: [], filter: '' });
+  const [terminalHosts, setTerminalHosts] = useState<string[]>([]);
+  const terminalInput = useRef<HTMLInputElement | null>(null);
+  // Block or group id -> its label, file and group, for naming where a problem comes from.
+  const files = useAppSelector(state => state.files.files);
+  const canvas = useAppSelector(state => state.canvas);
+  const groups = useAppSelector(state => state.groups);
+  const describe = (id: string) => {
+    const block = canvas.find(item => item.instanceId === id);
+    const group = groups.find(item => item.id === (block ? block.groupId : id));
+    const fileId = block?.fileId ?? group?.fileId;
+    const file = files.find(item => item.id === fileId);
+    if (!block && !group) return null;
+    return { label: block ? block.label : `Group ${group!.name}`, file: file && `${file.name}.cf`, group: block && group ? group.name : undefined };
+  };
   const [support, setSupport] = useState<{ key: string; platforms: PlatformSupport | null } | null>(null);
   const supportKey = environment ? `${environment.edition}|${environment.version}|${environment.arch}` : '';
 
@@ -210,6 +226,11 @@ export function TestResultsView() {
                   runtime={runtime.hosts[host.id]}
                   lastResult={lastResults.get(host.id)}
                   onOpenSettings={() => setEditingHost(host.id)}
+                  problems={(runtime.problems[host.id] ?? []).length}
+                  onTerminal={() => {
+                    setTerminalHosts([host.id]);
+                    terminalInput.current?.focus();
+                  }}
                 />
               ))}
             <ButtonBase
@@ -238,9 +259,19 @@ export function TestResultsView() {
           </Stack>
         </Stack>
         <Stack sx={{ flex: 1, minWidth: 0, p: 2 }} spacing={1}>
-          <LogPane hosts={environment.hosts} lines={runtime.lines} onClear={() => clearLog(id)} />
+          <ProblemsPanel
+            hosts={environment.hosts}
+            problems={runtime.problems}
+            describe={describe}
+            onShowBlock={onShowBlock}
+            onShowInLog={(hostId, text) => setLogView({ hosts: [hostId], filter: text.slice(0, 60) })}
+          />
+          <LogPane hosts={environment.hosts} lines={runtime.lines} onClear={() => clearLog(id)} view={logView} onViewChange={setLogView} />
           <TerminalBar
             hosts={environment.hosts}
+            selected={terminalHosts}
+            onSelect={setTerminalHosts}
+            inputRef={terminalInput}
             disabled={busy || !docker?.available || !anyUp}
             onRun={(command, hosts) => void startAction(environment, 'exec', { ...request(hosts), command })}
           />
@@ -252,6 +283,7 @@ export function TestResultsView() {
           isHub={editing.id === environment.hub}
           busy={busy}
           exists={Boolean(runtime.hosts[editing.id]?.container) && runtime.hosts[editing.id]?.state !== 'absent'}
+          container={runtime.hosts[editing.id]?.state === 'absent' ? undefined : runtime.hosts[editing.id]?.container}
           canRemove={environment.hosts.length > 1}
           support={platformSupport}
           otherPorts={new Set(environment.hosts.filter(other => other.id !== editing.id).flatMap(other => other.ports.map(port => port.host)))}

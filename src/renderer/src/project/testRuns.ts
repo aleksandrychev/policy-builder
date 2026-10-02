@@ -13,6 +13,7 @@ type Api = NonNullable<Window['api']>;
 type Action = Parameters<Api['testEnvStart']>[0];
 type Request = Parameters<Api['testEnvStatus']>[0];
 type TestEnvEvent = Parameters<Parameters<Api['onTestEnvEvent']>[0]>[1];
+export type TestProblem = Extract<TestEnvEvent, { t: 'problems' }>['problems'][number];
 
 export interface LogLine {
   host?: string | null;
@@ -54,12 +55,14 @@ export interface EnvironmentRuntime {
   lines: LogLine[];
   // How the last action ended, until the tab is looked at (the tab name's check / red dot).
   outcome: 'error' | 'ok' | null;
+  // Each host's errors from its last agent run.
+  problems: Record<string, TestProblem[]>;
   results: RunResult[];
   runId: string | null;
 }
 
 const MAX_LINES = 5000;
-const EMPTY: EnvironmentRuntime = { action: null, error: null, hosts: {}, hub: null, lines: [], outcome: null, results: [], runId: null };
+const EMPTY: EnvironmentRuntime = { action: null, error: null, hosts: {}, hub: null, lines: [], outcome: null, problems: {}, results: [], runId: null };
 const runtimes = new Map<string, EnvironmentRuntime>();
 const environmentOfRun = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -109,6 +112,8 @@ function handle(runId: string, event: TestEnvEvent) {
         return { results: [...runtime.results, event] };
       case 'hub':
         return { hub: { setupCode: event.setup_code, url: event.url } };
+      case 'problems':
+        return { problems: { ...runtime.problems, [event.host]: event.problems } };
       case 'exec':
         return event.exit === 0 ? {} : appended(runtime, { host: event.host, kind: 'error', text: `exit ${event.exit}` });
       case 'error':
@@ -150,7 +155,8 @@ export async function startAction(environment: TestEnvironment, action: Action, 
     action,
     error: null,
     outcome: null,
-    results: action === 'run' || action === 'test' ? [] : runtime.results
+    results: action === 'run' || action === 'test' ? [] : runtime.results,
+    problems: action === 'run' || action === 'test' ? {} : runtime.problems
   }));
   try {
     const runId = await window.api.testEnvStart(action, request);
@@ -208,6 +214,30 @@ export function markTestActivitySeen(): void {
   if (![...runtimes.values()].some(runtime => runtime.outcome)) return;
   for (const [id, runtime] of runtimes) runtimes.set(id, { ...runtime, outcome: null });
   for (const listener of listeners) listener();
+}
+
+// Block id -> the host names its promises failed on in the last run, across environments.
+let blockProblems: Record<string, string[]> = {};
+let blockProblemsKey = '';
+function currentBlockProblems(hostNames: Map<string, string>) {
+  const found: Record<string, string[]> = {};
+  for (const runtime of runtimes.values()) {
+    for (const [host, problems] of Object.entries(runtime.problems)) {
+      for (const problem of problems) {
+        if (!problem.block) continue;
+        const name = hostNames.get(host) ?? host;
+        found[problem.block] = [...new Set([...(found[problem.block] ?? []), name])];
+      }
+    }
+  }
+  const key = JSON.stringify(found);
+  if (key !== blockProblemsKey) [blockProblems, blockProblemsKey] = [found, key];
+  return blockProblems;
+}
+
+/** Which blocks failed on which hosts in the last runs (the canvas badges). */
+export function useBlockProblems(hostNames: Map<string, string>): Record<string, string[]> {
+  return useSyncExternalStore(subscribe, () => currentBlockProblems(hostNames));
 }
 
 export function clearLog(environmentId: string): void {

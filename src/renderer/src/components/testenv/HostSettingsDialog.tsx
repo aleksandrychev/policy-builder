@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import {
   Button,
   Dialog,
@@ -19,6 +21,8 @@ import { PortsField } from './PortsField';
 export interface HostSettingsDialogProps {
   busy: boolean;
   canRemove: boolean;
+  // The host's container, once created.
+  container?: string;
   exists: boolean;
   host: TestHost;
   isHub: boolean;
@@ -32,6 +36,33 @@ export interface HostSettingsDialogProps {
   otherPorts: Set<number>;
   // Which platforms have packages for this edition, version and architecture (null: unknown).
   support: PlatformSupport | null;
+}
+
+// `docker exec` for a shell in the container, with a Copy button.
+function ShellCommand({ container }: { container: string }) {
+  const [copied, setCopied] = useState(false);
+  const command = `docker exec -it ${container} bash`;
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <TextField
+        size="small"
+        label="Shell in this container"
+        value={command}
+        fullWidth
+        slotProps={{ htmlInput: { readOnly: true, style: { fontFamily: 'monospace', fontSize: 12 } } }}
+      />
+      <Button
+        onClick={() =>
+          void navigator.clipboard.writeText(command).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+        }
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </Button>
+    </Stack>
+  );
 }
 
 /** A host's settings: name, platform, role, ports and environment variables; Reset and Remove. */
@@ -98,6 +129,7 @@ export function HostSettingsDialog(props: HostSettingsDialogProps) {
           <PortsField ports={host.ports} taken={props.otherPorts} disabled={busy} onChange={ports => props.onChange({ ports })} />
           <EnvVarsField label="Environment variables (this host)" env={host.env} onChange={env => props.onChange({ env })} />
           <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Changing the platform or ports recreates the container on the next run.</Typography>
+          {props.container && <ShellCommand container={props.container} />}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'space-between' }}>

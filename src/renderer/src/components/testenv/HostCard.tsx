@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -21,9 +19,10 @@ const STATES: Record<string, { label: string; tone: Tone }> = {
 };
 
 // The pill: what the host is, from its state and last run.
-function statusOf(runtime: HostRuntime | undefined, result: RunResult | undefined): { label: string; tone: Tone } {
+function statusOf(runtime: HostRuntime | undefined, result: RunResult | undefined, problems: number): { label: string; tone: Tone } {
   const state = STATES[runtime?.state ?? 'absent'] ?? { tone: 'muted' as const, label: runtime?.state ?? '' };
   if (runtime?.state !== 'done' || !result) return state;
+  if (problems > 0) return { tone: 'error', label: `${problems} ${problems === 1 ? 'problem' : 'problems'}` };
   if ((result.notKept ?? 0) > 0) return { tone: 'warning', label: 'Not kept' };
   return runtime.converged ? state : { tone: 'warning', label: 'Still repairing' };
 }
@@ -34,26 +33,21 @@ export interface HostCardProps {
   isHub: boolean;
   lastResult?: RunResult;
   onOpenSettings: () => void;
+  // Point the terminal at this host.
+  onTerminal: () => void;
+  // Errors of its last run (the pill says how many).
+  problems: number;
   runtime?: HostRuntime;
 }
 
 /** One test host, status first: what it runs, its state, and how to reach it. Settings are behind the gear. */
-export function HostCard({ host, hub, isHub, lastResult, onOpenSettings, runtime }: HostCardProps) {
+export function HostCard({ host, hub, isHub, lastResult, onOpenSettings, onTerminal, problems, runtime }: HostCardProps) {
   const theme = useTheme();
-  const [copied, setCopied] = useState(false);
-  const status = statusOf(runtime, lastResult);
+  const status = statusOf(runtime, lastResult, problems);
   const color = status.tone === 'muted' ? theme.palette.text.secondary : theme.palette[status.tone].main;
   const busy = runtime?.state === 'provisioning' || runtime?.state === 'running';
   const exists = Boolean(runtime?.container) && runtime?.state !== 'absent';
   const platform = PLATFORMS.find(item => item.id === host.platform)?.label ?? host.platform;
-
-  const copyShell = () => {
-    if (!runtime?.container) return;
-    void navigator.clipboard.writeText(`docker exec -it ${runtime.container} bash`).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
 
   return (
     <Paper variant="outlined" sx={{ p: 1.5, borderColor: isHub ? 'primary.main' : 'divider' }}>
@@ -139,7 +133,7 @@ export function HostCard({ host, hub, isHub, lastResult, onOpenSettings, runtime
           )}
           {host.ports.length === 0 && !hub?.setupCode && <Typography sx={{ fontSize: 12, color: 'text.muted' }}>No published ports</Typography>}
         </Box>
-        <IconButton size="small" title={copied ? 'Copied' : 'Copy a shell command (docker exec)'} disabled={!exists} onClick={copyShell}>
+        <IconButton size="small" title="Run a command on this host (terminal below)" disabled={!exists || busy} onClick={onTerminal}>
           <TerminalIcon sx={{ fontSize: 18 }} />
         </IconButton>
         <IconButton size="small" title="Host settings" onClick={onOpenSettings}>

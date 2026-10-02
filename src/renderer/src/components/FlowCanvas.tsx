@@ -38,6 +38,8 @@ import { GATE_EDGE_PREFIX, GATE_WIDTH, type Gate, deriveGates } from '../canvas/
 import { GROUP_NODE_PREFIX, type GroupFrame, type Rect, deriveGroupFrames, frameAt, settleGroup } from '../canvas/groupFrames';
 import { GRID_SIZE, NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
 import { defaultOutcomesFor, describeOutcomes } from '../canvas/outcomes';
+import { useBlockProblems } from '../project/testRuns';
+import { useAppSelector } from '../store';
 import type { BlockInstance } from '../store/canvasSlice/types';
 import type { BlockEdge, BlockOutcome } from '../store/edgesSlice/types';
 import type { PolicyFile } from '../store/filesSlice/types';
@@ -331,6 +333,13 @@ export function FlowCanvas({
   const dragStartRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
   const order = useMemo(() => executionOrder(instances, edges, blockDescriptorsById), [instances, edges]);
+  // Blocks whose promises failed in the last test run, and on which hosts.
+  const testEnvironments = useAppSelector(state => state.testEnvironments);
+  const hostNames = useMemo(
+    () => new Map(testEnvironments.flatMap(environment => environment.hosts.map(host => [host.id, host.name] as const))),
+    [testEnvironments]
+  );
+  const blockProblems = useBlockProblems(hostNames);
   const orderNumbers = useMemo(() => new Map(order.map((instanceId, index) => [instanceId, index + 1])), [order]);
   const byId = useMemo(() => new Map(instances.map(instance => [instance.instanceId, instance])), [instances]);
 
@@ -361,7 +370,8 @@ export function FlowCanvas({
         onRemove: () => onRemove(instance.instanceId),
         cutPending: instance.instanceId === cutPendingId,
         highlighted: instance.instanceId === highlightedId,
-        hasDataInput: fedBlocks.has(instance.instanceId)
+        hasDataInput: fedBlocks.has(instance.instanceId),
+        failedOn: blockProblems[instance.instanceId] ?? (instance.groupId ? blockProblems[instance.groupId] : undefined)
       }
     };
   });
