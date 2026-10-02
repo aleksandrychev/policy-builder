@@ -47,7 +47,7 @@ describe('cfbsProject', () => {
     const file = state.files.files.find(item => item.id === fileId)!;
 
     // Exactly what `cfbs add` writes, but for the bundles step; no builder data on modules.
-    expect(modules.map(module => module.name)).toEqual(['./common.cf', './webserver.cf', './services/']);
+    expect(modules.map(module => module.name)).toEqual(['./common.cf', './webserver.cf', './security.cf', './services/']);
     expect(modules[1]).toEqual({
       name: './webserver.cf',
       description: 'Local policy file added using cfbs command line',
@@ -55,7 +55,7 @@ describe('cfbsProject', () => {
       added_by: 'cfbs add',
       steps: ['copy ./webserver.cf services/cfbs/webserver.cf', 'policy_files services/cfbs/webserver.cf', 'bundles webserver']
     });
-    expect(modules[2]).toEqual({
+    expect(modules[3]).toEqual({
       name: './services/',
       description: 'Local subdirectory added using cfbs command line',
       tags: ['local'],
@@ -133,9 +133,10 @@ describe('cfbsProject', () => {
       steps: [
         'copy ./common.cf services/cfbs/web-demo/common.cf',
         'copy ./webserver.cf services/cfbs/web-demo/webserver.cf',
+        'copy ./security.cf services/cfbs/web-demo/security.cf',
         'copy ./services/ services/cfbs/web-demo/services/',
         'policy_files services/cfbs/web-demo/',
-        `bundles webserver ${state.files.files.find(file => file.name === 'Cron jobs')!.bundle}`
+        `bundles webserver security ${state.files.files.find(file => file.name === 'Cron jobs')!.bundle}`
       ]
     });
   });

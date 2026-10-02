@@ -8,7 +8,8 @@ import { blockAdded, blocksMoved } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { edgeAdded } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
-import { fileAdded, projectFilesInitialized } from '../store/filesSlice';
+import { fileAdded, fileSelected, projectFilesInitialized } from '../store/filesSlice';
+import { groupCreated } from '../store/groupsSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
 
@@ -170,6 +171,11 @@ function buildLandingPageBlock(): DemoBlock {
   };
 }
 
+// The landing page's folder, made explicitly: a file's missing parents would be created 700.
+function buildWebRootBlock(): DemoBlock {
+  return { blockId: 'create-directory', label: 'Create web root', params: { path: '/var/www/html', mode: '755', owner: 'root', group: 'root' } };
+}
+
 function buildWebserverBlocksAfterTemplate(): DemoBlock[] {
   return [
     {
@@ -186,6 +192,12 @@ function buildWebserverBlocksAfterTemplate(): DemoBlock[] {
         owner: 'root',
         group: 'root'
       }
+    },
+    // A safety net behind logrotate: anything in the log folder untouched for a month.
+    {
+      blockId: 'clean-up-old-files',
+      label: 'Prune old nginx logs',
+      params: { directory: '/var/log/nginx', days: '30', depth: 'inf' }
     },
     {
       blockId: 'manage-users',
@@ -210,6 +222,48 @@ function buildKeepRunningBlock(): DemoBlock {
 // Mission Portal Apache restart (results() classes + if => "..._repaired").
 function buildManageServiceBlock(): DemoBlock {
   return { blockId: 'manage-service', label: 'Restart nginx on config change', params: { service_name: 'nginx', action: 'restart' } };
+}
+
+// Security: SSH hardening (only where an SSH server is installed), account file
+// permissions and change detection, and a login banner.
+function buildSecurityBlocks() {
+  const sshdPresent = definitionBlock('define-class', 'SSH server present', [
+    { valueSourceId: 'check-file-exists', params: { class_name: 'sshd_installed', path: '/etc/ssh/sshd_config' } }
+  ]);
+  const hardenSsh: DemoBlock = {
+    blockId: 'set-config-values',
+    label: 'Harden SSH',
+    params: { path: '/etc/ssh/sshd_config', format: 'space', settings: 'PermitRootLogin no\nMaxAuthTries 3\nX11Forwarding no' },
+    condition: { mode: 'if', kind: 'class', className: 'sshd_installed' }
+  };
+  // "ssh" on Debian/Ubuntu (RHEL calls it sshd).
+  const restartSsh: DemoBlock = { blockId: 'manage-service', label: 'Restart SSH on config change', params: { service_name: 'ssh', action: 'restart' } };
+  const accountFiles: DemoBlock = {
+    blockId: 'set-permissions',
+    label: 'Lock down account files',
+    params: { path: '/etc/passwd\n/etc/group', mode: '644', owner: 'root', group: 'root' }
+  };
+  const passwordHashes: DemoBlock = {
+    blockId: 'set-permissions',
+    label: 'Protect password hashes',
+    params: { path: '/etc/shadow', mode: '640', owner: 'root', group: 'shadow' }
+  };
+  const watchAccounts: DemoBlock = {
+    blockId: 'watch-file',
+    label: 'Watch account files',
+    params: { path: '/etc/passwd\n/etc/group\n/etc/shadow' }
+  };
+  const reportAccounts: DemoBlock = {
+    blockId: 'report-message',
+    label: 'Report account changes',
+    params: { message: 'Local accounts changed on $(sys.fqhost)' }
+  };
+  const banner: DemoBlock = {
+    blockId: 'ensure-lines',
+    label: 'Login banner',
+    params: { path: '/etc/issue', lines: 'Authorized access only. Activity may be monitored.', create: 'true' }
+  };
+  return { sshdPresent, hardenSsh, restartSsh, accountFiles, passwordHashes, watchAccounts, reportAccounts, banner };
 }
 
 const STACK_GAP = 60; // generous: labels can wrap past the height estimate
@@ -246,7 +300,8 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   const manageService = buildManageServiceBlock();
   const keepRunning = buildKeepRunningBlock();
   const landingPage = buildLandingPageBlock();
-  const column = [install, ...beforeTemplate, renderTemplate, manageService, keepRunning, landingPage, ...buildWebserverBlocksAfterTemplate()];
+  const webRoot = buildWebRootBlock();
+  const column = [install, ...beforeTemplate, renderTemplate, manageService, keepRunning, webRoot, landingPage, ...buildWebserverBlocksAfterTemplate()];
   const positions = stackPositions(column);
   const ids = column.map((block, index) => dispatch(blockAdded({ ...block, fileId: webserverFileId, position: positions[index] })).payload.instanceId);
   const idOf = (block: DemoBlock) => ids[column.indexOf(block)];
@@ -256,15 +311,57 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   arrow(install, keepRunning, ['kept', 'repaired']);
   arrow(install, landingPage, ['kept', 'repaired']);
   arrow(renderTemplate, manageService, ['repaired']);
+  arrow(webRoot, landingPage, ['kept', 'repaired']);
+
+  const securityFileId = dispatch(fileAdded('Security')).payload.id;
+  const security = buildSecurityBlocks();
+  const securityColumn = [
+    security.sshdPresent,
+    security.hardenSsh,
+    security.restartSsh,
+    security.accountFiles,
+    security.passwordHashes,
+    security.watchAccounts,
+    security.reportAccounts,
+    security.banner
+  ];
+  const securityPositions = stackPositions(securityColumn);
+  const securityIds = securityColumn.map(
+    (block, index) => dispatch(blockAdded({ ...block, fileId: securityFileId, position: securityPositions[index] })).payload.instanceId
+  );
+  const securityArrow = (source: DemoBlock, target: DemoBlock, outcomes: BlockOutcome[]) =>
+    dispatch(
+      edgeAdded({ fileId: securityFileId, source: securityIds[securityColumn.indexOf(source)], target: securityIds[securityColumn.indexOf(target)], outcomes })
+    );
+  securityArrow(security.hardenSsh, security.restartSsh, ['repaired']);
+  securityArrow(security.watchAccounts, security.reportAccounts, ['repaired']);
+  // Each group compiles into a bundle of its own; both arrows stay inside their group.
+  const securityGroup = (name: string, color: 'info' | 'warning', blocks: DemoBlock[]) =>
+    dispatch(groupCreated({ fileId: securityFileId, name, color, instanceIds: blocks.map(block => securityIds[securityColumn.indexOf(block)]) }));
+  securityGroup('SSH hardening', 'info', [security.sshdPresent, security.hardenSsh, security.restartSsh]);
+  securityGroup('Account protection', 'warning', [security.accountFiles, security.passwordHashes, security.watchAccounts, security.reportAccounts]);
   // Opens tidied, as Tidy up lays it out (with estimated sizes: nothing is rendered yet).
   dispatch((innerDispatch: AppDispatch, getState: () => RootState) => {
-    const { canvas, edges } = getState();
+    const { canvas, edges, groups } = getState();
     const sizeOf = (instance: BlockInstance) => ({ width: NODE_WIDTH, height: estimateNodeHeight(instance, blockDescriptorsById.get(instance.blockId)) });
-    for (const fileId of [commonFileId, webserverFileId]) {
+    for (const fileId of [commonFileId, webserverFileId, securityFileId]) {
       const instances = canvas.filter(block => block.fileId === fileId);
       const fileEdges = edges.filter(edge => edge.fileId === fileId);
-      innerDispatch(blocksMoved({ positions: tidyPositions(instances, fileEdges, [], fileId, sizeOf, () => undefined) }));
+      innerDispatch(
+        blocksMoved({
+          positions: tidyPositions(
+            instances,
+            fileEdges,
+            groups.filter(group => group.fileId === fileId),
+            fileId,
+            sizeOf,
+            () => undefined
+          )
+        })
+      );
     }
   });
+  // Adding a file opens it; the demo opens on the web server.
+  dispatch(fileSelected({ fileId: webserverFileId }));
   dispatch(historyCleared());
 }
