@@ -1,0 +1,14 @@
+### example
+  # Case 0
+  reports:
+    "Provisioned $(sys.fqhost)";
+
+### run_interval = '60'
+  # Case 1
+  reports:
+    "Provisioned $(sys.fqhost)" action => if_elapsed("60");
+
+### run_interval = '1440'
+  # Case 2
+  reports:
+    "Provisioned $(sys.fqhost)" action => if_elapsed("1440");

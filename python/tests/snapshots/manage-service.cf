@@ -1,0 +1,29 @@
+### example
+  # Case 0
+  services:
+    "nginx" service_policy => "start";
+
+### action = 'stop'
+  # Case 1
+  services:
+    "nginx" service_policy => "stop";
+
+### action = 'enable'
+  # Case 2
+  services:
+    "nginx" service_policy => "enable";
+
+### action = 'disable'
+  # Case 3
+  services:
+    "nginx" service_policy => "disable";
+
+### action = 'reload'
+  # Case 4
+  services:
+    "nginx" service_policy => "reload";
+
+### action = 'restart'
+  # Case 5
+  services:
+    "nginx" service_policy => "restart";

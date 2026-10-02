@@ -1,0 +1,15 @@
+### example
+  # Case 0
+  files:
+    "/etc/hosts"
+      create => "true",
+      edit_line => append_if_no_lines("127.0.0.1 app.local
+10.0.0.5 db.local");
+
+### create = 'false'
+  # Case 1
+  files:
+    "/etc/hosts"
+      create => "false",
+      edit_line => append_if_no_lines("127.0.0.1 app.local
+10.0.0.5 db.local");

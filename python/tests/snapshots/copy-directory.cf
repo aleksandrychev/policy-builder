@@ -1,0 +1,10 @@
+### example
+  # Case 0
+  files:
+    "/opt/app/static/."
+      create => "true",
+      copy_from => local_cp("/srv/build/static"),
+      depth_search => recurse("inf"),
+      perms => mog_dirs("644", "root", "root");
+
+### body perms mog_dirs(mode, user, group)

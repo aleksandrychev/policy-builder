@@ -1,0 +1,31 @@
+### example
+  # Case 0
+  storage:
+    "/mnt/share" mount => remote_mount("nfs", "nas.local", "/exports/share");
+
+### fs_type = 'nfs2'
+  # Case 1
+  storage:
+    "/mnt/share" mount => remote_mount("nfs2", "nas.local", "/exports/share");
+
+### fs_type = 'nfs3'
+  # Case 2
+  storage:
+    "/mnt/share" mount => remote_mount("nfs3", "nas.local", "/exports/share");
+
+### fs_type = 'nfs4'
+  # Case 3
+  storage:
+    "/mnt/share" mount => remote_mount("nfs4", "nas.local", "/exports/share");
+
+### fs_type = 'panfs'
+  # Case 4
+  storage:
+    "/mnt/share" mount => remote_mount("panfs", "nas.local", "/exports/share");
+
+### fs_type = 'cifs'
+  # Case 5
+  storage:
+    "/mnt/share" mount => remote_mount("cifs", "nas.local", "/exports/share");
+
+### body mount remote_mount(type, server, source)

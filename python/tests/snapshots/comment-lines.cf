@@ -1,0 +1,5 @@
+### example
+  # Case 0
+  files:
+    "/etc/nginx/nginx.conf"
+      edit_line => comment_lines_matching("listen 8080.*", "#");

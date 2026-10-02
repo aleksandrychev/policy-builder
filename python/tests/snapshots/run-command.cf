@@ -1,0 +1,18 @@
+### example
+  # Case 0
+  commands:
+    "/usr/sbin/update-ca-certificates"
+      contain => in_shell,
+      action => if_elapsed("1440");
+
+### run_interval = ''
+  # Case 1
+  commands:
+    "/usr/sbin/update-ca-certificates" contain => in_shell;
+
+### run_interval = '60'
+  # Case 2
+  commands:
+    "/usr/sbin/update-ca-certificates"
+      contain => in_shell,
+      action => if_elapsed("60");

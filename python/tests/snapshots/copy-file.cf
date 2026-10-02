@@ -1,0 +1,6 @@
+### example
+  # Case 0
+  files:
+    "/etc/motd"
+      copy_from => local_cp("/srv/files/motd"),
+      perms => mog("644", "root", "root");

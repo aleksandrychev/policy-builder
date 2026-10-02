@@ -1,0 +1,5 @@
+### example
+  # Case 0
+  methods:
+    "cron job for root"
+      usebundle => cronjob("/usr/local/bin/backup.sh", "root", "3", "30");

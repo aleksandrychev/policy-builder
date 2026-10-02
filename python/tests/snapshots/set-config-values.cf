@@ -1,0 +1,23 @@
+### example
+  # Case 0
+  vars:
+    "case_0_settings[PermitRootLogin]" string => "no";
+    "case_0_settings[MaxAuthTries]" string => "3";
+
+  files:
+    "/etc/ssh/sshd_config"
+      edit_line => set_line_based(
+        "snap.case_0_settings", " ", "\s+", ".*", "\s*#\s*"
+      );
+
+### format = 'equals'
+  # Case 1
+  vars:
+    "case_1_settings[PermitRootLogin]" string => "no";
+    "case_1_settings[MaxAuthTries]" string => "3";
+
+  files:
+    "/etc/ssh/sshd_config"
+      edit_line => set_line_based(
+        "snap.case_1_settings", "=", "\s*=\s*", ".*", "\s*#\s*"
+      );

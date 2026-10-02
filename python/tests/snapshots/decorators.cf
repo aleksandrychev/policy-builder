@@ -1,0 +1,187 @@
+### decorator default-if-empty
+    # Case 0
+    # The stdout of "/bin/echo hello"
+    # → fall back to "none" if unset or "x"
+    "via_0__in" string => execresult("/bin/echo hello", "noshell", "stdout");
+
+    "via_0"
+      string => "$(snap_vars.via_0__in)",
+      if => and(
+        isvariable("snap_vars.via_0__in"),
+        not(strcmp("$(snap_vars.via_0__in)", "x"))
+      );
+
+    "via_0"
+      string => "none",
+      if => not(isvariable("snap_vars.via_0"));
+
+### decorator filter
+    # Case 1
+    # The lines of /etc/hosts
+    # → filter entries on h.*
+    "via_1"
+      slist => filter(
+        "h.*",
+        readstringlist("/etc/hosts", "x", "\n", "1000", "1048576"),
+        "true",
+        "false",
+        "1000"
+      );
+
+### decorator format
+    # Case 2
+    # The stdout of "/bin/echo hello"
+    # → format as "%s"
+    "via_2"
+      string => format(
+        "%s", execresult("/bin/echo hello", "noshell", "stdout")
+      );
+
+### decorator grep
+    # Case 3
+    # The lines of /etc/hosts
+    # → keep entries matching h.*
+    "via_3"
+      slist => grep(
+        "h.*", readstringlist("/etc/hosts", "x", "\n", "1000", "1048576")
+      );
+
+### decorator join
+    # Case 4
+    # The lines of /etc/hosts
+    # → join with ", "
+    "via_4"
+      string => join(
+        ", ", readstringlist("/etc/hosts", "x", "\n", "1000", "1048576")
+      );
+
+### decorator lastnode
+    # Case 5
+    # The stdout of "/bin/echo hello"
+    # → keep what follows the last "/"
+    "via_5"
+      string => lastnode(
+        execresult("/bin/echo hello", "noshell", "stdout"), "/"
+      );
+
+### decorator length
+    # Case 6
+    # The lines of /etc/hosts
+    # → count the entries
+    "via_6"
+      int => length(readstringlist("/etc/hosts", "x", "\n", "1000", "1048576"));
+
+### decorator maplist
+    # Case 7
+    # The lines of /etc/hosts
+    # → map each entry to "h.*"
+    "via_7"
+      slist => maplist(
+        "h.*", readstringlist("/etc/hosts", "x", "\n", "1000", "1048576")
+      );
+
+### decorator nth
+    # Case 8
+    # The lines of /etc/hosts
+    # → take entry 0
+    "via_8"
+      string => nth(
+        readstringlist("/etc/hosts", "x", "\n", "1000", "1048576"), "0"
+      );
+
+### decorator regex-replace
+    # Case 9
+    # The stdout of "/bin/echo hello"
+    # → replace h.* with "x"
+    "via_9"
+      string => regex_replace(
+        execresult("/bin/echo hello", "noshell", "stdout"), "h.*", "x", "x"
+      );
+
+### decorator sort
+    # Case 10
+    # The lines of /etc/hosts
+    # → sort (lex)
+    "via_10"
+      slist => sort(
+        readstringlist("/etc/hosts", "x", "\n", "1000", "1048576"), "lex"
+      );
+
+### decorator split-list
+    # Case 11
+    # The stdout of "/bin/echo hello"
+    # → split into a list on "\n"
+    "via_11"
+      slist => string_split(
+        execresult("/bin/echo hello", "noshell", "stdout"), "\n", "1000"
+      );
+
+### decorator string-downcase
+    # Case 12
+    # The stdout of "/bin/echo hello"
+    # → lowercase
+    "via_12"
+      string => string_downcase(
+        execresult("/bin/echo hello", "noshell", "stdout")
+      );
+
+### decorator string-head
+    # Case 13
+    # The stdout of "/bin/echo hello"
+    # → keep the first 9 characters
+    "via_13"
+      string => string_head(
+        execresult("/bin/echo hello", "noshell", "stdout"), "9"
+      );
+
+### decorator string-replace
+    # Case 14
+    # The stdout of "/bin/echo hello"
+    # → replace "l" with "x"
+    "via_14"
+      string => string_replace(
+        execresult("/bin/echo hello", "noshell", "stdout"), "l", "x"
+      );
+
+### decorator string-reverse
+    # Case 15
+    # The stdout of "/bin/echo hello"
+    # → reverse
+    "via_15"
+      string => string_reverse(
+        execresult("/bin/echo hello", "noshell", "stdout")
+      );
+
+### decorator string-tail
+    # Case 16
+    # The stdout of "/bin/echo hello"
+    # → keep the last 9 characters
+    "via_16"
+      string => string_tail(
+        execresult("/bin/echo hello", "noshell", "stdout"), "9"
+      );
+
+### decorator string-trim
+    # Case 17
+    # The stdout of "/bin/echo hello"
+    # → trim surrounding whitespace
+    "via_17"
+      string => string_trim(execresult("/bin/echo hello", "noshell", "stdout"));
+
+### decorator string-upcase
+    # Case 18
+    # The stdout of "/bin/echo hello"
+    # → uppercase
+    "via_18"
+      string => string_upcase(
+        execresult("/bin/echo hello", "noshell", "stdout")
+      );
+
+### decorator unique
+    # Case 19
+    # The lines of /etc/hosts
+    # → remove duplicates
+    "via_19"
+      slist => unique(
+        readstringlist("/etc/hosts", "x", "\n", "1000", "1048576")
+      );

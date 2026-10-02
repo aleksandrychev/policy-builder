@@ -1,0 +1,7 @@
+### example
+  # Case 0
+  files:
+    "/var/tmp"
+      delete => tidy,
+      file_select => days_old("14"),
+      depth_search => recurse("inf");
