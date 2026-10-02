@@ -45,7 +45,7 @@ export function GeneratedPolicyView({
   const text = policyPath ? result?.files[policyPath] : undefined;
   const ranges = useMemo(() => (policyPath && selectedId ? (result?.sourceMap[policyPath]?.[selectedId] ?? []) : []), [policyPath, selectedId, result]);
   const [view, setView] = useState<EditorView | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'copied' | 'failed' | null>(null);
 
   const extensions = useMemo(
     () => [cfengineLanguage, highlightLines(ranges), EditorView.theme({ '.cm-selected-block': { backgroundColor: alpha(theme.palette.primary.main, 0.16) } })],
@@ -59,10 +59,14 @@ export function GeneratedPolicyView({
 
   const copy = () => {
     if (!text) return;
-    void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+    const show = (state: 'copied' | 'failed') => {
+      setCopied(state);
+      setTimeout(() => setCopied(null), 1500);
+    };
+    navigator.clipboard.writeText(text).then(
+      () => show('copied'),
+      () => show('failed')
+    );
   };
 
   if (!window.api) return <Placeholder text="The generated policy needs the desktop app." />;
@@ -83,7 +87,7 @@ export function GeneratedPolicyView({
         >
           <Status error={Boolean(error)} pending={pending} />
           <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />} onClick={copy} disabled={!text} sx={{ textTransform: 'none' }}>
-            {copied ? 'Copied' : 'Copy'}
+            {copied === 'copied' ? 'Copied' : copied === 'failed' ? 'Copy failed' : 'Copy'}
           </Button>
         </Stack>
         <Box sx={{ height: '100%', opacity: pending && result ? 0.6 : 1, transition: 'opacity 150ms' }}>

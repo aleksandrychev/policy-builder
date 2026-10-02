@@ -187,10 +187,10 @@ function createWindow(): void {
 app.whenReady().then(() => {
   app.setAppUserModelId('com.northerntech.cfengine-policy-builder');
 
-  // The app needs no web permissions (camera, geolocation, notifications…);
-  // deny anything that asks.
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+  // The app needs no web permissions (camera, geolocation, notifications…) except writing
+  // text to the clipboard (Copy in Generated Policy); deny anything else that asks.
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'clipboard-sanitized-write');
   });
 
   ipcMain.handle('theme:should-use-dark', event => {
