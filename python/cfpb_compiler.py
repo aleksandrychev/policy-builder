@@ -210,7 +210,9 @@ def params_with_defaults(declared: list[dict], given: dict) -> dict[str, str]:
     params = {}
     for param in declared:
         value = given.get(param["name"])
-        if value is None or value == "":
+        # Empty means "not set" — unless it's one of the options (Run Command's "Every agent run").
+        empty_option = any(isinstance(o, dict) and o.get("value") == "" or o == "" for o in param.get("options", []))
+        if value is None or (value == "" and not empty_option):
             value = param.get("default")
         # CFEngine booleans are "true"/"false"; Python's str() would give "True".
         params[param["name"]] = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
