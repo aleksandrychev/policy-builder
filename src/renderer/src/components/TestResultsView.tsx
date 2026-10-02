@@ -25,6 +25,7 @@ import {
 } from '../store/testEnvironmentsSlice';
 import type { PlatformSupport, TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { useMasterfilesVersions } from './dialogs/NewProjectDialog';
+import { AddHostMenu } from './testenv/AddHostMenu';
 import { EnvironmentSettingsDialog } from './testenv/EnvironmentSettingsDialog';
 import { HostCard } from './testenv/HostCard';
 import { HostSettingsDialog } from './testenv/HostSettingsDialog';
@@ -68,6 +69,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
   const [checks, setChecks] = useState(0);
   const [editingHost, setEditingHost] = useState<string | null>(null);
   const [environmentOpen, setEnvironmentOpen] = useState(false);
+  const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
   const [logView, setLogView] = useState<LogView>({ hosts: [], filter: '' });
   const [terminalHosts, setTerminalHosts] = useState<string[]>([]);
   const terminalInput = useRef<HTMLInputElement | null>(null);
@@ -210,7 +212,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
               {environment.hosts.length} {environment.hosts.length === 1 ? 'host' : 'hosts'}
             </Typography>
             <Box sx={{ flex: 1 }} />
-            <Button size="small" variant="outlined" startIcon={<AddIcon />} disabled={busy} onClick={() => dispatch(hostAdded({ environmentId: id }))}>
+            <Button size="small" variant="outlined" startIcon={<AddIcon />} disabled={busy} onClick={event => setAddAnchor(event.currentTarget)}>
               Add host
             </Button>
           </Stack>
@@ -239,7 +241,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
               ))}
             <ButtonBase
               disabled={busy}
-              onClick={() => dispatch(hostAdded({ environmentId: id }))}
+              onClick={event => setAddAnchor(event.currentTarget)}
               sx={{ py: 1.5, borderRadius: 1, border: '1px dashed', borderColor: 'divider', color: 'text.secondary', fontSize: 13, gap: 0.75 }}
             >
               <AddCircleOutlineIcon sx={{ fontSize: 18 }} /> Add client host
@@ -281,6 +283,16 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
           />
         </Stack>
       </Box>
+      <AddHostMenu
+        anchor={addAnchor}
+        last={environment.hosts.at(-1)?.platform}
+        support={platformSupport}
+        onClose={() => setAddAnchor(null)}
+        onSelect={platform => {
+          setAddAnchor(null);
+          dispatch(hostAdded({ environmentId: id, platform }));
+        }}
+      />
       {editing && (
         <HostSettingsDialog
           host={editing}

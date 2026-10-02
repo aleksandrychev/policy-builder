@@ -31,13 +31,13 @@ const testEnvironmentsSlice = createSlice({
       const environment = find(state, action.payload.environmentId);
       if (environment?.hosts.some(host => host.id === action.payload.hostId)) environment.hub = action.payload.hostId;
     },
-    hostAdded(state, action: PayloadAction<{ environmentId: string }>) {
+    hostAdded(state, action: PayloadAction<{ environmentId: string; platform?: string }>) {
       const environment = find(state, action.payload.environmentId);
       if (!environment) return;
       const names = new Set(environment.hosts.map(host => host.name));
       let number = environment.hosts.length;
       while (names.has(`client${number}`)) number += 1;
-      environment.hosts.push(newHost(`client${number}`, environment.hosts.at(-1)?.platform));
+      environment.hosts.push(newHost(`client${number}`, action.payload.platform ?? environment.hosts.at(-1)?.platform));
     },
     hostRemoved(state, action: PayloadAction<{ environmentId: string; hostId: string }>) {
       const environment = find(state, action.payload.environmentId);
