@@ -834,7 +834,11 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         result = None
         for number in range(1, MAX_RUNS + 1):
             emit("step", host=host["id"], step="run", message=f"Run {number} of {MAX_RUNS}")
-            run_in(engine, container, f"{CFENGINE}/cf-agent -KI -f update.cf", host["id"], "agent", environment)
+            # update.cf's errors are problems too (its compliance isn't in the summary we read).
+            updating: list[str] = []
+            run_in(
+                engine, container, f"{CFENGINE}/cf-agent -KI -f update.cf", host["id"], "agent", environment, updating
+            )
             output: list[str] = []
             code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment, output)
             result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
@@ -842,7 +846,14 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
             if code != 0 or result.get("repaired", 0) == 0:
                 break
         # What went wrong in the last pass (earlier passes may have been fixed by later ones).
-        emit("problems", host=host["id"], problems=find_problems(output if result else [], source_map, block_files))
+        emit(
+            "problems",
+            host=host["id"],
+            problems=[
+                *find_problems(updating if result else [], source_map, block_files),
+                *find_problems(output if result else [], source_map, block_files),
+            ],
+        )
         # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
         # Enterprise hub repairs a little on every run).
         converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0
