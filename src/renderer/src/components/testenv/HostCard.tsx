@@ -1,7 +1,12 @@
+import type { ReactNode } from 'react';
+
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
-import { Box, CircularProgress, IconButton, Link, Paper, Stack, Typography, alpha, useTheme } from '@mui/material';
+import { Box, CircularProgress, IconButton, Link, Paper, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material';
 
 import type { HostRuntime, RunResult } from '../../project/testRuns';
 import { PLATFORMS, type TestHost } from '../../store/testEnvironmentsSlice/types';
@@ -27,12 +32,32 @@ function statusOf(runtime: HostRuntime | undefined, result: RunResult | undefine
   return runtime.converged ? state : { tone: 'warning', label: 'Still repairing' };
 }
 
+// A footer icon; the tooltip shows on disabled ones too (hence the span).
+function Action({ children, disabled, onClick, title }: { children: ReactNode; disabled?: boolean; onClick: () => void; title: string }) {
+  return (
+    <Tooltip title={title}>
+      <span>
+        <IconButton size="small" aria-label={title} disabled={disabled} onClick={onClick}>
+          {children}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+}
+
 export interface HostCardProps {
+  // While another action runs, or Docker isn't there.
+  actionsDisabled: boolean;
   host: TestHost;
   hub: { setupCode: string | null; url: string | null } | null;
   isHub: boolean;
   lastResult?: RunResult;
   onOpenSettings: () => void;
+  // Run the policy on this host only.
+  onRunPolicy: () => void;
+  // Start / stop its container (it keeps what's installed).
+  onStart: () => void;
+  onStop: () => void;
   // Point the terminal at this host.
   onTerminal: () => void;
   // Errors of its last run (the pill says how many).
@@ -40,13 +65,53 @@ export interface HostCardProps {
   runtime?: HostRuntime;
 }
 
+type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | 'onStart' | 'onStop' | 'onTerminal'> & {
+  busy: boolean;
+  disabled: boolean;
+  stopped: boolean;
+  up: boolean;
+};
+
+// Deploy & run, start / stop, terminal, settings: close together, each explained on hover.
+function HostActions({ busy, disabled, onOpenSettings, onRunPolicy, onStart, onStop, onTerminal, stopped, up }: HostActionsProps) {
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
+      <Action title={up ? 'Deploy & run on this host' : 'Deploy & run on this host (start it first)'} disabled={disabled || !up} onClick={onRunPolicy}>
+        <PlayArrowIcon sx={{ fontSize: 18 }} />
+      </Action>
+      {stopped ? (
+        <Action title="Start the container" disabled={disabled} onClick={onStart}>
+          <PowerSettingsNewIcon sx={{ fontSize: 18 }} />
+        </Action>
+      ) : (
+        <Action title={up ? 'Stop the container (keeps what is installed)' : 'Stop the container (not running)'} disabled={disabled || !up} onClick={onStop}>
+          <StopOutlinedIcon sx={{ fontSize: 18 }} />
+        </Action>
+      )}
+      <Action
+        title={up ? 'Run a command on this host (terminal below)' : 'Run a command on this host (start it first)'}
+        disabled={!up || busy}
+        onClick={onTerminal}
+      >
+        <TerminalIcon sx={{ fontSize: 18 }} />
+      </Action>
+      <Action title="Host settings" onClick={onOpenSettings}>
+        <SettingsOutlinedIcon sx={{ fontSize: 18 }} />
+      </Action>
+    </Stack>
+  );
+}
+
 /** One test host, status first: what it runs, its state, and how to reach it. Settings are behind the gear. */
-export function HostCard({ host, hub, isHub, lastResult, onOpenSettings, onTerminal, problems, runtime }: HostCardProps) {
+export function HostCard(props: HostCardProps) {
+  const { actionsDisabled, host, hub, isHub, lastResult, onOpenSettings, onTerminal, problems, runtime } = props;
   const theme = useTheme();
   const status = statusOf(runtime, lastResult, problems);
   const color = status.tone === 'muted' ? theme.palette.text.secondary : theme.palette[status.tone].main;
   const busy = runtime?.state === 'provisioning' || runtime?.state === 'running';
   const exists = Boolean(runtime?.container) && runtime?.state !== 'absent';
+  const stopped = exists && (runtime?.state === 'exited' || runtime?.state === 'created');
+  const up = exists && !stopped;
   const platform = PLATFORMS.find(item => item.id === host.platform)?.label ?? host.platform;
 
   return (
@@ -133,12 +198,17 @@ export function HostCard({ host, hub, isHub, lastResult, onOpenSettings, onTermi
           )}
           {host.ports.length === 0 && !hub?.setupCode && <Typography sx={{ fontSize: 12, color: 'text.muted' }}>No published ports</Typography>}
         </Box>
-        <IconButton size="small" title="Run a command on this host (terminal below)" disabled={!exists || busy} onClick={onTerminal}>
-          <TerminalIcon sx={{ fontSize: 18 }} />
-        </IconButton>
-        <IconButton size="small" title="Host settings" onClick={onOpenSettings}>
-          <SettingsOutlinedIcon sx={{ fontSize: 18 }} />
-        </IconButton>
+        <HostActions
+          disabled={actionsDisabled}
+          busy={busy}
+          stopped={stopped}
+          up={up}
+          onRunPolicy={props.onRunPolicy}
+          onStart={props.onStart}
+          onStop={props.onStop}
+          onTerminal={onTerminal}
+          onOpenSettings={onOpenSettings}
+        />
       </Stack>
     </Paper>
   );

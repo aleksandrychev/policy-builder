@@ -82,8 +82,10 @@ const api = {
   onTestEnvEvent,
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
   testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
-  testEnvStart: (action: 'destroy' | 'exec' | 'pull' | 'run' | 'stop' | 'test' | 'up', request: TestEnvRequest | { image: string }): Promise<string> =>
-    invoke('testenv:start', action, request),
+  testEnvStart: (
+    action: 'destroy' | 'exec' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
+    request: TestEnvRequest | { image: string }
+  ): Promise<string> => invoke('testenv:start', action, request),
   testEnvPlatforms: (query: {
     arch: string;
     edition: string;

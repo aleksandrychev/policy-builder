@@ -146,7 +146,9 @@ export function LogPane({
         }}
       >
         {entries.length === 0 && (
-          <Typography sx={{ fontSize: 12, color: 'text.muted', p: 1 }}>Nothing yet: Run test to start the hosts and run the policy.</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.muted', p: 1 }}>
+            Nothing yet: Deploy &amp; run starts the hosts, deploys the policy and runs it.
+          </Typography>
         )}
         {entries.map(entry => {
           if (entry.kind === 'setup') {

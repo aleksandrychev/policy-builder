@@ -216,7 +216,10 @@ declare global {
         version: string;
       }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */
-      testEnvStart: (action: 'destroy' | 'exec' | 'pull' | 'run' | 'stop' | 'test' | 'up', request: TestEnvRequest | { image: string }) => Promise<string>;
+      testEnvStart: (
+        action: 'destroy' | 'exec' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
+        request: TestEnvRequest | { image: string }
+      ) => Promise<string>;
       /** Each host's container as Docker sees it: running, exited, absent… */
       testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }>;
     };

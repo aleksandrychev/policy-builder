@@ -670,7 +670,10 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
     hosts = env.get("hosts") or []
     hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
     containers = _labelled(engine, env)
-    missing = [h["name"] for h in hosts if h["id"] not in containers or containers[h["id"]].status != "running"]
+    only = set(request.get("hosts") or [h["id"] for h in hosts])
+    # The hosts to run, and the hub that serves them, have to be up.
+    needed = [h for h in hosts if h["id"] in only or h is hub_host]
+    missing = [h["name"] for h in needed if h["id"] not in containers or containers[h["id"]].status != "running"]
     if hub_host is None or missing:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
@@ -687,7 +690,6 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
     }
     dotenv = read_dotenv(request.get("envFile"))
-    only = set(request.get("hosts") or [h["id"] for h in hosts])
     for host in sorted(hosts, key=lambda h: h is not hub_host):
         if host["id"] not in only:
             continue
@@ -758,9 +760,27 @@ def status(request: dict) -> dict:
 
 
 def stop(request: dict) -> None:
-    for container in _labelled(client(), request["environment"]).values():
-        emit("step", step="stop", message=f"Stopping {container.name}")
+    """Stops the environment's containers (or only `hosts`); they keep what's installed."""
+    only = set(request.get("hosts") or [])
+    for host_id, container in _labelled(client(), request["environment"]).items():
+        if only and host_id not in only:
+            continue
+        emit("step", host=host_id, step="stop", message=f"Stopping {container.name}")
         container.stop(timeout=5)
+        emit("host", host=host_id, state="exited", container=container.name)
+    emit("done")
+
+
+def start(request: dict) -> None:
+    """Starts stopped containers again (or only `hosts`): already installed and bootstrapped."""
+    env, engine = request["environment"], client()
+    only = set(request.get("hosts") or [])
+    for host_id, container in _labelled(engine, env).items():
+        if only and host_id not in only:
+            continue
+        emit("step", host=host_id, step="start", message=f"Starting {container.name}")
+        container.start()
+        emit("host", host=host_id, state="ready", container=container.name, ip=_ip(engine, container, env))
     emit("done")
 
 

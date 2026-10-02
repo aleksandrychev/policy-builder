@@ -149,7 +149,9 @@ export function useEnvironmentRuntime(environmentId: string): EnvironmentRuntime
 export async function startAction(environment: TestEnvironment, action: Action, request: Request): Promise<void> {
   if (!window.api) return;
   subscribe(() => {});
-  const label = { up: 'Start', run: 'Run policy', test: 'Run test', exec: 'Command', stop: 'Stop', destroy: 'Destroy', pull: 'Pull' }[action];
+  const label = { up: 'Start', run: 'Deploy & run', test: 'Deploy & run', exec: 'Command', start: 'Start', stop: 'Stop', destroy: 'Destroy', pull: 'Pull' }[
+    action
+  ];
   update(environment.id, runtime => ({
     ...(action === 'exec' ? {} : appended(runtime, { kind: 'step', text: `── ${label} ──` })),
     action,

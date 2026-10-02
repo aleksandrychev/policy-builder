@@ -55,7 +55,7 @@ function problemOf(environment: TestEnvironment, support: PlatformSupport | null
 /**
  * The Test Results & Logs tab: a test environment of Docker hosts running the
  * generated policy (current edits, not the saved files). Start creates and
- * bootstraps the hosts; Run policy rebuilds, deploys to the hub and runs the
+ * bootstraps the hosts; Deploy & run rebuilds, deploys to the hub and runs the
  * agent everywhere until it converges.
  */
 export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string, id: string) => void }) {
@@ -172,7 +172,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
             onClick={() => void startAction(environment, 'test', request())}
             title="Create and bootstrap any host that isn't up yet, then run the policy on all of them"
           >
-            Run test
+            Deploy &amp; run
           </Button>
         )}
         <Button
@@ -226,6 +226,10 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
                   runtime={runtime.hosts[host.id]}
                   lastResult={lastResults.get(host.id)}
                   onOpenSettings={() => setEditingHost(host.id)}
+                  actionsDisabled={busy || !docker?.available}
+                  onRunPolicy={() => void startAction(environment, 'run', request([host.id]))}
+                  onStart={() => void startAction(environment, 'start', request([host.id]))}
+                  onStop={() => void startAction(environment, 'stop', request([host.id]))}
                   problems={(runtime.problems[host.id] ?? []).length}
                   onTerminal={() => {
                     setTerminalHosts([host.id]);
@@ -326,9 +330,10 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
 
 const BUSY_LABEL = {
   up: 'Starting hosts…',
-  run: 'Running policy…',
-  test: 'Running test…',
+  run: 'Deploying & running…',
+  test: 'Deploying & running…',
   exec: 'Running command…',
+  start: 'Starting…',
   stop: 'Stopping…',
   destroy: 'Removing…',
   pull: 'Pulling…'

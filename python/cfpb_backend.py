@@ -362,6 +362,7 @@ def testenv_command(action: str) -> int:
             "test": cfpb_testenv.test,
             "exec": cfpb_testenv.execute,
             "stop": cfpb_testenv.stop,
+            "start": cfpb_testenv.start,
             "destroy": cfpb_testenv.destroy,
         }
         if action in streaming:
@@ -378,7 +379,7 @@ def testenv_command(action: str) -> int:
         message = str(error)
     except Exception as error:  # Docker SDK / network errors: one line for the UI
         message = f"{type(error).__name__}: {error}"
-    if action in ("pull", "up", "run", "test", "exec", "stop", "destroy"):
+    if action in ("pull", "up", "run", "test", "exec", "start", "stop", "destroy"):
         cfpb_testenv.emit("error", message=message)
     print(message, file=sys.stderr)
     return 1
@@ -410,6 +411,7 @@ def main(argv: list[str] | None = None) -> int:
             "run",
             "test",
             "exec",
+            "start",
             "stop",
             "destroy",
         ],
