@@ -2,6 +2,7 @@ import type { BlockInstance } from '../canvasSlice/types';
 import type { BlockEdge } from '../edgesSlice/types';
 import type { PolicyFile, PolicyFolder } from '../filesSlice/types';
 import type { BlockGroup } from '../groupsSlice/types';
+import type { TestEnvironment } from '../testEnvironmentsSlice/types';
 
 // How the project is stored: a policy set (masterfiles plus this project, built with
 // `cfbs build`), or a module other policy sets add with `cfbs add` (cfbs.json `type`).
@@ -29,4 +30,5 @@ export interface ProjectContentState {
   edges: BlockEdge[];
   files: { currentFileId: string | null; files: PolicyFile[]; folders: PolicyFolder[] };
   groups: BlockGroup[];
+  testEnvironments: TestEnvironment[];
 }

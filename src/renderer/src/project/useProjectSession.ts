@@ -17,7 +17,8 @@ const snapshotOf = (state: RootState): ProjectData => ({
   derivedNodes: state.derivedNodes,
   edges: state.edges,
   files: state.files,
-  groups: state.groups
+  groups: state.groups,
+  testEnvironments: state.testEnvironments
 });
 
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
@@ -146,7 +147,7 @@ export function useProjectSession() {
       const result = await window.api.openProject(path ? { path } : {});
       if (!result) return;
       if (!result.ok) throw new Error(result.message);
-      const { data, ...project } = loadCfbsProject(result.cfbs, result.builder, folderNameOf(result.path));
+      const { data, ...project } = loadCfbsProject(result.cfbs, result.builder, folderNameOf(result.path), result.testEnvironments);
       dispatch(projectLoaded({ ...project, path: result.path }, data));
       dispatch(historyCleared());
       markSaved();

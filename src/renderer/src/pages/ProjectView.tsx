@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import { Box, Button, Paper, Popover, Stack, Typography } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { Box, Button, CircularProgress, Paper, Popover, Stack, Typography } from '@mui/material';
 
 import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { ReactFlowInstance } from '@xyflow/react';
@@ -44,6 +45,7 @@ import {
   clamp,
   useLayoutSettings
 } from '../hooks/useLayoutSettings';
+import { markTestActivitySeen, useTestActivity } from '../project/testRuns';
 import { useCompiledPolicy } from '../project/useCompiledPolicy';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
@@ -126,6 +128,17 @@ const GROUP_KEY = navigator.platform.startsWith('Mac') ? '⌘G' : 'Ctrl+G';
 // The blocks a canvas action applies to: the multi-selection, else the one selected block.
 const selectionOf = (multiSelectedIds: string[], selectedInstanceId: string | null): string[] =>
   multiSelectedIds.length > 0 ? multiSelectedIds : selectedInstanceId ? [selectedInstanceId] : [];
+
+// On the Test Results tab's name: a spinner while an environment action runs, then a
+// check (or a red dot when it failed) until the tab is opened.
+function TestActivityBadge() {
+  const { outcome, running } = useTestActivity();
+  if (running) return <CircularProgress size={12} thickness={5} aria-label="Test environment busy" />;
+  if (outcome === 'ok') return <CheckCircleIcon color="success" sx={{ fontSize: 14 }} aria-label="Test environment action done" />;
+  if (outcome === 'error')
+    return <Box component="span" aria-label="Test environment action failed" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />;
+  return null;
+}
 
 // The tabs besides the canvas.
 function OtherTab({ tab, ...policy }: { tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
@@ -285,6 +298,13 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   const canRedo = useAppSelector(state => state.history.future.length > 0);
   // In-app "full screen": side panels hidden, properties as an overlay.
   const [maximized, setMaximized] = useState(false);
+  // The Test Results tab has its own layout: no block palette or Properties panel.
+  const showSidebars = !maximized && activeTab !== 2;
+  const testActivity = useTestActivity();
+  // Looking at the Test Results tab acknowledges how the last action ended.
+  useEffect(() => {
+    if (activeTab === 2 && testActivity.outcome) markTestActivitySeen();
+  }, [activeTab, testActivity.outcome]);
   const [addBlockAnchor, setAddBlockAnchor] = useState<HTMLElement | null>(null);
   const [tidyConfirmOpen, setTidyConfirmOpen] = useState(false);
   const [convertTargetId, setConvertTargetId] = useState<string | null>(null);
@@ -860,6 +880,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
           blockCount={instances.length}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabBadges={{ 2: <TestActivityBadge /> }}
           onSave={onSave}
           onOpenSettings={onOpenSettings}
           savedToDisk={Boolean(project.path)}
@@ -867,7 +888,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
         />
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-          {!maximized && (
+          {showSidebars && (
             <>
               <Box
                 sx={{
@@ -1013,7 +1034,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
             <OtherTab tab={activeTab} compiled={compiled} currentFileId={currentFileId} selectedId={selectedGroupId ?? selectedInstanceId} />
           )}
 
-          {!maximized && (
+          {showSidebars && (
             <>
               <ResizeHandle label="Resize properties panel" orientation="vertical" onResize={handleRightResize} onResizeEnd={commitLayout} />
               <Box

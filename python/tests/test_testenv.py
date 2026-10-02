@@ -87,3 +87,48 @@ def test_a_platform_without_a_package_says_so():
 def test_nightly_builds_are_never_picked():
     with pytest.raises(RunnerError, match="No CFEngine enterprise release master"):
         _find(version="master")
+
+
+def test_unpublished_packages_are_not_offered():
+    with pytest.raises(RunnerError, match="No CFEngine enterprise hub 3.27.1 package for ubuntu_20"):
+        _find(platform="ubuntu_20", hub=True)
+    assert _find(platform="ubuntu_20")["filename"] == "cfengine-nova_3.27.1-1.ubuntu20_amd64.deb"
+
+
+def test_release_data_falls_back_to_the_cached_copy_when_offline(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cfpb_testenv, "CACHE_DIR", str(tmp_path))
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, *args):
+            return b'{"releases": []}'
+
+    monkeypatch.setattr(cfpb_testenv.urllib.request, "urlopen", lambda url, timeout: Response())
+    assert cfpb_testenv._fetch_json("https://example.test/releases.json") == {"releases": []}
+
+    def offline(url, timeout):
+        raise OSError("timed out")
+
+    monkeypatch.setattr(cfpb_testenv.urllib.request, "urlopen", offline)
+    assert cfpb_testenv._fetch_json("https://example.test/releases.json") == {"releases": []}
+    with pytest.raises(RunnerError, match="Couldn't read https://example.test/other.json"):
+        cfpb_testenv._fetch_json("https://example.test/other.json")
+
+
+def test_platforms_say_which_have_client_and_hub_packages(monkeypatch):
+    releases = json.loads((RELEASES / "enterprise-releases.json").read_text())
+    detail = json.loads((RELEASES / "enterprise-3.27.1.json").read_text())
+    monkeypatch.setattr(cfpb_testenv, "_fetch_json", lambda url: releases if url.endswith("releases.json") else detail)
+
+    found = cfpb_testenv.platforms({"edition": "enterprise", "version": "3.27.1", "arch": "x86_64"})["platforms"]
+    support = {p["id"]: (p["client"], p["hub"]) for p in found}
+
+    assert support["ubuntu-22"] == (True, True)
+    assert support["ubuntu-20"] == (True, False)
+    assert support["rhel-7"] == (True, False)
+    assert support["rhel-9"] == (True, True)

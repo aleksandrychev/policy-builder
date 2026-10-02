@@ -12,7 +12,8 @@ import type {
   ProjectStorage,
   RecentProject,
   TargetCheck,
-  TestEnvEvent
+  TestEnvEvent,
+  TestEnvRequest
 } from './api';
 
 // Everything the renderer can ask the main process to do goes through this
@@ -81,7 +82,14 @@ const api = {
   onTestEnvEvent,
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
   testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
-  testEnvPull: (image: string): Promise<string> => invoke('testenv:pull', image),
+  testEnvStart: (action: 'destroy' | 'pull' | 'run' | 'stop' | 'up', request: TestEnvRequest | { image: string }): Promise<string> =>
+    invoke('testenv:start', action, request),
+  testEnvPlatforms: (query: {
+    arch: string;
+    edition: string;
+    version: string;
+  }): Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
+  testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; state: string }> }> => invoke('testenv:status', request),
   cancelTestEnvRun: (runId: string): Promise<void> => invoke('testenv:cancel', runId),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */

@@ -10,6 +10,7 @@ import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
 import type { ProjectType } from '../store/projectSlice/types';
+import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { moduleNameFor } from './moduleName';
 
 /**
@@ -92,6 +93,8 @@ export interface CfbsProjectContent {
   project: ProjectMeta;
   // When stored as a module. The main process adds a templates/ copy step when there are templates.
   provided: ProvidedModule;
+  // .policy-builder/test-environments.json.
+  testEnvironments: TestEnvironment[];
 }
 
 // What the project is called and provided as.
@@ -234,7 +237,8 @@ export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjec
       current_file_id: data.files.currentFileId
     },
     modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
-    provided: toProvided(modules, identity)
+    provided: toProvided(modules, identity),
+    testEnvironments: data.testEnvironments
   };
 }
 
@@ -313,7 +317,9 @@ export function fromBuilderProject(json: unknown): ProjectData {
     derivedNodes,
     edges,
     files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
-    groups
+    groups,
+    // Read from their own file; see loadCfbsProject.
+    testEnvironments: []
   };
 }
 
@@ -340,7 +346,47 @@ function masterfilesOf(build: unknown[]): string | null {
  * null when there is none) → what goes into the store. A cfbs project
  * without builder data opens with one empty policy file named after it.
  */
-export function loadCfbsProject(json: unknown, builder: unknown, folderName: string): LoadedProject {
+const stringMap = (value: unknown): Record<string, string> =>
+  isObject(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+const text = (value: unknown, fallback: string) => (typeof value === 'string' && value ? value : fallback);
+
+/** The environments in .policy-builder/test-environments.json, whatever is unusable dropped. */
+export function environmentsFrom(value: unknown): TestEnvironment[] {
+  return listOf(Array.isArray(value) ? value : undefined)
+    .filter(isObject)
+    .flatMap(environment => {
+      const hosts = listOf(Array.isArray(environment.hosts) ? environment.hosts : undefined)
+        .filter(isObject)
+        .filter(host => typeof host.id === 'string')
+        .map(host => ({
+          id: host.id as string,
+          name: text(host.name, 'host'),
+          platform: text(host.platform, 'ubuntu-22'),
+          ports: listOf(Array.isArray(host.ports) ? host.ports : undefined)
+            .filter(isObject)
+            .filter(port => Number.isInteger(port.host) && Number.isInteger(port.container))
+            .map(port => ({ host: port.host as number, container: port.container as number })),
+          env: stringMap(host.env)
+        }));
+      if (typeof environment.id !== 'string' || hosts.length === 0) return [];
+      const hub = hosts.some(host => host.id === environment.hub) ? (environment.hub as string) : hosts[0].id;
+      return [
+        {
+          id: environment.id,
+          name: text(environment.name, 'Environment'),
+          arch: environment.arch === 'aarch64' ? ('aarch64' as const) : ('x86_64' as const),
+          edition: environment.edition === 'enterprise' ? ('enterprise' as const) : ('community' as const),
+          version: text(environment.version, 'latest'),
+          hub,
+          env: stringMap(environment.env),
+          envFile: typeof environment.envFile === 'string' ? environment.envFile : null,
+          hosts
+        }
+      ];
+    });
+}
+
+export function loadCfbsProject(json: unknown, builder: unknown, folderName: string, testEnvironments: unknown = null): LoadedProject {
   if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
   const type: ProjectType = json.type === 'module' ? 'module' : 'policy-set';
   const cfbsName = (typeof json.name === 'string' && json.name.trim()) || folderName;
@@ -350,10 +396,11 @@ export function loadCfbsProject(json: unknown, builder: unknown, folderName: str
   const moduleName = typeof saved.module_name === 'string' && saved.module_name ? saved.module_name : type === 'module' ? cfbsName : moduleNameFor(name);
   const identity = { description: typeof json.description === 'string' ? json.description : '', moduleName, name, type };
   const masterfiles = masterfilesOf(Array.isArray(json.build) ? json.build : []);
+  const environments = environmentsFrom(testEnvironments);
   const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
-  if (data && data.files.files.length > 0) return { ...identity, data, masterfiles };
+  if (data && data.files.files.length > 0) return { ...identity, data: { ...data, testEnvironments: environments }, masterfiles };
   const files = filesReducer(undefined, projectFilesInitialized(name));
-  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [] }, masterfiles };
+  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [], testEnvironments: environments }, masterfiles };
 }
 
 /** The project folder's name for a project name: "Web Server Hardening" → "web-server-hardening". */

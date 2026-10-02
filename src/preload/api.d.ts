@@ -15,6 +15,8 @@ export interface ProjectContent {
   modules: object[];
   project: object;
   provided: object;
+  // .policy-builder/test-environments.json (the file is removed when there are none).
+  testEnvironments?: object[];
 }
 
 export type ProjectType = 'module' | 'policy-set';
@@ -37,10 +39,50 @@ export interface BaseImage {
   present: boolean;
 }
 
+// A test host: one container. `ports` are published host:container (TCP).
+export interface TestHost {
+  env: Record<string, string>;
+  id: string;
+  name: string;
+  platform: string;
+  ports: { container: number; host: number }[];
+}
+
+// A test environment (.policy-builder/test-environments.json): hosts, which one is the hub, the
+// CFEngine edition and version they run, and environment variables (plus an optional .env file).
+export interface TestEnvironment {
+  arch: 'aarch64' | 'x86_64';
+  edition: 'community' | 'enterprise';
+  env: Record<string, string>;
+  // Relative to the project folder, e.g. "./.env"; its values are read at run time.
+  envFile: string | null;
+  hosts: TestHost[];
+  hub: string;
+  id: string;
+  name: string;
+  // "latest" or an exact release, e.g. "3.27.1".
+  version: string;
+}
+
+// What Start / Run / Stop / Destroy get: the environment and the project to build and deploy.
+export interface TestEnvRequest {
+  content?: ProjectContent;
+  // The .env file's absolute path (absent for an unsaved project).
+  envFile?: string | null;
+  environment: TestEnvironment;
+  // Run / Destroy only these hosts (default: all).
+  hosts?: string[];
+  masterfiles?: string;
+}
+
 // One event of a streaming test-environment run; `exit` always comes last.
 export type TestEnvEvent =
   | { current: number; t: 'progress'; total: number }
-  | { line: string; t: 'log' }
+  | { host?: string | null; line: string; stream?: string; t: 'log' }
+  | { host?: string; message: string; step: string; t: 'step' }
+  | { container?: string; converged?: boolean; host: string; state: string; t: 'host' }
+  | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
+  | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
   | { t: 'done' }
   | { message: string; t: 'error' }
   | { message?: string; ok: boolean; t: 'exit' };
@@ -83,6 +125,8 @@ export interface OpenedProject {
   // The parsed cfbs.json.
   cfbs: Record<string, unknown>;
   path: string;
+  // The parsed .policy-builder/test-environments.json's environments, null without.
+  testEnvironments: unknown[] | null;
 }
 
 export interface RecentProject {
@@ -149,8 +193,16 @@ declare global {
       testEnvDoctor: () => Promise<DockerStatus>;
       /** The base images test hosts run, and which are pulled. */
       testEnvImages: () => Promise<{ platforms: BaseImage[] }>;
-      /** Starts pulling a base image; resolves with the run id its events (onTestEnvEvent) carry. */
-      testEnvPull: (image: string) => Promise<string>;
+      /** Which platforms have a client / hub package for an edition, version and architecture. */
+      testEnvPlatforms: (query: {
+        arch: string;
+        edition: string;
+        version: string;
+      }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
+      /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */
+      testEnvStart: (action: 'destroy' | 'pull' | 'run' | 'stop' | 'up', request: TestEnvRequest | { image: string }) => Promise<string>;
+      /** Each host's container as Docker sees it: running, exited, absent… */
+      testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; state: string }> }>;
     };
   }
 }

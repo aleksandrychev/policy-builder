@@ -339,14 +339,16 @@ def compile_command() -> int:
 
 
 def testenv_command(action: str) -> int:
-    """Test environments (cfpb_testenv): `doctor`, `images`, `package` answer with one JSON object;
-    `pull` streams events, one JSON object per line, ending with a `done` or `error` event."""
+    """Test environments (cfpb_testenv): `doctor`, `images`, `package`, `status` answer with one JSON
+    object; the rest stream events, one JSON object per line, ending with a `done` or `error` event."""
     import cfpb_testenv
 
     try:
-        query = json.loads(sys.stdin.read() or "{}") if action in ("package", "pull") else {}
+        query = json.loads(sys.stdin.read() or "{}") if action not in ("doctor", "images") else {}
         if not isinstance(query, dict):
             raise cfpb_testenv.RunnerError("Expected a JSON object on stdin")
+        if isinstance(query.get("cacheDir"), str):
+            cfpb_testenv.CACHE_DIR = query["cacheDir"]
         if action == "pull":
             image = query.get("image")
             if image not in {p["image"] for p in cfpb_testenv.PLATFORMS.values()}:
@@ -354,14 +356,27 @@ def testenv_command(action: str) -> int:
             cfpb_testenv.pull(image)
             cfpb_testenv.emit("done")
             return 0
-        result = {"doctor": cfpb_testenv.doctor, "images": cfpb_testenv.images}.get(action)
-        print(json.dumps(result() if result else cfpb_testenv.package(query)))
+        streaming = {
+            "up": cfpb_testenv.up,
+            "run": cfpb_testenv.run,
+            "stop": cfpb_testenv.stop,
+            "destroy": cfpb_testenv.destroy,
+        }
+        if action in streaming:
+            if not isinstance(query.get("environment"), dict):
+                raise cfpb_testenv.RunnerError('"environment" must be an object')
+            streaming[action](query)
+            return 0
+        answers = {"doctor": cfpb_testenv.doctor, "images": cfpb_testenv.images}
+        queries = {"package": cfpb_testenv.package, "status": cfpb_testenv.status, "platforms": cfpb_testenv.platforms}
+        result = answers[action]() if action in answers else queries[action](query)
+        print(json.dumps(result))
         return 0
     except (json.JSONDecodeError, cfpb_testenv.RunnerError) as error:
         message = str(error)
     except Exception as error:  # Docker SDK / network errors: one line for the UI
         message = f"{type(error).__name__}: {error}"
-    if action == "pull":
+    if action in ("pull", "up", "run", "stop", "destroy"):
         cfpb_testenv.emit("error", message=message)
     print(message, file=sys.stderr)
     return 1
@@ -380,7 +395,10 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("compile", help="generate policy from the builder's project data")
     commands.add_parser("masterfiles", help="the masterfiles build entry for a version")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
-    testenv.add_argument("action", choices=["doctor", "images", "package", "pull"])
+    testenv.add_argument(
+        "action",
+        choices=["doctor", "images", "package", "platforms", "pull", "status", "up", "run", "stop", "destroy"],
+    )
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     if args.command == "testenv":
         return testenv_command(args.action)

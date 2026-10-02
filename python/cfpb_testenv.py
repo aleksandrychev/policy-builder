@@ -15,14 +15,43 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# The base images a host can run, and the CFEngine package platform each one takes.
+# The platforms CFEngine supports that run in a Linux container: the base image, the CFEngine
+# package platform it takes (release data classexpr) and how packages install. RHEL-compatible
+# ones use AlmaLinux (CentOS 7 for 7, the only free image of it).
 PLATFORMS = {
-    "ubuntu-22": {"label": "Ubuntu 22.04", "image": "ubuntu:22.04", "package": "ubuntu_22"},
-    "ubuntu-24": {"label": "Ubuntu 24.04", "image": "ubuntu:24.04", "package": "ubuntu_24"},
-    "debian-12": {"label": "Debian 12", "image": "debian:12", "package": "debian_12"},
+    "ubuntu-20": {"label": "Ubuntu 20.04", "image": "ubuntu:20.04", "package": "ubuntu_20", "family": "deb"},
+    "ubuntu-22": {"label": "Ubuntu 22.04", "image": "ubuntu:22.04", "package": "ubuntu_22", "family": "deb"},
+    "ubuntu-24": {"label": "Ubuntu 24.04", "image": "ubuntu:24.04", "package": "ubuntu_24", "family": "deb"},
+    "debian-12": {"label": "Debian 12", "image": "debian:12", "package": "debian_12", "family": "deb"},
+    "debian-13": {"label": "Debian 13", "image": "debian:13", "package": "debian_13", "family": "deb"},
+    "rhel-7": {"label": "RHEL 7 (CentOS 7)", "image": "centos:7", "package": "redhat_7", "family": "yum"},
+    "rhel-8": {"label": "RHEL 8 (AlmaLinux 8)", "image": "almalinux:8", "package": "redhat_8", "family": "rpm"},
+    "rhel-9": {"label": "RHEL 9 (AlmaLinux 9)", "image": "almalinux:9", "package": "redhat_9", "family": "rpm"},
+    "rhel-10": {"label": "RHEL 10 (AlmaLinux 10)", "image": "almalinux:10", "package": "redhat_10", "family": "rpm"},
+}
+# Release data arch -> Docker platform / image architecture.
+DOCKER_PLATFORM = {"x86_64": "linux/amd64", "aarch64": "linux/arm64"}
+DOCKER_ARCH = {"x86_64": "amd64", "aarch64": "arm64"}
+# How CFEngine and what it needs get installed, by package family: (prerequisites, install {file}).
+INSTALL = {
+    "deb": (
+        "DEBIAN_FRONTEND=noninteractive apt-get update -qq && "
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 procps curl ca-certificates",
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y {file}",
+    ),
+    "rpm": ("dnf install -y -q python3 procps-ng ca-certificates findutils", "dnf install -y {file}"),
+    # CentOS 7 is end of life: its mirrors are gone, the vault keeps the packages.
+    "yum": (
+        "sed -i -e 's/^mirrorlist/#mirrorlist/' -e 's|^#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|' "
+        "/etc/yum.repos.d/CentOS-*.repo && yum install -y -q procps-ng curl ca-certificates",
+        "yum install -y {file}",
+    ),
 }
 RELEASES = "https://cfengine.com/release-data/{edition}/releases.json"
 HTTP_TIMEOUT = 20
+# Where fetched release data is kept, so a slow or missing network falls back to the last copy
+# (set from the request's cacheDir, which main adds).
+CACHE_DIR: str | None = None
 
 
 class RunnerError(Exception):
@@ -138,12 +167,14 @@ def images() -> dict:
     }
 
 
-def pull(image: str) -> None:
-    """Pulls an image, streaming `progress` events (bytes over all layers) and `log` lines."""
+def pull(image: str, arch: str | None = None) -> None:
+    """Pulls an image (for `arch`, else the engine's own), streaming `progress` events (bytes over
+    all layers) and `log` lines."""
     repository, _, tag = image.partition(":")
     layers: dict[str, tuple[int, int]] = {}
     last = -1
-    for status in client().api.pull(repository, tag=tag or "latest", stream=True, decode=True):
+    platform = DOCKER_PLATFORM.get(arch) if arch else None
+    for status in client().api.pull(repository, tag=tag or "latest", stream=True, decode=True, platform=platform):
         if "error" in status:
             raise RunnerError(status["error"])
         detail = status.get("progressDetail") or {}
@@ -165,11 +196,18 @@ def pull(image: str) -> None:
 
 
 def _fetch_json(url: str):
+    cached = Path(CACHE_DIR, "release-data", hashlib.sha256(url.encode()).hexdigest() + ".json") if CACHE_DIR else None
     try:
         with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as response:
-            return json.load(response)
+            data = json.load(response)
     except (OSError, ValueError) as error:
+        if cached and cached.is_file():
+            return json.loads(cached.read_text())
         raise RunnerError(f"Couldn't read {url}: {error}") from error
+    if cached:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(data))
+    return data
 
 
 def _matches(classexpr: str, platform: str, arch: str) -> bool:
@@ -193,6 +231,9 @@ def find_package(releases: dict, detail_of, edition: str, version: str, platform
     for items in detail.get("artifacts", {}).values():
         for item in items:
             expr = item.get("classexpr", "")
+            # Unpublished: built, but not supported (e.g. Ubuntu 20.04 hubs, Debian 11).
+            if item.get("Published") is False:
+                continue
             if edition == "enterprise" and expr.startswith("am_policy_hub.") != hub:
                 continue
             if _matches(expr, platform, arch):
@@ -221,3 +262,399 @@ def package(query: dict) -> dict:
         query.get("arch", "x86_64"),
         bool(query.get("hub")),
     )
+
+
+# --- environments -----------------------------------------------------------
+#
+# An environment (the tab's, saved in .policy-builder/test-environments.json):
+#   {id, name, edition: "community"|"enterprise", version: "latest"|"3.27.1", hub: <host id>,
+#    env: {KEY: value}, hosts: [{id, name, platform, ports: [{host, container}], env: {KEY: value}}]}
+# Every container and the network carry labels (cfpb.env, cfpb.host), so state is found again
+# from Docker itself after the app restarts.
+
+LABEL_ENV, LABEL_HOST, LABEL_CONFIG = "cfpb.env", "cfpb.host", "cfpb.config"
+CFENGINE = "/var/cfengine/bin"
+MAX_RUNS = 3
+# promise_summary.log, one line per agent run (update.cf runs get their own). Community:
+# "... Promises observed to be kept 97.44%, Promises repaired 2.56%, Promises not repaired 0.00%";
+# Enterprise: "... Total promise compliance: 98% kept, 2% repaired, 1% not kept (out of 340 events) ...".
+COMPLIANCE = (
+    re.compile(r"kept ([\d.]+)%, Promises repaired ([\d.]+)%, Promises not repaired ([\d.]+)%"),
+    re.compile(r"Total promise compliance: ([\d.]+)% kept, ([\d.]+)% repaired, ([\d.]+)% not kept"),
+)
+
+
+def _short(env_id: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", env_id.lower())[:8] or "env"
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "host"
+
+
+def container_name(env: dict, host: dict) -> str:
+    return f"cfpb-{_short(env['id'])}-{_slug(host['name'])}"
+
+
+def network_name(env: dict) -> str:
+    return f"cfpb-{_short(env['id'])}"
+
+
+def host_env(env: dict, host: dict, dotenv: dict[str, str]) -> dict[str, str]:
+    """Environment variables for a host: its own beat the environment's, which beat .env."""
+    return {**dotenv, **(env.get("env") or {}), **(host.get("env") or {})}
+
+
+def read_dotenv(path: str | None) -> dict[str, str]:
+    """`KEY=value` lines (`#` comments, `export ` prefix and surrounding quotes allowed). A missing file is empty."""
+    if not path or not os.path.isfile(path):
+        return {}
+    values = {}
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.removeprefix("export ").split("=", 1)
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
+class _Lines:
+    """Turns streamed output chunks into whole lines, emitted as `log` events."""
+
+    def __init__(self, host: str | None, stream: str):
+        self.host, self.stream, self.partial = host, stream, ""
+
+    def feed(self, chunk: bytes | str | None) -> None:
+        if not chunk:
+            return
+        text = self.partial + (chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk)
+        *lines, self.partial = text.split("\n")
+        for line in lines:
+            emit("log", host=self.host, stream=self.stream, line=line.rstrip("\r"))
+
+    def close(self) -> None:
+        if self.partial:
+            emit("log", host=self.host, stream=self.stream, line=self.partial)
+            self.partial = ""
+
+
+def run_in(engine, container, command: str, host: str | None, stream: str, environment: dict | None = None) -> int:
+    """Runs a shell command in a container, streaming its output; returns its exit code."""
+    exec_id = engine.api.exec_create(container.id, ["bash", "-lc", command], environment=environment or None)["Id"]
+    lines = _Lines(host, stream)
+    for out, err in engine.api.exec_start(exec_id, stream=True, demux=True):
+        lines.feed(out)
+        lines.feed(err)
+    lines.close()
+    return engine.api.exec_inspect(exec_id)["ExitCode"]
+
+
+def _check(code: int, what: str) -> None:
+    if code != 0:
+        raise RunnerError(f"{what} failed (exit {code})")
+
+
+def _has_image(engine, image: str, arch: str) -> bool:
+    """Whether `image` is pulled for `arch` (a tag holds one architecture at a time)."""
+    try:
+        return engine.images.get(image).attrs.get("Architecture") == DOCKER_ARCH[arch]
+    except Exception:  # docker.errors.ImageNotFound
+        return False
+
+
+def ensure_image(engine, platform: str, edition: str, version: str, hub: bool, arch: str) -> str:
+    """A local image with CFEngine installed (built once per platform, edition, role, version and arch)."""
+    if platform not in PLATFORMS:
+        raise RunnerError(f"Unknown platform: {platform}")
+    role = "hub" if edition == "enterprise" and hub else "agent"
+    spec = PLATFORMS[platform]
+    found = package({"edition": edition, "version": version, "platform": platform, "arch": arch, "hub": hub})
+    repository, tag = f"cfpb-cache/{platform}", f"{edition}-{role}-{found['version']}-{DOCKER_ARCH[arch]}"
+    if _has_image(engine, f"{repository}:{tag}", arch):
+        return f"{repository}:{tag}"
+    label = f"{spec['label']} ({arch}) with CFEngine {edition} {found['version']} ({role})"
+    emit("step", step="image", message=f"Preparing {label}")
+    if not _has_image(engine, spec["image"], arch):
+        pull(spec["image"], arch)
+    builder = engine.containers.run(
+        spec["image"],
+        "sleep infinity",
+        detach=True,
+        init=True,
+        labels={"cfpb.build": "1"},
+        platform=DOCKER_PLATFORM[arch],
+    )
+    try:
+        prerequisites, install = INSTALL[spec["family"]]
+        _check(run_in(engine, builder, prerequisites, None, "setup"), "Installing prerequisites")
+        file = f"/tmp/{found['filename']}"
+        command = f"curl -fsSL -o {file} {found['url']} && {install.format(file=file)} && rm {file}"
+        _check(run_in(engine, builder, command, None, "setup"), "Installing CFEngine")
+        builder.commit(repository=repository, tag=tag)
+    finally:
+        builder.remove(force=True)
+    return f"{repository}:{tag}"
+
+
+def platforms(query: dict) -> dict:
+    """Every platform, and whether this edition + version has a client / hub package for `arch`."""
+    edition, version = query.get("edition", "community"), query.get("version", "latest")
+    arch = query.get("arch", "x86_64")
+    releases = _fetch_json(RELEASES.format(edition=edition))
+    cache: dict[str, dict] = {}
+
+    def detail_of(url: str) -> dict:
+        if url not in cache:
+            cache[url] = _fetch_json(url)
+        return cache[url]
+
+    def has(platform: str, hub: bool) -> bool:
+        try:
+            find_package(releases, detail_of, edition, version, platform, arch, hub)
+            return True
+        except RunnerError:
+            return False
+
+    listed = [
+        # In Community any host can serve policy; an Enterprise hub needs the hub package.
+        {"id": key, "label": spec["label"], "client": has(spec["package"], False), "hub": has(spec["package"], True)}
+        for key, spec in PLATFORMS.items()
+    ]
+    return {"platforms": listed}
+
+
+def _labelled(engine, env: dict) -> dict:
+    """The environment's containers by host id."""
+    found = engine.containers.list(all=True, filters={"label": f"{LABEL_ENV}={env['id']}"})
+    return {container.labels.get(LABEL_HOST): container for container in found}
+
+
+def _network(engine, env: dict):
+    name = network_name(env)
+    existing = engine.networks.list(names=[name])
+    return existing[0] if existing else engine.networks.create(name, labels={LABEL_ENV: env["id"]})
+
+
+def _config_hash(image: str, host: dict) -> str:
+    """What a container is created with that can't change afterwards: image, name and ports."""
+    ports = sorted((int(p["host"]), int(p["container"])) for p in host.get("ports") or [])
+    return hashlib.sha256(json.dumps([image, host["name"], ports]).encode()).hexdigest()[:16]
+
+
+def _ensure_container(engine, env: dict, host: dict, image: str, environment: dict):
+    existing = _labelled(engine, env).get(host["id"])
+    config = _config_hash(image, host)
+    if existing is not None and existing.labels.get(LABEL_CONFIG) != config:
+        emit("step", host=host["id"], step="recreate", message="Recreating (image, name or ports changed)")
+        existing.remove(force=True)
+        existing = None
+    if existing is not None:
+        if existing.status != "running":
+            existing.start()
+        return existing
+    emit("step", host=host["id"], step="create", message=f"Creating {container_name(env, host)}")
+    return engine.containers.run(
+        image,
+        "sleep infinity",
+        name=container_name(env, host),
+        hostname=_slug(host["name"]),
+        detach=True,
+        init=True,  # reaps zombies (an Enterprise hub leaves defunct httpd / php-fpm otherwise)
+        network=network_name(env),
+        platform=DOCKER_PLATFORM.get(env.get("arch") or "x86_64"),
+        ports={f"{int(p['container'])}/tcp": int(p["host"]) for p in host.get("ports") or []},
+        environment=environment,
+        labels={LABEL_ENV: env["id"], LABEL_HOST: host["id"], LABEL_CONFIG: config},
+    )
+
+
+def _ip(engine, container, env: dict) -> str:
+    container.reload()
+    return container.attrs["NetworkSettings"]["Networks"][network_name(env)]["IPAddress"]
+
+
+def _deploy(engine, hub, masterfiles: str) -> None:
+    """Replaces the hub's /var/cfengine/masterfiles with the built policy set."""
+    import io
+    import tarfile
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        archive.add(masterfiles, arcname="masterfiles")
+    _check(run_in(engine, hub, "rm -rf /var/cfengine/masterfiles", None, "setup"), "Clearing masterfiles")
+    if not hub.put_archive("/var/cfengine", buffer.getvalue()):
+        raise RunnerError("Couldn't copy the policy to the hub")
+
+
+def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
+    """Builds the project as a policy set (cfbs) in a scratch copy; returns its out/masterfiles.
+    One pristine `cfbs init` per masterfiles version is kept, so a rebuild needs no network."""
+    import cfbs.main
+    from cfbs.cfbs_config import CFBSConfig
+
+    import cfpb_backend
+
+    base = os.path.join(cache_dir, "masterfiles", masterfiles)
+    if not os.path.isfile(os.path.join(base, "cfbs.json")):
+        emit("step", step="build", message=f"Downloading masterfiles {masterfiles}")
+        shutil.rmtree(base, ignore_errors=True)
+        os.makedirs(base)
+        cfpb_backend._run_cfbs_init(base, masterfiles)
+    work = os.path.join(cache_dir, "build")
+    shutil.rmtree(work, ignore_errors=True)
+    shutil.copytree(base, work)
+    options = {"type": "policy-set", "name": "test", "description": "Test build", "git": False, "content": content}
+    cfpb_backend._update_cfbs_json(work, options)
+    emit("step", step="build", message="Building the policy set")
+    CFBSConfig.instance = None
+    with cfpb_backend._cfbs_session(work, ["build"]) as tee:
+        code = cfbs.main.main()
+    for line in "".join(tee.chunks).splitlines():
+        emit("log", host=None, stream="setup", line=line)
+    if code != 0:
+        raise RunnerError(f"cfbs build failed (exit {code})")
+    return os.path.join(work, "out", "masterfiles")
+
+
+def _bootstrapped(engine, container) -> bool:
+    return run_in(engine, container, "test -s /var/cfengine/policy_server.dat", None, "quiet") == 0
+
+
+def up(request: dict) -> None:
+    """Start: build the policy, make sure every host's container exists and runs CFEngine, deploy
+    the policy to the hub and bootstrap everyone to it."""
+    env, engine = request["environment"], client()
+    hosts = env.get("hosts") or []
+    hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
+    if hub_host is None:
+        raise RunnerError("The environment has no hosts")
+    # x86-64 by default, also on Apple Silicon (emulated there): the widest set of packages.
+    arch = env.get("arch") or "x86_64"
+    edition, version = env.get("edition", "community"), env.get("version", "latest")
+    masterfiles_dir = build_policy(request["content"], request["masterfiles"], request["cacheDir"])
+    dotenv = read_dotenv(request.get("envFile"))
+    _network(engine, env)
+    containers = {}
+    for host in sorted(hosts, key=lambda h: h is not hub_host):
+        emit("host", host=host["id"], state="provisioning")
+        image = ensure_image(engine, host["platform"], edition, version, host is hub_host, arch)
+        containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
+    hub = containers[hub_host["id"]]
+    _deploy(engine, hub, masterfiles_dir)
+    hub_ip = _ip(engine, hub, env)
+    for host in sorted(hosts, key=lambda h: h is not hub_host):
+        container = containers[host["id"]]
+        if not _bootstrapped(engine, container):
+            emit("step", host=host["id"], step="bootstrap", message=f"Bootstrapping to {hub_ip}")
+            environment = host_env(env, host, dotenv)
+            _check(
+                run_in(
+                    engine, container, f"{CFENGINE}/cf-agent --bootstrap {hub_ip}", host["id"], "setup", environment
+                ),
+                "Bootstrap",
+            )
+        emit("host", host=host["id"], state="ready", container=container.name)
+    if edition == "enterprise":
+        _setup_code(engine, hub, hub_host)
+    emit("done")
+
+
+def _setup_code(engine, hub, hub_host: dict) -> None:
+    """A fresh Mission Portal first-login code (it expires after an hour)."""
+    exec_id = engine.api.exec_create(hub.id, [f"{CFENGINE}/cf-hub", "--new-setup-code"])["Id"]
+    output = engine.api.exec_start(exec_id).decode("utf-8", "replace")
+    code = re.search(r"\b(\d{4,})\b", output)
+    port = next((int(p["host"]) for p in hub_host.get("ports") or [] if int(p["container"]) == 443), None)
+    emit(
+        "hub",
+        host=hub_host["id"],
+        setup_code=code.group(1) if code else None,
+        url=f"https://localhost:{port}/" if port else None,
+    )
+
+
+def _compliance(engine, container) -> dict | None:
+    command = "grep -v 'version update.cf' /var/cfengine/promise_summary.log | tail -n 1"
+    exec_id = engine.api.exec_create(container.id, ["bash", "-c", command])["Id"]
+    line = engine.api.exec_start(exec_id).decode("utf-8", "replace")
+    match = next((m for m in (pattern.search(line) for pattern in COMPLIANCE) if m), None)
+    if not match:
+        return None
+    kept, repaired, not_kept = (float(g) for g in match.groups())
+    return {"kept": kept, "repaired": repaired, "notKept": not_kept}
+
+
+def run(request: dict) -> None:
+    """Run policy: rebuild and redeploy the current edits, then run the agent on every host (hub
+    first) until a run repairs nothing, at most MAX_RUNS times."""
+    env, engine = request["environment"], client()
+    hosts = env.get("hosts") or []
+    hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
+    containers = _labelled(engine, env)
+    missing = [h["name"] for h in hosts if h["id"] not in containers or containers[h["id"]].status != "running"]
+    if hub_host is None or missing:
+        raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
+    masterfiles_dir = build_policy(request["content"], request["masterfiles"], request["cacheDir"])
+    _deploy(engine, containers[hub_host["id"]], masterfiles_dir)
+    dotenv = read_dotenv(request.get("envFile"))
+    only = set(request.get("hosts") or [h["id"] for h in hosts])
+    for host in sorted(hosts, key=lambda h: h is not hub_host):
+        if host["id"] not in only:
+            continue
+        container, environment = containers[host["id"]], host_env(env, host, dotenv)
+        emit("host", host=host["id"], state="running")
+        result = None
+        for number in range(1, MAX_RUNS + 1):
+            emit("step", host=host["id"], step="run", message=f"Run {number}")
+            run_in(engine, container, f"{CFENGINE}/cf-agent -KI -f update.cf", host["id"], "agent", environment)
+            code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment)
+            result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
+            emit("result", host=host["id"], **result)
+            if code != 0 or result.get("repaired", 0) == 0:
+                break
+        # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
+        # Enterprise hub repairs a little on every run).
+        converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0
+        failed = not result or result["exit"] != 0
+        emit("host", host=host["id"], state="failed" if failed else "done", converged=converged)
+    emit("done")
+
+
+def status(request: dict) -> dict:
+    """Each host's container, as Docker sees it (found by label)."""
+    env, engine = request["environment"], client()
+    containers = _labelled(engine, env)
+    hosts = {}
+    for host in env.get("hosts") or []:
+        container = containers.get(host["id"])
+        hosts[host["id"]] = (
+            {"state": container.status, "container": container.name} if container else {"state": "absent"}
+        )
+    return {"hosts": hosts}
+
+
+def stop(request: dict) -> None:
+    for container in _labelled(client(), request["environment"]).values():
+        emit("step", step="stop", message=f"Stopping {container.name}")
+        container.stop(timeout=5)
+    emit("done")
+
+
+def destroy(request: dict) -> None:
+    """Removes the environment's containers (or only `hosts`) and, when all go, its network."""
+    env, engine = request["environment"], client()
+    only = set(request.get("hosts") or [])
+    for host_id, container in _labelled(engine, env).items():
+        if only and host_id not in only:
+            continue
+        emit("step", host=host_id, step="destroy", message=f"Removing {container.name}")
+        container.remove(force=True)
+        emit("host", host=host_id, state="absent")
+    if not only:
+        for network in engine.networks.list(names=[network_name(env)]):
+            network.remove()
+    emit("done")

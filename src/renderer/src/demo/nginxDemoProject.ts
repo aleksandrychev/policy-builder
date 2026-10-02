@@ -12,6 +12,7 @@ import { fileAdded, fileSelected, projectFilesInitialized } from '../store/files
 import { groupCreated } from '../store/groupsSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
+import { environmentAdded, newEnvironment } from '../store/testEnvironmentsSlice';
 
 type DemoBlock = Omit<BlockInstance, 'fileId' | 'instanceId'>;
 
@@ -361,6 +362,10 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
       );
     }
   });
+  // One Ubuntu host serving the landing page on http://localhost:8080/. Fixed ids: every demo
+  // session finds the same container again (Docker labels carry them) instead of orphaning it.
+  const demoEnvironment = newEnvironment('Demo web server', { id: 'demo-web', name: 'web', ports: [{ host: 8080, container: 80 }] });
+  dispatch(environmentAdded({ ...demoEnvironment, id: 'demo-web-server', hub: 'demo-web' }));
   // Adding a file opens it; the demo opens on the web server.
   dispatch(fileSelected({ fileId: webserverFileId }));
   dispatch(historyCleared());

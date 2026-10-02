@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { Box, Button, IconButton, Tab, Tabs, Typography } from '@mui/material';
 
@@ -23,6 +25,8 @@ interface TopBarProps {
   projectName: string;
   // A project that isn't on disk yet (the demo) is saved with Save As.
   savedToDisk: boolean;
+  // Shown after a tab's name, by tab index (the test environments' spinner / check).
+  tabBadges?: Partial<Record<number, ReactNode>>;
   type: ProjectType;
 }
 
@@ -54,6 +58,7 @@ export function TopBar({
   onOpenSettings,
   onSave,
   savedToDisk,
+  tabBadges,
   type
 }: TopBarProps) {
   return (
@@ -99,8 +104,21 @@ export function TopBar({
         </Box>
 
         <Tabs value={activeTab} onChange={(_event, value: number) => onTabChange(value)} sx={{ minHeight: 'auto', height: '100%' }}>
-          {PROJECT_TABS.map(tab => (
-            <Tab key={tab} label={tab} sx={{ minHeight: 'auto', fontSize: 14, textTransform: 'none' }} />
+          {PROJECT_TABS.map((tab, index) => (
+            <Tab
+              key={tab}
+              label={
+                tabBadges?.[index] ? (
+                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                    {tab}
+                    {tabBadges[index]}
+                  </Box>
+                ) : (
+                  tab
+                )
+              }
+              sx={{ minHeight: 'auto', fontSize: 14, textTransform: 'none' }}
+            />
           ))}
         </Tabs>
       </Box>

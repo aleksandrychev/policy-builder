@@ -1,0 +1,194 @@
+import { useSyncExternalStore } from 'react';
+
+import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
+
+/**
+ * What the test environments are doing right now, per environment: the action
+ * running, its streamed log, host states, run results and the hub's Mission
+ * Portal details. Kept outside React (and Redux: none of it is project data),
+ * so it survives switching tabs; the sidecar's events arrive here once.
+ */
+
+type Api = NonNullable<Window['api']>;
+type Action = Parameters<Api['testEnvStart']>[0];
+type Request = Parameters<Api['testEnvStatus']>[0];
+type TestEnvEvent = Parameters<Parameters<Api['onTestEnvEvent']>[0]>[1];
+
+export interface LogLine {
+  host?: string | null;
+  // "step" lines are the runner's own progress; "setup" and "agent" are command output.
+  kind: 'agent' | 'error' | 'setup' | 'step';
+  text: string;
+}
+
+export interface RunResult {
+  exit: number;
+  host: string;
+  kept?: number;
+  notKept?: number;
+  repaired?: number;
+  run: number;
+}
+
+export interface HostRuntime {
+  container?: string;
+  converged?: boolean;
+  state: string;
+}
+
+export interface EnvironmentRuntime {
+  action: Action | null;
+  error: string | null;
+  hosts: Record<string, HostRuntime>;
+  hub: { setupCode: string | null; url: string | null } | null;
+  lines: LogLine[];
+  // How the last action ended, until the tab is looked at (the tab name's check / red dot).
+  outcome: 'error' | 'ok' | null;
+  results: RunResult[];
+  runId: string | null;
+}
+
+const MAX_LINES = 5000;
+const EMPTY: EnvironmentRuntime = { action: null, error: null, hosts: {}, hub: null, lines: [], outcome: null, results: [], runId: null };
+const runtimes = new Map<string, EnvironmentRuntime>();
+const environmentOfRun = new Map<string, string>();
+const listeners = new Set<() => void>();
+let subscribed = false;
+
+const runtimeOf = (environmentId: string) => runtimes.get(environmentId) ?? EMPTY;
+
+function update(environmentId: string, change: (runtime: EnvironmentRuntime) => Partial<EnvironmentRuntime>) {
+  const current = runtimeOf(environmentId);
+  runtimes.set(environmentId, { ...current, ...change(current) });
+  for (const listener of listeners) listener();
+}
+
+const appended = (runtime: EnvironmentRuntime, ...lines: LogLine[]) => ({ lines: [...runtime.lines, ...lines].slice(-MAX_LINES) });
+
+function handle(runId: string, event: TestEnvEvent) {
+  const environmentId = environmentOfRun.get(runId);
+  if (!environmentId) return;
+  update(environmentId, runtime => {
+    switch (event.t) {
+      case 'log':
+        return appended(runtime, { host: event.host, kind: event.stream === 'agent' ? 'agent' : 'setup', text: event.line });
+      case 'step':
+        return appended(runtime, { host: event.host, kind: 'step', text: event.message });
+      case 'host':
+        return {
+          hosts: {
+            ...runtime.hosts,
+            [event.host]: {
+              ...runtime.hosts[event.host],
+              state: event.state,
+              container: event.container ?? runtime.hosts[event.host]?.container,
+              converged: event.converged
+            }
+          }
+        };
+      case 'result':
+        return { results: [...runtime.results, event] };
+      case 'hub':
+        return { hub: { setupCode: event.setup_code, url: event.url } };
+      case 'error':
+        return { ...appended(runtime, { kind: 'error', text: event.message }), error: event.message };
+      case 'exit':
+        environmentOfRun.delete(runId);
+        return {
+          action: null,
+          runId: null,
+          outcome: event.ok ? 'ok' : 'error',
+          error: event.ok ? runtime.error : (runtime.error ?? event.message ?? 'Failed')
+        };
+      default:
+        return {};
+    }
+  });
+}
+
+function subscribe(listener: () => void) {
+  if (!subscribed && window.api) {
+    subscribed = true;
+    window.api.onTestEnvEvent(handle);
+  }
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function useEnvironmentRuntime(environmentId: string): EnvironmentRuntime {
+  return useSyncExternalStore(subscribe, () => runtimeOf(environmentId));
+}
+
+/** Starts Start / Run / Stop / Destroy for an environment; its events land in the runtime. */
+export async function startAction(environment: TestEnvironment, action: Action, request: Request): Promise<void> {
+  if (!window.api) return;
+  subscribe(() => {});
+  const label = { up: 'Start', run: 'Run policy', stop: 'Stop', destroy: 'Destroy', pull: 'Pull' }[action];
+  update(environment.id, runtime => ({
+    ...appended(runtime, { kind: 'step', text: `── ${label} ──` }),
+    action,
+    error: null,
+    outcome: null,
+    results: action === 'run' ? [] : runtime.results
+  }));
+  try {
+    const runId = await window.api.testEnvStart(action, request);
+    environmentOfRun.set(runId, environment.id);
+    update(environment.id, () => ({ runId }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    update(environment.id, runtime => ({ ...appended(runtime, { kind: 'error', text: message }), action: null, error: message }));
+  }
+}
+
+export function cancelAction(environmentId: string): void {
+  const { runId } = runtimeOf(environmentId);
+  if (runId) void window.api?.cancelTestEnvRun(runId);
+}
+
+/** Each host's container state, as Docker reports it (not while an action is running). */
+export async function refreshStatus(environment: TestEnvironment, request: Request): Promise<void> {
+  if (!window.api || runtimeOf(environment.id).action) return;
+  try {
+    const { hosts } = await window.api.testEnvStatus(request);
+    update(environment.id, runtime => ({
+      hosts: Object.fromEntries(
+        Object.entries(hosts).map(([id, docker]) => {
+          // A running container keeps its last run's outcome; otherwise Docker's word is final.
+          const known = runtime.hosts[id];
+          const keep = docker.state === 'running' && known && ['done', 'failed', 'ready'].includes(known.state);
+          // Docker's "running" is the container being up, not the agent running: Ready.
+          const state = docker.state === 'running' ? 'ready' : docker.state;
+          return [id, keep ? { ...known, container: docker.container } : { state, container: docker.container }];
+        })
+      )
+    }));
+  } catch {
+    // Docker not reachable: the status card says so.
+  }
+}
+
+// Across environments: whether an action is running, else how the last unseen one ended.
+let activity: { outcome: 'error' | 'ok' | null; running: boolean } = { outcome: null, running: false };
+function currentActivity() {
+  const all = [...runtimes.values()];
+  const running = all.some(runtime => runtime.action !== null);
+  const outcome = all.some(runtime => runtime.outcome === 'error') ? 'error' : all.some(runtime => runtime.outcome === 'ok') ? 'ok' : null;
+  if (running !== activity.running || outcome !== activity.outcome) activity = { outcome, running };
+  return activity;
+}
+
+export function useTestActivity() {
+  return useSyncExternalStore(subscribe, currentActivity);
+}
+
+/** The tab was looked at: its check / red dot goes. */
+export function markTestActivitySeen(): void {
+  if (![...runtimes.values()].some(runtime => runtime.outcome)) return;
+  for (const [id, runtime] of runtimes) runtimes.set(id, { ...runtime, outcome: null });
+  for (const listener of listeners) listener();
+}
+
+export function clearLog(environmentId: string): void {
+  update(environmentId, () => ({ lines: [] }));
+}

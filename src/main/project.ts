@@ -23,6 +23,7 @@ import { compilePolicy, initCfbsProject, masterfilesEntry } from './backend';
 
 // The builder's own data, next to cfbs.json (which stays plain cfbs).
 const BUILDER_FILE = '.policy-builder/project.json';
+const TEST_ENVIRONMENTS_FILE = '.policy-builder/test-environments.json';
 // Where projects saved before .policy-builder/ kept it: cfbs.json's meta["policy-builder"].
 const LEGACY_META_KEY = 'policy-builder';
 const VERSIONS_URL = 'https://raw.githubusercontent.com/cfengine/build-index/master/versions.json';
@@ -155,6 +156,9 @@ function checkedContent(value: unknown): ProjectContent {
     names.every(name => typeof name === 'string' && modules.has(name)) &&
     content.modules.every(module => isRecord(module) && Array.isArray(module.steps));
   if (!ok) throw new InvalidRequest('Invalid policy module');
+  if (content.testEnvironments !== undefined && !(Array.isArray(content.testEnvironments) && content.testEnvironments.every(isRecord))) {
+    throw new InvalidRequest('Invalid test environments');
+  }
   if (JSON.stringify(content).length > MAX_CONTENT_BYTES) throw new InvalidRequest('Project is too large');
   return content as ProjectContent;
 }
@@ -361,12 +365,29 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
   const saved = withGenerated(stamped(content), generated, storage.type);
   await fs.mkdir(dirname(join(projectPath, BUILDER_FILE)), { recursive: true });
   await writeFileAtomic(join(projectPath, BUILDER_FILE), `${JSON.stringify(saved.project, null, 2)}\n`);
+  await writeTestEnvironments(projectPath, content.testEnvironments);
   const merged = mergeCfbsJson(existing, saved, previous, storage.type, generated, masterfiles);
   await writeFileAtomic(cfbsPath, `${JSON.stringify(merged, null, 2)}\n`);
   const entry = (Array.isArray(merged.build) ? merged.build : []).find(item => isRecord(item) && item.name === 'masterfiles') as
     Record<string, unknown> | undefined;
   const version = entry ? (typeof entry.version === 'string' ? entry.version : 'master') : null;
   return { masterfiles: version };
+}
+
+// The project's test environments (the Test Results & Logs tab); no file when there are none.
+async function writeTestEnvironments(projectPath: string, environments: object[] | undefined): Promise<void> {
+  const path = join(projectPath, TEST_ENVIRONMENTS_FILE);
+  if (!environments?.length) return fs.rm(path, { force: true });
+  await fs.mkdir(dirname(path), { recursive: true });
+  await writeFileAtomic(path, `${JSON.stringify({ environments }, null, 2)}\n`);
+}
+
+async function readTestEnvironments(folder: string): Promise<unknown[] | null> {
+  const parsed: unknown = await fs
+    .readFile(join(folder, TEST_ENVIRONMENTS_FILE), 'utf-8')
+    .then(text => JSON.parse(text))
+    .catch(() => null);
+  return isRecord(parsed) && Array.isArray(parsed.environments) ? parsed.environments : null;
 }
 
 const failure = (error: unknown): OperationResult<never> => ({
@@ -471,9 +492,10 @@ async function openProject(event: IpcMainInvokeEvent, request: { path?: unknown 
   const path = await projectFolderOf(resolve(picked));
   const cfbs = await readCfbsJson(path);
   const builder = await readBuilderProject(path, cfbs);
+  const testEnvironments = await readTestEnvironments(path);
   knownProjects.add(path);
   await rememberRecent(path, typeof cfbs.name === 'string' && cfbs.name.trim() ? cfbs.name.trim() : basename(path));
-  return { ok: true as const, builder, cfbs, path };
+  return { ok: true as const, builder, cfbs, path, testEnvironments };
 }
 
 async function createProject(request: CreateProjectRequest) {
@@ -483,7 +505,9 @@ async function createProject(request: CreateProjectRequest) {
   const description = checkedString(request.description, 'description', 500);
   if (typeof request.git !== 'boolean') throw new InvalidRequest('Invalid git option');
   if (typeof request.masterfiles !== 'string' || !MASTERFILES.test(request.masterfiles)) throw new InvalidRequest('Invalid masterfiles version');
-  const content = stamped(checkedContent({ project: request.project, modules: request.modules, provided: request.provided }));
+  const content = stamped(
+    checkedContent({ project: request.project, modules: request.modules, provided: request.provided, testEnvironments: request.testEnvironments })
+  );
   const type = checkedStorage({ type: request.type, masterfiles: null }).type;
   const check = await checkTarget(parent, folderName);
   if (!check.parentWritable) throw new InvalidRequest(`Can't write to ${parent}`);
@@ -499,6 +523,7 @@ async function createProject(request: CreateProjectRequest) {
     name,
     type
   });
+  await writeTestEnvironments(result.path, content.testEnvironments);
   knownProjects.add(result.path);
   await writeSettings({ lastProjectParent: parent }).catch(error => console.error(`[project] settings not saved: ${error}`));
   await rememberRecent(result.path, name);
