@@ -1,9 +1,10 @@
 // Builds the "Provision and harden an nginx web server" demo project
 import { newDefinitionEntry } from '../blocks/definitionEntries';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
-import { estimateNodeHeight } from '../canvas/layout';
-import type { AppDispatch } from '../store';
-import { blockAdded } from '../store/canvasSlice';
+import { NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
+import { tidyPositions } from '../canvas/tidy';
+import type { AppDispatch, RootState } from '../store';
+import { blockAdded, blocksMoved } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { edgeAdded } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
@@ -255,5 +256,15 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   arrow(install, keepRunning, ['kept', 'repaired']);
   arrow(install, landingPage, ['kept', 'repaired']);
   arrow(renderTemplate, manageService, ['repaired']);
+  // Opens tidied, as Tidy up lays it out (with estimated sizes: nothing is rendered yet).
+  dispatch((innerDispatch: AppDispatch, getState: () => RootState) => {
+    const { canvas, edges } = getState();
+    const sizeOf = (instance: BlockInstance) => ({ width: NODE_WIDTH, height: estimateNodeHeight(instance, blockDescriptorsById.get(instance.blockId)) });
+    for (const fileId of [commonFileId, webserverFileId]) {
+      const instances = canvas.filter(block => block.fileId === fileId);
+      const fileEdges = edges.filter(edge => edge.fileId === fileId);
+      innerDispatch(blocksMoved({ positions: tidyPositions(instances, fileEdges, [], fileId, sizeOf, () => undefined) }));
+    }
+  });
   dispatch(historyCleared());
 }

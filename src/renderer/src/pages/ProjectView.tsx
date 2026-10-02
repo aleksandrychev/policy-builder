@@ -11,12 +11,12 @@ import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType, resolveBlockShape } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
-import { type ChainOwner, dataFootprint } from '../canvas/dataChains';
+import type { ChainOwner } from '../canvas/dataChains';
 import { executionOrder } from '../canvas/executionOrder';
 import { describeFileCondition } from '../canvas/fileCondition';
-import { GATE_EDGE_PREFIX, GATE_LIFT, GATE_SPACE, type Gate, deriveGates, gateKey } from '../canvas/gates';
-import { throughGroups } from '../canvas/groupEdges';
-import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition, tidyLayout } from '../canvas/layout';
+import { GATE_EDGE_PREFIX, type Gate, deriveGates, gateKey } from '../canvas/gates';
+import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition } from '../canvas/layout';
+import { tidyPositions } from '../canvas/tidy';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
 import { CANVAS_DROPPABLE_ID, type CanvasEdge, type CanvasNode, FlowCanvas, type NodeSizes, type ZoomControls } from '../components/FlowCanvas';
@@ -579,20 +579,8 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   };
 
   const handleTidy = () => {
-    const order = executionOrder(instances, edges, blockDescriptorsById);
-    const footprintOf = (instance: BlockInstance) => {
-      const chains = currentFileId ? dataFootprint(instance, currentFileId, nodeId => measured[nodeId]?.height, blockDescriptorsById) : { height: 0, left: 0 };
-      // With chains beside the block, its gate rises above them (see deriveGates).
-      const lifted = Boolean(instance.condition) && chains.left > 0;
-      return { above: lifted ? GATE_LIFT : 0, height: chains.height, left: Math.max(chains.left, instance.condition ? GATE_SPACE : 0) };
-    };
     asOneStep(() => {
-      const groupOf = (instance: BlockInstance) => (groups.some(group => group.id === instance.groupId) ? instance.groupId : undefined);
-      dispatch(
-        blocksMoved({
-          positions: tidyLayout(instances, throughGroups(edges, instances, blockDescriptorsById), order, sizeOf, footprintOf, blockDescriptorsById, groupOf)
-        })
-      );
+      dispatch(blocksMoved({ positions: tidyPositions(instances, edges, groups, currentFileId, sizeOf, nodeId => measured[nodeId]?.height) }));
       // Gates and data-chain nodes go back to their default spots beside their blocks.
       if (currentFileId) dispatch(derivedNodePositionsClearedForFile({ fileId: currentFileId }));
       // Frames go back to hugging their (re-laid-out) blocks.
