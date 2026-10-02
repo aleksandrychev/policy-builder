@@ -5,7 +5,7 @@ import type { ZoomControls } from '../components/FlowCanvas';
 // What each shortcut does. The command handlers return whether they acted,
 // so a key that did nothing keeps its native behaviour.
 export interface ShortcutHandlers {
-  // Bare zoom keys only apply while the canvas tab is showing.
+  // Zoom keys only apply while the canvas tab is showing.
   canvasActive: boolean;
   onCopy: () => boolean;
   onCut: () => boolean;
@@ -26,10 +26,16 @@ function isEditableTarget(target: Element | null): boolean {
   return (target as HTMLElement).isContentEditable;
 }
 
-// n8n-style bare zoom keys — Ctrl/Cmd +/-/0 already belong to the View menu's page zoom.
-function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null) {
+// n8n-style bare zoom keys, plus Ctrl/Cmd +/-/0 (the app has no page zoom: they zoom the canvas).
+function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null, withCommand = false) {
   if (!zoom) return;
-  const zoomActions: Record<string, () => void> = { '+': zoom.zoomIn, '=': zoom.zoomIn, '-': zoom.zoomOut, '0': zoom.reset, '1': zoom.fit };
+  const zoomActions: Record<string, () => void> = {
+    '+': zoom.zoomIn,
+    '=': zoom.zoomIn,
+    '-': zoom.zoomOut,
+    '0': zoom.reset,
+    ...(withCommand ? {} : { '1': zoom.fit })
+  };
   const zoomAction = zoomActions[event.key];
   if (!zoomAction) return;
   event.preventDefault();
@@ -72,7 +78,10 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       }
       // Never hijack typing, or native copy/paste of actual text (TextFields, CodeMirror…).
       if (isEditableTarget(document.activeElement)) return;
-      if (event.ctrlKey || event.metaKey) return handleCommandKey(event, current);
+      if (event.ctrlKey || event.metaKey) {
+        if (current.canvasActive && !event.altKey) handleZoomKey(event, current.zoomControlsRef.current, true);
+        return event.defaultPrevented ? undefined : handleCommandKey(event, current);
+      }
       if (event.altKey) return;
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (current.onDelete()) event.preventDefault();

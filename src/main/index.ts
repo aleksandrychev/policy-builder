@@ -110,7 +110,11 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
       ]
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    // The default View menu minus page zoom: Ctrl/Cmd +/-/0 zoom the canvas instead (renderer).
+    {
+      label: 'View',
+      submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }]
+    },
     ...(isMac ? [{ role: 'windowMenu' as const }] : [])
   ];
 
@@ -161,6 +165,9 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
   });
+
+  // Chromium remembers a page zoom per origin across launches; the app has none any more.
+  mainWindow.webContents.on('did-finish-load', () => mainWindow.webContents.setZoomFactor(1));
 
   // Open external links in the user's browser, never in-app.
   mainWindow.webContents.setWindowOpenHandler(details => {
