@@ -277,7 +277,6 @@ export function NewProjectDialog({
             {persistent && (
               <>
                 <LocationField parent={parent} folderName={folderName} check={check} disabled={submitting} onChange={setParent} />
-                <ProjectTypeField value={type} onChange={setType} disabled={submitting} />
                 <FormControl disabled={submitting} sx={{ display: type === 'module' ? 'none' : undefined }}>
                   <FormLabel id="masterfiles-label" sx={{ fontSize: 14 }}>
                     Which version of masterfiles would you like to use?
@@ -291,6 +290,7 @@ export function NewProjectDialog({
                     <FormControlLabel value="master" control={<Radio size="small" />} label="Master branch" />
                   </RadioGroup>
                 </FormControl>
+                <ProjectTypeField value={type} onChange={setType} disabled={submitting} />
                 <Box>
                   <FormControlLabel
                     control={<Checkbox size="small" checked={git} onChange={event => setGit(event.target.checked)} disabled={submitting} />}
