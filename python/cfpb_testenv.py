@@ -808,7 +808,12 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
     if hub_host is None or missing:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
-    _deploy(engine, containers[hub_host["id"]], masterfiles_dir)
+    hub = containers[hub_host["id"]]
+    _deploy(engine, hub, masterfiles_dir)
+    # Clients' update.cf needs masterfiles/cf_promises_validated, which the deploy removed and only the
+    # hub's own run writes again: tag it now, so running only some clients works too.
+    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", hub_host["id"], "setup")
+    _check(tagged, "Validating the policy on the hub")
     # Where each block's lines are, to trace errors back to blocks.
     from cfpb_compiler import compile_project
 
