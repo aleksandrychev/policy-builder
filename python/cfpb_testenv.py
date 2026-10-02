@@ -366,7 +366,9 @@ def _has_image(engine, image: str, arch: str) -> bool:
         return False
 
 
-def ensure_image(engine, platform: str, edition: str, version: str, hub: bool, arch: str) -> str:
+def ensure_image(
+    engine, platform: str, edition: str, version: str, hub: bool, arch: str, host_id: str | None = None
+) -> str:
     """A local image with CFEngine installed (built once per platform, edition, role, version and arch)."""
     if platform not in PLATFORMS:
         raise RunnerError(f"Unknown platform: {platform}")
@@ -377,7 +379,7 @@ def ensure_image(engine, platform: str, edition: str, version: str, hub: bool, a
     if _has_image(engine, f"{repository}:{tag}", arch):
         return f"{repository}:{tag}"
     label = f"{spec['label']} ({arch}) with CFEngine {edition} {found['version']} ({role})"
-    emit("step", step="image", message=f"Preparing {label}")
+    emit("step", host=host_id, step="image", message=f"Preparing {label}")
     if not _has_image(engine, spec["image"], arch):
         pull(spec["image"], arch)
     builder = engine.containers.run(
@@ -524,9 +526,9 @@ def _bootstrapped(engine, container) -> bool:
     return run_in(engine, container, "test -s /var/cfengine/policy_server.dat", None, "quiet") == 0
 
 
-def up(request: dict) -> None:
+def up(request: dict, finish: bool = True) -> str:
     """Start: build the policy, make sure every host's container exists and runs CFEngine, deploy
-    the policy to the hub and bootstrap everyone to it."""
+    the policy to the hub and bootstrap everyone to it. Returns the built masterfiles."""
     env, engine = request["environment"], client()
     hosts = env.get("hosts") or []
     hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
@@ -541,7 +543,7 @@ def up(request: dict) -> None:
     containers = {}
     for host in sorted(hosts, key=lambda h: h is not hub_host):
         emit("host", host=host["id"], state="provisioning")
-        image = ensure_image(engine, host["platform"], edition, version, host is hub_host, arch)
+        image = ensure_image(engine, host["platform"], edition, version, host is hub_host, arch, host["id"])
         containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
     hub = containers[hub_host["id"]]
     _deploy(engine, hub, masterfiles_dir)
@@ -557,10 +559,12 @@ def up(request: dict) -> None:
                 ),
                 "Bootstrap",
             )
-        emit("host", host=host["id"], state="ready", container=container.name)
+        emit("host", host=host["id"], state="ready", container=container.name, ip=_ip(engine, container, env))
     if edition == "enterprise":
         _setup_code(engine, hub, hub_host)
-    emit("done")
+    if finish:
+        emit("done")
+    return masterfiles_dir
 
 
 def _setup_code(engine, hub, hub_host: dict) -> None:
@@ -588,9 +592,9 @@ def _compliance(engine, container) -> dict | None:
     return {"kept": kept, "repaired": repaired, "notKept": not_kept}
 
 
-def run(request: dict) -> None:
-    """Run policy: rebuild and redeploy the current edits, then run the agent on every host (hub
-    first) until a run repairs nothing, at most MAX_RUNS times."""
+def run(request: dict, masterfiles_dir: str | None = None) -> None:
+    """Run policy: rebuild (unless just built) and redeploy the current edits, then run the agent on
+    every host (hub first) until a run repairs nothing, at most MAX_RUNS times."""
     env, engine = request["environment"], client()
     hosts = env.get("hosts") or []
     hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
@@ -598,7 +602,7 @@ def run(request: dict) -> None:
     missing = [h["name"] for h in hosts if h["id"] not in containers or containers[h["id"]].status != "running"]
     if hub_host is None or missing:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
-    masterfiles_dir = build_policy(request["content"], request["masterfiles"], request["cacheDir"])
+    masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
     _deploy(engine, containers[hub_host["id"]], masterfiles_dir)
     dotenv = read_dotenv(request.get("envFile"))
     only = set(request.get("hosts") or [h["id"] for h in hosts])
@@ -609,7 +613,7 @@ def run(request: dict) -> None:
         emit("host", host=host["id"], state="running")
         result = None
         for number in range(1, MAX_RUNS + 1):
-            emit("step", host=host["id"], step="run", message=f"Run {number}")
+            emit("step", host=host["id"], step="run", message=f"Run {number} of {MAX_RUNS}")
             run_in(engine, container, f"{CFENGINE}/cf-agent -KI -f update.cf", host["id"], "agent", environment)
             code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment)
             result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
@@ -624,6 +628,34 @@ def run(request: dict) -> None:
     emit("done")
 
 
+def test(request: dict) -> None:
+    """Run Test: Start what isn't up yet, then run the policy everywhere."""
+    run(request, up(request, finish=False))
+
+
+def execute(request: dict) -> None:
+    """The terminal: runs a shell command on the chosen hosts, one after another, streaming each
+    one's output; emits a `result`-free `exec` event with its exit code."""
+    env, engine = request["environment"], client()
+    command = request.get("command")
+    if not isinstance(command, str) or not command.strip():
+        raise RunnerError("No command to run")
+    containers = _labelled(engine, env)
+    dotenv = read_dotenv(request.get("envFile"))
+    only = set(request.get("hosts") or [])
+    for host in env.get("hosts") or []:
+        if only and host["id"] not in only:
+            continue
+        container = containers.get(host["id"])
+        if container is None or container.status != "running":
+            emit("log", host=host["id"], stream="exec", line=f"{host['name']} isn't running")
+            continue
+        emit("log", host=host["id"], stream="command", line=f"$ {command}")
+        code = run_in(engine, container, command, host["id"], "exec", host_env(env, host, dotenv))
+        emit("exec", host=host["id"], exit=code)
+    emit("done")
+
+
 def status(request: dict) -> dict:
     """Each host's container, as Docker sees it (found by label)."""
     env, engine = request["environment"], client()
@@ -631,9 +663,12 @@ def status(request: dict) -> dict:
     hosts = {}
     for host in env.get("hosts") or []:
         container = containers.get(host["id"])
-        hosts[host["id"]] = (
-            {"state": container.status, "container": container.name} if container else {"state": "absent"}
-        )
+        if container is None:
+            hosts[host["id"]] = {"state": "absent"}
+            continue
+        networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+        ip = (networks.get(network_name(env)) or {}).get("IPAddress") or None
+        hosts[host["id"]] = {"state": container.status, "container": container.name, "ip": ip}
     return {"hosts": hosts}
 
 

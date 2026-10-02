@@ -66,11 +66,13 @@ export interface TestEnvironment {
 
 // What Start / Run / Stop / Destroy get: the environment and the project to build and deploy.
 export interface TestEnvRequest {
+  // The terminal's command (exec).
+  command?: string;
   content?: ProjectContent;
   // The .env file's absolute path (absent for an unsaved project).
   envFile?: string | null;
   environment: TestEnvironment;
-  // Run / Destroy only these hosts (default: all).
+  // Run / Exec / Destroy only these hosts (default: all).
   hosts?: string[];
   masterfiles?: string;
 }
@@ -80,9 +82,10 @@ export type TestEnvEvent =
   | { current: number; t: 'progress'; total: number }
   | { host?: string | null; line: string; stream?: string; t: 'log' }
   | { host?: string; message: string; step: string; t: 'step' }
-  | { container?: string; converged?: boolean; host: string; state: string; t: 'host' }
+  | { container?: string; converged?: boolean; host: string; ip?: string; state: string; t: 'host' }
   | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
   | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
+  | { exit: number; host: string; t: 'exec' }
   | { t: 'done' }
   | { message: string; t: 'error' }
   | { message?: string; ok: boolean; t: 'exit' };
@@ -200,9 +203,9 @@ declare global {
         version: string;
       }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */
-      testEnvStart: (action: 'destroy' | 'pull' | 'run' | 'stop' | 'up', request: TestEnvRequest | { image: string }) => Promise<string>;
+      testEnvStart: (action: 'destroy' | 'exec' | 'pull' | 'run' | 'stop' | 'test' | 'up', request: TestEnvRequest | { image: string }) => Promise<string>;
       /** Each host's container as Docker sees it: running, exited, absent… */
-      testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; state: string }> }>;
+      testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }>;
     };
   }
 }

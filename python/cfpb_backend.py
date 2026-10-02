@@ -359,6 +359,8 @@ def testenv_command(action: str) -> int:
         streaming = {
             "up": cfpb_testenv.up,
             "run": cfpb_testenv.run,
+            "test": cfpb_testenv.test,
+            "exec": cfpb_testenv.execute,
             "stop": cfpb_testenv.stop,
             "destroy": cfpb_testenv.destroy,
         }
@@ -376,7 +378,7 @@ def testenv_command(action: str) -> int:
         message = str(error)
     except Exception as error:  # Docker SDK / network errors: one line for the UI
         message = f"{type(error).__name__}: {error}"
-    if action in ("pull", "up", "run", "stop", "destroy"):
+    if action in ("pull", "up", "run", "test", "exec", "stop", "destroy"):
         cfpb_testenv.emit("error", message=message)
     print(message, file=sys.stderr)
     return 1
@@ -397,7 +399,20 @@ def main(argv: list[str] | None = None) -> int:
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
     testenv.add_argument(
         "action",
-        choices=["doctor", "images", "package", "platforms", "pull", "status", "up", "run", "stop", "destroy"],
+        choices=[
+            "doctor",
+            "images",
+            "package",
+            "platforms",
+            "pull",
+            "status",
+            "up",
+            "run",
+            "test",
+            "exec",
+            "stop",
+            "destroy",
+        ],
     )
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
     if args.command == "testenv":

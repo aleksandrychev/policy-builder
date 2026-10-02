@@ -1,88 +1,207 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Box, Button, MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import { Box, IconButton, InputAdornment, Stack, TextField, Typography, alpha, useTheme } from '@mui/material';
 
 import type { LogLine } from '../../project/testRuns';
 import type { TestHost } from '../../store/testEnvironmentsSlice/types';
+import { HostTabs } from './HostTabs';
+import { hostColor } from './hostColors';
 
-/** The environment's streamed log: every host or one, setup and/or agent output. */
+type Tone = 'change' | 'error' | 'plain' | 'report' | 'step' | 'warning';
+
+// What a line is, for its colour and badge: agent reports (R:), errors, warnings, changes the agent made (info:).
+function toneOf(line: LogLine): Tone {
+  if (line.kind === 'error' || /\berror:/.test(line.text)) return 'error';
+  if (line.kind === 'step') return 'step';
+  if (/\bwarning:/.test(line.text)) return 'warning';
+  if (/^R: /.test(line.text)) return 'report';
+  if (line.kind === 'agent' && /^\s*info:/.test(line.text)) return 'change';
+  return 'plain';
+}
+
+const BADGES: Partial<Record<Tone, string>> = { error: 'ERROR', warning: 'WARNING', report: 'REPORT', change: 'CHANGED' };
+
+type Entry = { kind: 'line'; line: LogLine } | { host?: string | null; key: string; kind: 'setup'; lines: LogLine[] };
+
+// Consecutive setup output of one host folds into one row.
+function entriesOf(lines: LogLine[]): Entry[] {
+  const entries: Entry[] = [];
+  lines.forEach((line, index) => {
+    const last = entries.at(-1);
+    if (line.kind === 'setup' && toneOf(line) === 'plain') {
+      if (last?.kind === 'setup' && last.host === line.host) last.lines.push(line);
+      else entries.push({ kind: 'setup', host: line.host, key: `setup-${index}`, lines: [line] });
+    } else entries.push({ kind: 'line', line });
+  });
+  return entries;
+}
+
+const clock = (time: number) => new Date(time).toLocaleTimeString([], { hour12: false });
+
+/** The environment's log: per host or all, coloured by host and by what each line is. */
 export function LogPane({ hosts, lines, onClear }: { hosts: TestHost[]; lines: LogLine[]; onClear: () => void }) {
-  const [host, setHost] = useState('all');
-  const [kinds, setKinds] = useState<string[]>(['setup', 'agent']);
+  const theme = useTheme();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [filter, setFilter] = useState('');
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const end = useRef<HTMLDivElement | null>(null);
-  const nameOf = new Map(hosts.map(item => [item.id, item.name]));
-  const shown = lines.filter(
-    line => (host === 'all' || !line.host || line.host === host) && (line.kind === 'step' || line.kind === 'error' || kinds.includes(line.kind))
-  );
+  const indexOf = new Map(hosts.map((host, index) => [host.id, index]));
+  const nameOf = new Map(hosts.map(host => [host.id, host.name]));
+
+  const shown = useMemo(() => {
+    const query = filter.trim().toLowerCase();
+    return lines.filter(line => (selected.length === 0 || !line.host || selected.includes(line.host)) && (!query || line.text.toLowerCase().includes(query)));
+  }, [lines, selected, filter]);
+  const entries = useMemo(() => entriesOf(shown), [shown]);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' });
   }, [shown.length]);
 
-  const text = shown.map(line => `${line.host ? `[${nameOf.get(line.host) ?? line.host}] ` : ''}${line.text}`).join('\n');
+  const text = shown.map(line => `${clock(line.time)} ${line.host ? `[${nameOf.get(line.host) ?? line.host}] ` : ''}${line.text}`).join('\n');
+  const toneColor: Record<Tone, string> = {
+    error: theme.palette.error.main,
+    warning: theme.palette.warning.main,
+    report: theme.palette.success.main,
+    change: theme.palette.info.main,
+    step: theme.palette.primary.main,
+    plain: 'transparent'
+  };
+
+  const hostTag = (host?: string | null) => {
+    if (!host) return <Box sx={{ width: 64, flexShrink: 0 }} />;
+    const color = hostColor(theme, indexOf.get(host) ?? 0);
+    return (
+      <Box
+        component="span"
+        sx={{ flexShrink: 0, minWidth: 64, px: 0.75, borderRadius: 0.5, fontWeight: 600, color, bgcolor: alpha(color, 0.12), textAlign: 'center' }}
+      >
+        {nameOf.get(host) ?? host}
+      </Box>
+    );
+  };
 
   return (
     <Stack sx={{ minHeight: 0, flex: 1 }} spacing={1}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Log</Typography>
-        <TextField select size="small" value={host} onChange={event => setHost(event.target.value)} sx={{ width: 150 }}>
-          <MenuItem value="all">All hosts</MenuItem>
-          {hosts.map(item => (
-            <MenuItem key={item.id} value={item.id}>
-              {item.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <ToggleButtonGroup size="small" value={kinds} onChange={(_event, value: string[]) => setKinds(value)}>
-          <ToggleButton value="setup" sx={{ textTransform: 'none', py: 0.25 }}>
-            Setup
-          </ToggleButton>
-          <ToggleButton value="agent" sx={{ textTransform: 'none', py: 0.25 }}>
-            Agent
-          </ToggleButton>
-        </ToggleButtonGroup>
+        <HostTabs allLabel="All logs" hosts={hosts} selected={selected} onChange={next => setSelected(next)} />
         <Box sx={{ flex: 1 }} />
-        <Button size="small" disabled={!text} onClick={() => void navigator.clipboard.writeText(text)} sx={{ textTransform: 'none' }}>
-          Copy
-        </Button>
-        <Button size="small" disabled={lines.length === 0} onClick={onClear} sx={{ textTransform: 'none' }}>
-          Clear
-        </Button>
+        <TextField
+          size="small"
+          placeholder="Filter logs…"
+          value={filter}
+          onChange={event => setFilter(event.target.value)}
+          sx={{ width: 220 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 18 }} />
+                </InputAdornment>
+              )
+            }
+          }}
+        />
+        <IconButton size="small" title="Copy the log" disabled={!text} onClick={() => void navigator.clipboard.writeText(text)}>
+          <ContentCopyIcon sx={{ fontSize: 18 }} />
+        </IconButton>
+        <IconButton size="small" title="Clear the log" disabled={lines.length === 0} onClick={onClear}>
+          <DeleteSweepOutlinedIcon sx={{ fontSize: 18 }} />
+        </IconButton>
       </Stack>
       <Box
         sx={{
           flex: 1,
-          minHeight: 200,
+          minHeight: 160,
           overflow: 'auto',
-          bgcolor: 'background.code',
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 1,
-          p: 1,
+          py: 0.5,
           fontFamily: 'monospace',
-          fontSize: 12,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word'
+          fontSize: 12
         }}
       >
-        {shown.length === 0 && <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Nothing yet: Start the environment, then Run policy.</Typography>}
-        {shown.map((line, index) => (
-          <Box
-            key={index}
-            sx={{
-              color:
-                line.kind === 'error' ? 'error.main' : line.kind === 'step' ? 'primary.light' : line.text.startsWith('R: ') ? 'success.main' : 'text.primary',
-              fontWeight: line.kind === 'step' ? 600 : 400
-            }}
-          >
-            {line.host && (
-              <Box component="span" sx={{ color: 'text.muted' }}>
-                [{nameOf.get(line.host) ?? line.host}]{' '}
+        {entries.length === 0 && (
+          <Typography sx={{ fontSize: 12, color: 'text.muted', p: 1 }}>Nothing yet: Run test to start the hosts and run the policy.</Typography>
+        )}
+        {entries.map(entry => {
+          if (entry.kind === 'setup') {
+            const expanded = open.has(entry.key);
+            return (
+              <Box key={entry.key}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  onClick={() => setOpen(current => new Set(expanded ? [...current].filter(key => key !== entry.key) : [...current, entry.key]))}
+                  sx={{ alignItems: 'center', cursor: 'pointer', mx: 0.75, my: 0.25, px: 0.75, py: 0.25, borderRadius: 0.5, bgcolor: 'action.hover' }}
+                >
+                  <ChevronRightIcon sx={{ fontSize: 16, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  <Box component="span" sx={{ color: 'text.muted', width: 64 }}>
+                    {clock(entry.lines[0].time)}
+                  </Box>
+                  {hostTag(entry.host)}
+                  <Box component="span" sx={{ color: 'text.secondary' }}>
+                    Container setup — {entry.lines.length} {entry.lines.length === 1 ? 'line' : 'lines'}
+                  </Box>
+                </Stack>
+                {expanded &&
+                  entry.lines.map((line, index) => (
+                    <Box key={index} sx={{ pl: 6, pr: 1, color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {line.text}
+                    </Box>
+                  ))}
               </Box>
-            )}
-            {line.text}
-          </Box>
-        ))}
+            );
+          }
+          const { line } = entry;
+          const tone = toneOf(line);
+          const color = toneColor[tone];
+          const badge = BADGES[tone];
+          return (
+            <Stack
+              key={`${line.time}-${line.text}-${line.host}`}
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'baseline',
+                px: 1,
+                py: 0.25,
+                borderLeft: '3px solid',
+                borderLeftColor: tone === 'plain' || tone === 'step' ? 'transparent' : color,
+                bgcolor: tone === 'plain' || tone === 'step' ? 'transparent' : alpha(color, 0.08)
+              }}
+            >
+              <Box component="span" sx={{ color: 'text.muted', width: 64, flexShrink: 0 }}>
+                {clock(line.time)}
+              </Box>
+              {hostTag(line.host)}
+              {badge && (
+                <Box
+                  component="span"
+                  sx={{ flexShrink: 0, px: 0.5, borderRadius: 0.5, fontSize: 10, fontWeight: 700, color: theme.palette.getContrastText(color), bgcolor: color }}
+                >
+                  {badge}
+                </Box>
+              )}
+              <Box
+                component="span"
+                sx={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  fontWeight: tone === 'step' || line.kind === 'command' ? 700 : 400,
+                  color: tone === 'step' ? 'primary.main' : tone === 'plain' ? 'text.primary' : color
+                }}
+              >
+                {tone === 'report' ? line.text.slice(3) : line.text}
+              </Box>
+            </Stack>
+          );
+        })}
         <div ref={end} />
       </Box>
     </Stack>

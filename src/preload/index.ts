@@ -82,14 +82,15 @@ const api = {
   onTestEnvEvent,
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
   testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
-  testEnvStart: (action: 'destroy' | 'pull' | 'run' | 'stop' | 'up', request: TestEnvRequest | { image: string }): Promise<string> =>
+  testEnvStart: (action: 'destroy' | 'exec' | 'pull' | 'run' | 'stop' | 'test' | 'up', request: TestEnvRequest | { image: string }): Promise<string> =>
     invoke('testenv:start', action, request),
   testEnvPlatforms: (query: {
     arch: string;
     edition: string;
     version: string;
   }): Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
-  testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; state: string }> }> => invoke('testenv:status', request),
+  testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }> =>
+    invoke('testenv:status', request),
   cancelTestEnvRun: (runId: string): Promise<void> => invoke('testenv:cancel', runId),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */

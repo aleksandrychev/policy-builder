@@ -11,7 +11,7 @@ import { type SidecarStream, startSidecarStream, testEnvQuery } from './backend'
 
 const BASE_IMAGES = new Set(['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']);
 // The streaming actions: pulling a base image, and an environment's Start / Run / Stop / Destroy.
-const STREAMING = new Set(['pull', 'up', 'run', 'stop', 'destroy']);
+const STREAMING = new Set(['pull', 'up', 'run', 'test', 'exec', 'stop', 'destroy']);
 const runs = new Map<string, SidecarStream>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

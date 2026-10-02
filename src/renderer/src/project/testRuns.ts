@@ -16,10 +16,15 @@ type TestEnvEvent = Parameters<Parameters<Api['onTestEnvEvent']>[0]>[1];
 
 export interface LogLine {
   host?: string | null;
-  // "step" lines are the runner's own progress; "setup" and "agent" are command output.
-  kind: 'agent' | 'error' | 'setup' | 'step';
+  // "step" lines are the runner's own progress; "setup", "agent" and "exec" (the terminal) are
+  // command output; "command" is a terminal command as typed.
+  kind: 'agent' | 'command' | 'error' | 'exec' | 'setup' | 'step';
   text: string;
+  // When it arrived (ms).
+  time: number;
 }
+
+const KIND_OF_STREAM: Record<string, LogLine['kind']> = { agent: 'agent', exec: 'exec', command: 'command' };
 
 export interface RunResult {
   exit: number;
@@ -33,8 +38,13 @@ export interface RunResult {
 export interface HostRuntime {
   container?: string;
   converged?: boolean;
+  ip?: string | null;
   state: string;
+  // What it's doing right now ("Bootstrapping to …", "Run 2 of 3"), while busy.
+  step?: string;
 }
+
+const BUSY_STATES = new Set(['provisioning', 'running']);
 
 export interface EnvironmentRuntime {
   action: Action | null;
@@ -63,7 +73,9 @@ function update(environmentId: string, change: (runtime: EnvironmentRuntime) => 
   for (const listener of listeners) listener();
 }
 
-const appended = (runtime: EnvironmentRuntime, ...lines: LogLine[]) => ({ lines: [...runtime.lines, ...lines].slice(-MAX_LINES) });
+const appended = (runtime: EnvironmentRuntime, ...lines: Omit<LogLine, 'time'>[]) => ({
+  lines: [...runtime.lines, ...lines.map(line => ({ ...line, time: Date.now() }))].slice(-MAX_LINES)
+});
 
 function handle(runId: string, event: TestEnvEvent) {
   const environmentId = environmentOfRun.get(runId);
@@ -71,25 +83,34 @@ function handle(runId: string, event: TestEnvEvent) {
   update(environmentId, runtime => {
     switch (event.t) {
       case 'log':
-        return appended(runtime, { host: event.host, kind: event.stream === 'agent' ? 'agent' : 'setup', text: event.line });
-      case 'step':
-        return appended(runtime, { host: event.host, kind: 'step', text: event.message });
-      case 'host':
+        return appended(runtime, { host: event.host, kind: KIND_OF_STREAM[event.stream ?? ''] ?? 'setup', text: event.line });
+      case 'step': {
+        const host = event.host ? runtime.hosts[event.host] : undefined;
+        const hosts = event.host ? { ...runtime.hosts, [event.host]: { state: 'provisioning', ...host, step: event.message } } : runtime.hosts;
+        return { ...appended(runtime, { host: event.host, kind: 'step', text: event.message }), hosts };
+      }
+      case 'host': {
+        const known = runtime.hosts[event.host];
         return {
           hosts: {
             ...runtime.hosts,
             [event.host]: {
-              ...runtime.hosts[event.host],
+              ...known,
               state: event.state,
-              container: event.container ?? runtime.hosts[event.host]?.container,
-              converged: event.converged
+              container: event.container ?? known?.container,
+              ip: event.ip ?? known?.ip,
+              converged: event.converged,
+              step: BUSY_STATES.has(event.state) ? known?.step : undefined
             }
           }
         };
+      }
       case 'result':
         return { results: [...runtime.results, event] };
       case 'hub':
         return { hub: { setupCode: event.setup_code, url: event.url } };
+      case 'exec':
+        return event.exit === 0 ? {} : appended(runtime, { host: event.host, kind: 'error', text: `exit ${event.exit}` });
       case 'error':
         return { ...appended(runtime, { kind: 'error', text: event.message }), error: event.message };
       case 'exit':
@@ -123,13 +144,13 @@ export function useEnvironmentRuntime(environmentId: string): EnvironmentRuntime
 export async function startAction(environment: TestEnvironment, action: Action, request: Request): Promise<void> {
   if (!window.api) return;
   subscribe(() => {});
-  const label = { up: 'Start', run: 'Run policy', stop: 'Stop', destroy: 'Destroy', pull: 'Pull' }[action];
+  const label = { up: 'Start', run: 'Run policy', test: 'Run test', exec: 'Command', stop: 'Stop', destroy: 'Destroy', pull: 'Pull' }[action];
   update(environment.id, runtime => ({
-    ...appended(runtime, { kind: 'step', text: `── ${label} ──` }),
+    ...(action === 'exec' ? {} : appended(runtime, { kind: 'step', text: `── ${label} ──` })),
     action,
     error: null,
     outcome: null,
-    results: action === 'run' ? [] : runtime.results
+    results: action === 'run' || action === 'test' ? [] : runtime.results
   }));
   try {
     const runId = await window.api.testEnvStart(action, request);
@@ -159,7 +180,7 @@ export async function refreshStatus(environment: TestEnvironment, request: Reque
           const keep = docker.state === 'running' && known && ['done', 'failed', 'ready'].includes(known.state);
           // Docker's "running" is the container being up, not the agent running: Ready.
           const state = docker.state === 'running' ? 'ready' : docker.state;
-          return [id, keep ? { ...known, container: docker.container } : { state, container: docker.container }];
+          return [id, keep ? { ...known, container: docker.container, ip: docker.ip } : { state, container: docker.container, ip: docker.ip }];
         })
       )
     }));

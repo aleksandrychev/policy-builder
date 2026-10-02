@@ -1,0 +1,89 @@
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField } from '@mui/material';
+
+import type { TestEnvironment } from '../../store/testEnvironmentsSlice/types';
+import { EnvVarsField } from './EnvVarsField';
+
+export interface EnvironmentSettingsDialogProps {
+  busy: boolean;
+  canDestroy: boolean;
+  // The Docker engine's own architecture, when known (another one is emulated).
+  engineArch?: string;
+  environment: TestEnvironment;
+  onChange: (changes: Partial<Pick<TestEnvironment, 'arch' | 'edition' | 'envFile' | 'name' | 'version'>>) => void;
+  onClose: () => void;
+  onDestroy: () => void;
+  onEnvChange: (env: Record<string, string>) => void;
+  // A .env file needs a project folder.
+  saved: boolean;
+}
+
+/** What every host shares: CFEngine edition, version and architecture, and environment variables. */
+export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps) {
+  const { environment, busy, onChange } = props;
+  const emulated = Boolean(props.engineArch) && props.engineArch !== environment.arch;
+  return (
+    <Dialog open onClose={props.onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Test environment</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <TextField label="Name" size="small" value={environment.name} onChange={event => onChange({ name: event.target.value })} />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              select
+              label="Edition"
+              size="small"
+              value={environment.edition}
+              disabled={busy}
+              onChange={event => onChange({ edition: event.target.value as TestEnvironment['edition'] })}
+              helperText={environment.edition === 'enterprise' ? 'The hub runs Mission Portal (publish port 443)' : ' '}
+              sx={{ flex: 1.3 }}
+            >
+              <MenuItem value="community">Community</MenuItem>
+              <MenuItem value="enterprise">Enterprise</MenuItem>
+            </TextField>
+            <TextField
+              select
+              label="Architecture"
+              size="small"
+              value={environment.arch}
+              disabled={busy}
+              onChange={event => onChange({ arch: event.target.value as TestEnvironment['arch'] })}
+              helperText={emulated ? 'Emulated by Docker (slower)' : 'Native'}
+              sx={{ flex: 1 }}
+            >
+              <MenuItem value="x86_64">x86-64</MenuItem>
+              <MenuItem value="aarch64">arm64</MenuItem>
+            </TextField>
+            <TextField
+              label="CFEngine version"
+              size="small"
+              value={environment.version}
+              disabled={busy}
+              onChange={event => onChange({ version: event.target.value.trim() || 'latest' })}
+              helperText="latest, or e.g. 3.27.1"
+              sx={{ flex: 1 }}
+            />
+          </Stack>
+          <EnvVarsField label="Environment variables (all hosts)" env={environment.env} onChange={props.onEnvChange} />
+          <TextField
+            label=".env file"
+            size="small"
+            value={environment.envFile ?? ''}
+            placeholder="./.env"
+            disabled={!props.saved}
+            helperText={props.saved ? 'In the project folder; read at every run, never saved' : 'Save the project to use one'}
+            onChange={event => onChange({ envFile: event.target.value.trim() || null })}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ justifyContent: 'space-between' }}>
+        <Button color="error" disabled={busy || !props.canDestroy} onClick={props.onDestroy} title="Remove every container of this environment">
+          Destroy containers
+        </Button>
+        <Button variant="contained" onClick={props.onClose}>
+          Done
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
