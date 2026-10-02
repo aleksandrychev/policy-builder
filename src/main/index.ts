@@ -5,7 +5,7 @@ import { basename, join } from 'path';
 import { pathToFileURL } from 'url';
 
 import type { RecentProject } from '../preload/api';
-import { compilePolicy, formatPolicy } from './backend';
+import { compilePolicy, formatPolicy, warmUpSidecar } from './backend';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 
 const APP_TITLE = 'CFEngine Policy Builder';
@@ -164,6 +164,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show();
+    warmUpSidecar();
   });
 
   // Chromium remembers a page zoom per origin across launches; the app has none any more.

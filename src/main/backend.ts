@@ -167,6 +167,18 @@ export async function compilePolicy(project: unknown): Promise<CompiledPolicy> {
 }
 
 /**
+ * Runs the sidecar once with an empty project, in the background. The first run of a new
+ * build is slow (macOS checks the bundle's binaries, ~10 s): this takes it at launch,
+ * not on the first save or Generated Policy view.
+ */
+export function warmUpSidecar(): void {
+  const started = Date.now();
+  compilePolicy({ files: [] })
+    .then(() => console.log(`[backend] warm-up done in ${Date.now() - started} ms`))
+    .catch((error: unknown) => console.warn('[backend] warm-up failed:', error instanceof Error ? error.message : error));
+}
+
+/**
  * The masterfiles build entry cfbs writes for `version` ("3.27.1" or "master"), for turning a
  * module into a policy set. Needs the network, like New Project.
  */
