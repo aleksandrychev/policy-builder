@@ -548,7 +548,13 @@ export function PolicyFileExplorer({
       </Box>
 
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1 }}>
-        <SimpleTreeView expandedItems={expandedItems} onExpandedItemsChange={(_event, itemIds) => setExpandedItems(itemIds)} selectedItems={currentFileId}>
+        <SimpleTreeView
+          expandedItems={expandedItems}
+          onExpandedItemsChange={(_event, itemIds) => setExpandedItems(itemIds)}
+          selectedItems={currentFileId}
+          // The rows carry their own 6px; the tree item's padding would double it.
+          sx={{ '& .MuiTreeItem-content': { py: 0 } }}
+        >
           {renderChildren(null, tree)}
         </SimpleTreeView>
       </Box>
