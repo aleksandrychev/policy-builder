@@ -1,11 +1,10 @@
 // Builds the "Provision and harden an nginx web server" demo project
 import { newDefinitionEntry } from '../blocks/definitionEntries';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
-import { NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
-import { tidyPositions } from '../canvas/tidy';
-import type { AppDispatch, RootState } from '../store';
-import { blockAdded, blocksMoved } from '../store/canvasSlice';
+import type { AppDispatch } from '../store';
+import { blockAdded } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
+import { derivedNodeMoved } from '../store/derivedNodesSlice';
 import { edgeAdded } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
 import { fileAdded, fileSelected, projectFilesInitialized } from '../store/filesSlice';
@@ -267,19 +266,34 @@ function buildSecurityBlocks() {
   return { sshdPresent, hardenSsh, restartSsh, accountFiles, passwordHashes, watchAccounts, reportAccounts, banner };
 }
 
-const STACK_GAP = 60; // generous: labels can wrap past the height estimate
+type Position = { x: number; y: number };
 
-// Top-left corners for a top-to-bottom column, spaced by each card's
-// estimated height (the canvas hasn't measured anything yet).
-function stackPositions(blocks: DemoBlock[], x = 0): { x: number; y: number }[] {
-  let y = 0;
-  return blocks.map(block => {
-    const position = { x, y };
-    const height = estimateNodeHeight({ ...block, fileId: '', instanceId: '' }, blockDescriptorsById.get(block.blockId));
-    y += Math.ceil((height + STACK_GAP) / 20) * 20;
-    return position;
-  });
-}
+// The demo's layout, by block label (labels are unique within each file).
+const POSITIONS: Record<string, Position> = {
+  'Nginx settings': { x: -440, y: 0 },
+  'Web server role': { x: -440, y: 280 },
+  'Install web server package': { x: 840, y: -40 },
+  'Remove conflicting Apache': { x: 40, y: 620 },
+  'Render nginx config': { x: 1000, y: 320 },
+  'Restart nginx on config change': { x: 1000, y: 580 },
+  'Keep nginx running': { x: 420, y: 220 },
+  'Create web root': { x: 500, y: 680 },
+  'Publish the demo landing page': { x: 560, y: 440 },
+  'Remove default nginx site': { x: 580, y: 920 },
+  'Lock down nginx config files': { x: 580, y: 1060 },
+  'Prune old nginx logs': { x: 580, y: 1260 },
+  'Create deploy user': { x: 580, y: 1420 },
+  'Report provisioning done': { x: 580, y: 1580 },
+  'SSH server present': { x: 720, y: 320 },
+  'Harden SSH': { x: 420, y: 60 },
+  'Restart SSH on config change': { x: 240, y: 320 },
+  'Lock down account files': { x: 240, y: 660 },
+  'Protect password hashes': { x: 240, y: 940 },
+  'Watch account files': { x: 240, y: 1200 },
+  'Report account changes': { x: 240, y: 1420 },
+  'Login banner': { x: 240, y: 1700 }
+};
+const positionOf = (block: DemoBlock) => POSITIONS[block.label] ?? { x: 0, y: 0 };
 
 export function createNginxDemoProject(dispatch: AppDispatch): void {
   dispatch(projectCreated({ name: 'Nginx Web Server Demo' }));
@@ -287,8 +301,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   const commonFile = dispatch(projectFilesInitialized('Common'));
   const commonFileId = commonFile.payload.id;
   const commonBlocks = buildCommonBlocks();
-  const commonPositions = stackPositions(commonBlocks);
-  commonBlocks.forEach((block, index) => dispatch(blockAdded({ ...block, fileId: commonFileId, position: commonPositions[index] })));
+  commonBlocks.forEach(block => dispatch(blockAdded({ ...block, fileId: commonFileId, position: positionOf(block) })));
 
   // Webserver: one column in execution order. The restart sits right under
   // the config it depends on, gated by a "repaired" arrow from it. Whatever
@@ -303,8 +316,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   const landingPage = buildLandingPageBlock();
   const webRoot = buildWebRootBlock();
   const column = [install, ...beforeTemplate, renderTemplate, manageService, keepRunning, webRoot, landingPage, ...buildWebserverBlocksAfterTemplate()];
-  const positions = stackPositions(column);
-  const ids = column.map((block, index) => dispatch(blockAdded({ ...block, fileId: webserverFileId, position: positions[index] })).payload.instanceId);
+  const ids = column.map(block => dispatch(blockAdded({ ...block, fileId: webserverFileId, position: positionOf(block) })).payload.instanceId);
   const idOf = (block: DemoBlock) => ids[column.indexOf(block)];
   const arrow = (source: DemoBlock, target: DemoBlock, outcomes: BlockOutcome[]) =>
     dispatch(edgeAdded({ fileId: webserverFileId, source: idOf(source), target: idOf(target), outcomes }));
@@ -326,10 +338,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
     security.reportAccounts,
     security.banner
   ];
-  const securityPositions = stackPositions(securityColumn);
-  const securityIds = securityColumn.map(
-    (block, index) => dispatch(blockAdded({ ...block, fileId: securityFileId, position: securityPositions[index] })).payload.instanceId
-  );
+  const securityIds = securityColumn.map(block => dispatch(blockAdded({ ...block, fileId: securityFileId, position: positionOf(block) })).payload.instanceId);
   const securityArrow = (source: DemoBlock, target: DemoBlock, outcomes: BlockOutcome[]) =>
     dispatch(
       edgeAdded({ fileId: securityFileId, source: securityIds[securityColumn.indexOf(source)], target: securityIds[securityColumn.indexOf(target)], outcomes })
@@ -341,27 +350,8 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
     dispatch(groupCreated({ fileId: securityFileId, name, color, instanceIds: blocks.map(block => securityIds[securityColumn.indexOf(block)]) }));
   securityGroup('SSH hardening', 'info', [security.sshdPresent, security.hardenSsh, security.restartSsh]);
   securityGroup('Account protection', 'warning', [security.accountFiles, security.passwordHashes, security.watchAccounts, security.reportAccounts]);
-  // Opens tidied, as Tidy up lays it out (with estimated sizes: nothing is rendered yet).
-  dispatch((innerDispatch: AppDispatch, getState: () => RootState) => {
-    const { canvas, edges, groups } = getState();
-    const sizeOf = (instance: BlockInstance) => ({ width: NODE_WIDTH, height: estimateNodeHeight(instance, blockDescriptorsById.get(instance.blockId)) });
-    for (const fileId of [commonFileId, webserverFileId, securityFileId]) {
-      const instances = canvas.filter(block => block.fileId === fileId);
-      const fileEdges = edges.filter(edge => edge.fileId === fileId);
-      innerDispatch(
-        blocksMoved({
-          positions: tidyPositions(
-            instances,
-            fileEdges,
-            groups.filter(group => group.fileId === fileId),
-            fileId,
-            sizeOf,
-            () => undefined
-          )
-        })
-      );
-    }
-  });
+  // The "webserver_role" condition pill, off to the side of the blocks it gates.
+  dispatch(derivedNodeMoved({ key: `${webserverFileId}|if|webserver_role`, position: { x: 60, y: -20 } }));
   // One Ubuntu host serving the landing page on http://localhost:8080/. Fixed ids: every demo
   // session finds the same container again (Docker labels carry them) instead of orphaning it.
   const demoEnvironment = newEnvironment('Demo web server', { id: 'demo-web', name: 'web', ports: [{ host: 8080, container: 80 }] });
