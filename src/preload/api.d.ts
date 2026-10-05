@@ -346,7 +346,7 @@ declare global {
       testEnvSearch: (query: { hub: boolean; term: string }) => Promise<ImageSearch>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */
       testEnvStart: (
-        action: 'destroy' | 'exec' | 'inspect' | 'pull' | 'run' | 'start' | 'stop' | 'test' | 'up',
+        action: 'destroy' | 'exec' | 'inspect' | 'pull' | 'reset' | 'run' | 'start' | 'stop' | 'test' | 'up',
         request: TestEnvRequest | { arch?: string; image: string }
       ) => Promise<string>;
       /** Each host's container as Docker sees it: running, exited, absent… */

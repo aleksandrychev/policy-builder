@@ -872,6 +872,36 @@ def test(request: dict) -> None:
     run(request, up(request, finish=False))
 
 
+def reset(request: dict) -> None:
+    """Recreate: removes `hosts`' containers, then sets them up fresh and runs the policy on them.
+    A new hub has new keys, so the other clients forget the old one and bootstrap again."""
+    env, engine = request["environment"], client()
+    only = set(request.get("hosts") or [])
+    if not only:
+        raise RunnerError("Recreate needs the hosts to recreate")
+    containers = _labelled(engine, env)
+    for host_id in only:
+        if host_id in containers:
+            emit("step", host=host_id, step="destroy", message=f"Removing {containers[host_id].name}")
+            containers[host_id].remove(force=True)
+            emit("host", host=host_id, state="absent")
+    hosts = env.get("hosts") or []
+    hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
+    if hub_host and hub_host["id"] in only:
+        for host in hosts:
+            container = containers.get(host["id"])
+            if host is hub_host or host["id"] in only or container is None:
+                continue
+            # A stopped client would come back trusting the old hub: start it and re-bootstrap it too.
+            if container.status != "running":
+                container.start()
+            emit("step", host=host["id"], step="bootstrap", message="Forgetting the old hub")
+            forget = "rm -f /var/cfengine/policy_server.dat /var/cfengine/ppkeys/root-*.pub"
+            run_in(engine, container, forget, host["id"], "setup")
+            only.add(host["id"])
+    test({**request, "hosts": sorted(only)})
+
+
 def execute(request: dict) -> None:
     """The terminal: runs a shell command on the chosen hosts, one after another, streaming each
     one's output; emits a `result`-free `exec` event with its exit code."""

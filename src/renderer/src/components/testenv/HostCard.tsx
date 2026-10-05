@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -53,6 +54,8 @@ export interface HostCardProps {
   isHub: boolean;
   lastResult?: RunResult;
   onOpenSettings: () => void;
+  // Remove its container, set it up fresh (nothing from earlier runs) and run the policy on it.
+  onRecreate: () => void;
   // Run the policy on this host only.
   onRunPolicy: () => void;
   // A host with no container yet: create it, install CFEngine, bootstrap it, then run the policy on it.
@@ -67,7 +70,7 @@ export interface HostCardProps {
   runtime?: HostRuntime;
 }
 
-type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | 'onSetUp' | 'onStart' | 'onStop' | 'onTerminal'> & {
+type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRecreate' | 'onRunPolicy' | 'onSetUp' | 'onStart' | 'onStop' | 'onTerminal'> & {
   absent: boolean;
   busy: boolean;
   disabled: boolean;
@@ -76,7 +79,7 @@ type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | '
 };
 
 // Deploy & run, start / stop, terminal, settings: close together, each explained on hover.
-function HostActions({ absent, busy, disabled, onOpenSettings, onRunPolicy, onSetUp, onStart, onStop, onTerminal, stopped, up }: HostActionsProps) {
+function HostActions({ absent, busy, disabled, onOpenSettings, onRecreate, onRunPolicy, onSetUp, onStart, onStop, onTerminal, stopped, up }: HostActionsProps) {
   return (
     <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
       {absent ? (
@@ -97,6 +100,13 @@ function HostActions({ absent, busy, disabled, onOpenSettings, onRunPolicy, onSe
           <StopOutlinedIcon sx={{ fontSize: 18 }} />
         </Action>
       )}
+      <Action
+        title="Recreate: a fresh container from the cached image (nothing left from earlier runs), bootstrapped, then the policy run on it"
+        disabled={disabled || absent}
+        onClick={onRecreate}
+      >
+        <RestartAltIcon sx={{ fontSize: 18 }} />
+      </Action>
       <Action
         title={up ? 'Run a command on this host (terminal below)' : 'Run a command on this host (start it first)'}
         disabled={!up || busy}
@@ -216,6 +226,7 @@ export function HostCard(props: HostCardProps) {
           absent={!exists && !busy}
           onRunPolicy={props.onRunPolicy}
           onSetUp={props.onSetUp}
+          onRecreate={props.onRecreate}
           onStart={props.onStart}
           onStop={props.onStop}
           onTerminal={onTerminal}

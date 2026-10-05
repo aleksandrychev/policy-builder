@@ -385,6 +385,7 @@ def testenv_command(action: str) -> int:
             "stop": cfpb_testenv.stop,
             "start": cfpb_testenv.start,
             "destroy": cfpb_testenv.destroy,
+            "reset": cfpb_testenv.reset,
         }
         if action == "inspect":
             cfpb_testenv.inspect(query)
@@ -408,7 +409,7 @@ def testenv_command(action: str) -> int:
         message = str(error)
     except Exception as error:  # Docker SDK / network errors: one line for the UI
         message = f"{type(error).__name__}: {error}"
-    if action in ("pull", "inspect", "up", "run", "test", "exec", "start", "stop", "destroy"):
+    if action in ("pull", "inspect", "up", "run", "test", "exec", "start", "stop", "destroy", "reset"):
         cfpb_testenv.emit("error", message=message)
     print(message, file=sys.stderr)
     return 1
@@ -446,6 +447,7 @@ def main(argv: list[str] | None = None) -> int:
             "start",
             "stop",
             "destroy",
+            "reset",
         ],
     )
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)

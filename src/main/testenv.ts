@@ -11,7 +11,7 @@ import { type SidecarStream, startSidecarStream, testEnvQuery } from './backend'
 
 const BASE_IMAGES = new Set(['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']);
 // The streaming actions: pulling a base image, checking a custom one, and an environment's Start / Run / Stop / Destroy.
-const STREAMING = new Set(['pull', 'inspect', 'up', 'run', 'test', 'exec', 'start', 'stop', 'destroy']);
+const STREAMING = new Set(['pull', 'inspect', 'up', 'run', 'test', 'exec', 'start', 'stop', 'destroy', 'reset']);
 // [registry[:port]/]name[:tag][@digest], as the sidecar checks it.
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$/;
 const runs = new Map<string, SidecarStream>();
