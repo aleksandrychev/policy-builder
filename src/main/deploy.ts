@@ -190,13 +190,26 @@ function run(command: string, args: string[], timeout: number, input?: string, o
 
 /** Copies a built policy set to a hub over SSH and makes it the hub's masterfiles. */
 async function deployOverSsh(tarball: string, host: string, port: number | null, key: string | null, onStage: (stage: string) => void): Promise<string> {
-  // A chosen key is the only one tried (not every key the agent holds).
-  const options = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', ...(key ? ['-i', key, '-o', 'IdentitiesOnly=yes'] : [])];
+  // A chosen key is the only one tried (not every key the agent holds). A new host's key is
+  // trusted on first use (no prompt in BatchMode); a changed one still fails.
+  const options = [
+    '-o',
+    'BatchMode=yes',
+    '-o',
+    'ConnectTimeout=15',
+    '-o',
+    'StrictHostKeyChecking=accept-new',
+    ...(key ? ['-i', key, '-o', 'IdentitiesOnly=yes'] : [])
+  ];
   const remote = `/tmp/cfpb-masterfiles-${Date.now()}.tgz`;
   onStage('copy');
   const copy = await run('scp', [...options, ...(port ? ['-P', String(port)] : []), tarball, `${host}:${remote}`], SSH_TIMEOUT_MS);
   if (copy.code !== 0) {
-    const locked = key && /passphrase|Permission denied \(publickey/.test(copy.stderr) ? ' (a key with a passphrase must be in your ssh agent: ssh-add)' : '';
+    const locked = /REMOTE HOST IDENTIFICATION HAS CHANGED/.test(copy.stderr)
+      ? ' (the host key changed since you last connected: if that is expected, ssh-keygen -R the host)'
+      : key && /passphrase|Permission denied \(publickey/.test(copy.stderr)
+        ? ' (a key with a passphrase must be in your ssh agent: ssh-add)'
+        : '';
     throw commandError(`Copying to the hub failed${locked}`, copy);
   }
   const asRoot = `if [ "$(id -u)" = 0 ]; then sh -s -- ${remote}; else sudo -n sh -s -- ${remote}; fi`;
