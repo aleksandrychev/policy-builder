@@ -233,6 +233,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
                   onOpenSettings={() => setEditingHost(host.id)}
                   actionsDisabled={busy || !docker?.available}
                   onRunPolicy={() => void act('run', request([host.id]))}
+                  onSetUp={() => void act('test', request([host.id]))}
                   onStart={() => void act('start', request([host.id]))}
                   onStop={() => void act('stop', request([host.id]))}
                   problems={(runtime.problems[host.id] ?? []).length}

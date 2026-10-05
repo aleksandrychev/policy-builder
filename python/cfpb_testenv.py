@@ -665,12 +665,15 @@ def _bootstrapped(engine, container) -> bool:
 
 def up(request: dict, finish: bool = True) -> str:
     """Start: build the policy, make sure every host's container exists and runs CFEngine, deploy
-    the policy to the hub and bootstrap everyone to it. Returns the built masterfiles."""
+    the policy to the hub and bootstrap everyone to it. Returns the built masterfiles. With
+    `hosts`, only those (and the hub they bootstrap to) are set up."""
     env, engine = request["environment"], client()
-    hosts = env.get("hosts") or []
-    hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
+    every = env.get("hosts") or []
+    hub_host = next((h for h in every if h["id"] == env.get("hub")), every[0] if every else None)
     if hub_host is None:
         raise RunnerError("The environment has no hosts")
+    only = set(request.get("hosts") or [h["id"] for h in every])
+    hosts = [h for h in every if h["id"] in only or h is hub_host]
     # x86-64 by default, also on Apple Silicon (emulated there): the widest set of packages.
     arch = env.get("arch") or "x86_64"
     edition, version = env.get("edition", "community"), env.get("version", "latest")

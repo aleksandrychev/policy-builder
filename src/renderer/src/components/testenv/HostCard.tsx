@@ -13,7 +13,7 @@ import { PLATFORMS, type TestHost } from '../../store/testEnvironmentsSlice/type
 
 type Tone = 'error' | 'info' | 'muted' | 'success' | 'warning';
 const STATES: Record<string, { label: string; tone: Tone }> = {
-  absent: { tone: 'muted', label: 'Not created' },
+  absent: { tone: 'muted', label: 'Not set up' },
   created: { tone: 'muted', label: 'Created' },
   exited: { tone: 'muted', label: 'Stopped' },
   provisioning: { tone: 'info', label: 'Setting up' },
@@ -55,6 +55,8 @@ export interface HostCardProps {
   onOpenSettings: () => void;
   // Run the policy on this host only.
   onRunPolicy: () => void;
+  // A host with no container yet: create it, install CFEngine, bootstrap it, then run the policy on it.
+  onSetUp: () => void;
   // Start / stop its container (it keeps what's installed).
   onStart: () => void;
   onStop: () => void;
@@ -65,7 +67,8 @@ export interface HostCardProps {
   runtime?: HostRuntime;
 }
 
-type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | 'onStart' | 'onStop' | 'onTerminal'> & {
+type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | 'onSetUp' | 'onStart' | 'onStop' | 'onTerminal'> & {
+  absent: boolean;
   busy: boolean;
   disabled: boolean;
   stopped: boolean;
@@ -73,12 +76,18 @@ type HostActionsProps = Pick<HostCardProps, 'onOpenSettings' | 'onRunPolicy' | '
 };
 
 // Deploy & run, start / stop, terminal, settings: close together, each explained on hover.
-function HostActions({ busy, disabled, onOpenSettings, onRunPolicy, onStart, onStop, onTerminal, stopped, up }: HostActionsProps) {
+function HostActions({ absent, busy, disabled, onOpenSettings, onRunPolicy, onSetUp, onStart, onStop, onTerminal, stopped, up }: HostActionsProps) {
   return (
     <Stack direction="row" sx={{ alignItems: 'center', flexShrink: 0 }}>
-      <Action title={up ? 'Deploy & run on this host' : 'Deploy & run on this host (start it first)'} disabled={disabled || !up} onClick={onRunPolicy}>
-        <PlayArrowIcon sx={{ fontSize: 18 }} />
-      </Action>
+      {absent ? (
+        <Action title="Set up this host (create it, install CFEngine, bootstrap to the hub), then run the policy on it" disabled={disabled} onClick={onSetUp}>
+          <PlayArrowIcon sx={{ fontSize: 18 }} />
+        </Action>
+      ) : (
+        <Action title={up ? 'Deploy & run on this host' : 'Deploy & run on this host (start it first)'} disabled={disabled || !up} onClick={onRunPolicy}>
+          <PlayArrowIcon sx={{ fontSize: 18 }} />
+        </Action>
+      )}
       {stopped ? (
         <Action title="Start the container" disabled={disabled} onClick={onStart}>
           <PowerSettingsNewIcon sx={{ fontSize: 18 }} />
@@ -159,7 +168,7 @@ export function HostCard(props: HostCardProps) {
           <Typography
             sx={{ fontSize: 12, color: busy ? 'info.main' : 'text.muted', mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
-            {busy && runtime?.step ? runtime.step : [platform, runtime?.ip].filter(Boolean).join(' · ')}
+            {busy && runtime?.step ? runtime.step : [platform, runtime?.ip, !exists && 'not set up yet: ▶ sets it up'].filter(Boolean).join(' · ')}
           </Typography>
         </Box>
       </Stack>
@@ -204,7 +213,9 @@ export function HostCard(props: HostCardProps) {
           busy={busy}
           stopped={stopped}
           up={up}
+          absent={!exists && !busy}
           onRunPolicy={props.onRunPolicy}
+          onSetUp={props.onSetUp}
           onStart={props.onStart}
           onStop={props.onStop}
           onTerminal={onTerminal}
