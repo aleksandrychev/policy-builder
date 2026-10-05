@@ -155,15 +155,23 @@ function DeployActivityBadge({ path }: { path: string | null }) {
 // The tabs besides the canvas.
 function OtherTab({
   tab,
+  dirty,
+  onOpenTests,
   onReload,
   onSave,
   onShowBlock,
   ...policy
-}: { onReload: () => Promise<void>; onSave: () => Promise<boolean>; onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<
-  typeof GeneratedPolicyView
->[0]) {
+}: {
+  dirty: boolean;
+  onOpenTests: () => void;
+  onReload: () => Promise<void>;
+  onSave: () => Promise<boolean>;
+  onShowBlock: (fileId: string, id: string) => void;
+  tab: number;
+} & Parameters<typeof GeneratedPolicyView>[0]) {
   if (tab === 1) return <GeneratedPolicyView {...policy} />;
-  if (tab === 3) return <DeploymentView compiled={policy.compiled} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
+  if (tab === 3)
+    return <DeploymentView compiled={policy.compiled} dirty={dirty} onOpenTests={onOpenTests} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
   return <TestResultsView onShowBlock={onShowBlock} />;
 }
 
@@ -1081,6 +1089,8 @@ export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }:
               tab={activeTab}
               onSave={onSave}
               onReload={onReload}
+              dirty={dirty}
+              onOpenTests={() => setActiveTab(2)}
               compiled={compiled}
               currentFileId={currentFileId}
               selectedId={selectedGroupId ?? selectedInstanceId}

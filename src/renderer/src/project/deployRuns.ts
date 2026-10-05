@@ -50,6 +50,8 @@ export interface DeployRun {
   action: 'build' | 'hub' | 'ssh' | null;
   build: BuildResult | null;
   buildFailure: Failure | null;
+  // The project content (its saved JSON) the last build checked: pre-flight reruns when it changed.
+  builtFrom: string | null;
   hub: HubDeploy;
   // How the last run ended, until the tab is looked at.
   outcome: 'error' | 'ok' | null;
@@ -58,7 +60,16 @@ export interface DeployRun {
   stage: string | null;
 }
 
-const EMPTY: DeployRun = { action: null, build: null, buildFailure: null, hub: { phase: 'idle' }, outcome: null, ssh: { phase: 'idle' }, stage: null };
+const EMPTY: DeployRun = {
+  action: null,
+  build: null,
+  buildFailure: null,
+  builtFrom: null,
+  hub: { phase: 'idle' },
+  outcome: null,
+  ssh: { phase: 'idle' },
+  stage: null
+};
 // One per project folder.
 const runs = new Map<string, DeployRun>();
 const listeners = new Set<() => void>();
@@ -100,12 +111,15 @@ async function saved(save: () => Promise<boolean>, path: string, action: DeployR
   return null;
 }
 
-export async function startBuild(path: string, save: () => Promise<boolean>): Promise<void> {
+/** Whether a build's checks passed (an invalid policy can't be shipped). */
+export const isValid = (run: DeployRun) => Boolean(run.build && !run.buildFailure && run.build.lint.ok && run.build.promises.ok !== false);
+
+export async function startBuild(path: string, save: () => Promise<boolean>, content: string | null = null): Promise<void> {
   if (!window.api || runOf(path).action || !(await saved(save, path, 'build'))) return;
   try {
     const result = await window.api.buildPolicySet(path);
     const valid = result.ok && result.build.lint.ok && result.build.promises.ok !== false;
-    update(path, result.ok ? { build: result.build, buildFailure: null } : { build: null, buildFailure: result });
+    update(path, result.ok ? { build: result.build, buildFailure: null, builtFrom: content } : { build: null, buildFailure: result, builtFrom: content });
     update(path, { outcome: valid ? 'ok' : 'error' });
   } finally {
     update(path, { action: null, stage: null });
@@ -115,7 +129,8 @@ export async function startBuild(path: string, save: () => Promise<boolean>): Pr
 export async function startSshDeploy(
   path: string,
   save: () => Promise<boolean>,
-  target: { host: string; key: string | null; port: number | null }
+  target: { host: string; key: string | null; port: number | null },
+  content: string | null = null
 ): Promise<void> {
   if (!window.api || runOf(path).action || !(await saved(save, path, 'ssh'))) return;
   update(path, { ssh: { phase: 'deploying' } });
@@ -128,12 +143,29 @@ export async function startSshDeploy(
     update(path, {
       build: result.build,
       buildFailure: null,
+      builtFrom: content,
       ssh: result.deployed ? { phase: 'deployed', log: result.log, at: Date.now(), host: target.host } : { phase: 'invalid' },
       outcome: result.deployed ? 'ok' : 'error'
     });
   } finally {
     update(path, { action: null, stage: null });
   }
+}
+
+export const readRun = (path: string | null) => runOf(path);
+
+// Where Deploy over SSH goes, per project (host, port, key path — never the key itself).
+export type SshTarget = { host: string; key: string | null; port: number | null };
+export function sshTargetOf(path: string | null): SshTarget | null {
+  const [host = '', port = '', key = ''] = (localStorage.getItem(`cfpb.deploy.ssh:${path}`) ?? '').split('|');
+  return host ? { host, port: port ? Number(port) : null, key: key || null } : null;
+}
+export const saveSshTarget = (path: string, target: SshTarget) =>
+  localStorage.setItem(`cfpb.deploy.ssh:${path}`, `${target.host}|${target.port ?? ''}|${target.key ?? ''}`);
+
+export function forgetSshTarget(path: string) {
+  localStorage.removeItem(`cfpb.deploy.ssh:${path}`);
+  resetSsh(path);
 }
 
 export const resetSsh = (path: string) => runOf(path).ssh.phase !== 'deploying' && update(path, { ssh: { phase: 'idle' } });

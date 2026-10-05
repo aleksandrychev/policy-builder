@@ -92,7 +92,18 @@ async function status(path: string): Promise<GitStatus> {
   const top = await git(path, ['rev-parse', '--show-toplevel']);
   const real = await fs.realpath(path);
   const repo = top.code === 0 && normalize(top.stdout.trim()) === real;
-  const empty: GitStatus = { repo, branch: null, remote: null, upstream: null, ahead: 0, behind: 0, changedFiles: 0, lastCommit: null, headBuilder: null };
+  const empty: GitStatus = {
+    repo,
+    branch: null,
+    remote: null,
+    upstream: null,
+    ahead: 0,
+    behind: 0,
+    changedFiles: 0,
+    changedPaths: [],
+    lastCommit: null,
+    headBuilder: null
+  };
   if (!repo) return empty;
   // What the remote has that we don't (best effort: offline, the last fetch's view).
   if ((await git(path, ['remote', 'get-url', 'origin'])).code === 0) await git(path, ['fetch', '--quiet', 'origin'], FETCH_TIMEOUT_MS).catch(() => null);
@@ -127,6 +138,11 @@ async function status(path: string): Promise<GitStatus> {
     ahead: ahead || 0,
     behind: behind || 0,
     changedFiles: changed.stdout.split('\n').filter(Boolean).length,
+    changedPaths: changed.stdout
+      .split('\n')
+      .filter(Boolean)
+      .map(line => line.slice(3))
+      .slice(0, 50),
     lastCommit: hash ? { hash, subject, date } : null,
     headBuilder
   };

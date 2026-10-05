@@ -195,8 +195,9 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   branch: string | null;
-  // Uncommitted files (cfbs's out/ is ignored).
+  // Uncommitted files (cfbs's out/ is ignored), and their paths (the first 50).
   changedFiles: number;
+  changedPaths: string[];
   // .policy-builder/project.json at HEAD, parsed: what "changes since the last commit" compares with.
   headBuilder: unknown;
   lastCommit: { date: string; hash: string; subject: string } | null;
