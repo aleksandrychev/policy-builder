@@ -136,6 +136,39 @@ export interface CreateProjectRequest extends ProjectContent {
 }
 
 // Errors come back as data: Electron drops custom Error properties like `details`.
+// One finding of Deployment's checks, at a project file's line when it's in one ("./security.cf").
+export interface BuildProblem {
+  file: string | null;
+  line: number;
+  message: string;
+}
+
+// Deployment's Build: the policy set cfbs built, and what the linter and cf-promises found.
+export interface BuildResult {
+  lint: { ok: boolean; problems: BuildProblem[] };
+  log: string[];
+  masterfiles: string;
+  // cf-promises ran locally, in a test-host image, or not at all (ok null, with why).
+  promises: { how: 'docker' | 'local' | 'skipped'; message?: string; ok: boolean | null; problems: BuildProblem[] };
+  tarball: string | null;
+}
+
+// The project folder's git state, for Deployment's Commit & push.
+export interface GitStatus {
+  ahead: number;
+  behind: number;
+  branch: string | null;
+  // Uncommitted files (cfbs's out/ is ignored).
+  changedFiles: number;
+  // .policy-builder/project.json at HEAD, parsed: what "changes since the last commit" compares with.
+  headBuilder: unknown;
+  lastCommit: { date: string; hash: string; subject: string } | null;
+  remote: string | null;
+  // The folder is its own git repository (not inside another one).
+  repo: boolean;
+  upstream: string | null;
+}
+
 export type OperationResult<T> = ({ ok: true } & T) | { details: string; message: string; ok: false };
 
 export interface MasterfilesVersions {
@@ -169,6 +202,8 @@ declare global {
     // Optional on purpose: the bridge only exists inside Electron. Renderer
     // code runs without it under vitest/jsdom (and any future browser mode),
     api?: {
+      /** Deployment's Build: `cfbs build` in the saved project, then the linter and cf-promises. */
+      buildPolicySet: (path: string) => Promise<OperationResult<{ build: BuildResult }>>;
       /** Stops a streaming test-environment run (its last event is an `exit`). */
       cancelTestEnvRun: (runId: string) => Promise<void>;
       /** Checks whether a project folder can be created at parent/folderName. */
@@ -179,6 +214,11 @@ declare global {
       confirmWindowClose: () => Promise<void>;
       /** Runs `cfbs init` into parent/folderName, then writes the builder's content into its cfbs.json. */
       createProject: (request: CreateProjectRequest) => Promise<OperationResult<{ masterfiles: string | null; path: string }>>;
+      /** Builds and checks the saved project, then copies it to a hub over SSH (the user's ssh, no prompts) as its masterfiles. */
+      deployOverSsh: (
+        path: string,
+        target: { host: string; key: string | null; port: number | null }
+      ) => Promise<OperationResult<{ build: BuildResult; deployed: boolean; log: string }>>;
       /** Removes a project from the recent-projects list. */
       forgetRecentProject: (path: string) => Promise<void>;
       /** Formats CFEngine policy, rejecting with a message if it cannot. */
@@ -193,8 +233,19 @@ declare global {
       getPathForFile: (file: File) => string;
       /** The last few opened/created projects, most recent first. */
       getRecentProjects: () => Promise<RecentProject[]>;
+      /** Commits everything in the project folder (adding out/ to .gitignore). */
+      gitCommit: (path: string, message: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      /** Makes the project folder a git repository, with a first commit. */
+      gitInit: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      /** Pushes the current branch to origin, with the user's own git credentials; never prompts. */
+      gitPush: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      /** Sets (or adds) the origin remote. */
+      gitSetRemote: (path: string, url: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      gitStatus: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
+      /** Each step of a running Build or SSH deploy as it starts (build, lint, promises, copy, validate, install, update, policy). */
+      onDeployProgress: (callback: (stage: string) => void) => () => void;
       /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
       onMenuAction: (callback: (action: MenuAction, path?: string) => void) => () => void;
       /** Subscribes to the events of streaming test-environment runs; call the returned function to unsubscribe. */
@@ -203,6 +254,10 @@ declare global {
       openProject: (request?: { path?: string }) => Promise<OperationResult<OpenedProject> | null>;
       /** Opens a native folder picker, or null if cancelled. */
       pickDirectory: (defaultPath?: string) => Promise<string | null>;
+      /** A file picker in ~/.ssh for the hub's private key (the path only), or null if cancelled. */
+      pickSshKey: () => Promise<string | null>;
+      /** Shows a file inside the project in the OS file manager. */
+      revealInProject: (path: string, file: string) => Promise<void>;
       /** Shows the project's cfbs.json in the OS file manager. */
       revealProject: (path: string) => Promise<void>;
       /** Merges the builder's content into the project's cfbs.json. */

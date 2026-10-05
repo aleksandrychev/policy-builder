@@ -3,7 +3,7 @@ import { app } from 'electron';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
-import type { CompiledPolicy } from '../preload/api';
+import type { BuildResult, CompiledPolicy } from '../preload/api';
 
 /**
  * Runs the bundled Python sidecar (see `python/`): one short-lived process per
@@ -16,6 +16,8 @@ const COMPILE_TIMEOUT_MS = 30_000;
 const INIT_TIMEOUT_MS = 120_000;
 // Docker queries and the release-data lookup (a network fetch).
 const TESTENV_TIMEOUT_MS = 60_000;
+// cfbs build may download masterfiles, then lint + cf-promises run (maybe in a container).
+const BUILD_TIMEOUT_MS = 300_000;
 
 const isWindows = process.platform === 'win32';
 const executableName = isWindows ? 'cfpb-backend.exe' : 'cfpb-backend';
@@ -49,7 +51,7 @@ function resolveCommand(): { command: string; commandArgs: string[] } {
 
 // Spawns the sidecar with `args`, feeds `input` on stdin, and resolves with the
 // raw outcome; rejects only when the process cannot be spawned at all.
-function runSidecar(args: string[], input: string, timeoutMs: number): Promise<SidecarResult> {
+function runSidecar(args: string[], input: string, timeoutMs: number, onStderrLine?: (line: string) => void): Promise<SidecarResult> {
   const { command, commandArgs } = resolveCommand();
   if (!existsSync(command)) {
     return Promise.reject(new Error(`Python backend not found at ${command} — run \`npm run backend:build\` (or \`npm run backend:sync\` for development)`));
@@ -67,8 +69,13 @@ function runSidecar(args: string[], input: string, timeoutMs: number): Promise<S
       stdout += chunk;
     });
     child.stderr.setEncoding('utf8');
+    let pending = '';
     child.stderr.on('data', (chunk: string) => {
       stderr += chunk;
+      if (!onStderrLine) return;
+      const lines = (pending + chunk).split('\n');
+      pending = lines.pop() ?? '';
+      lines.forEach(onStderrLine);
     });
 
     // A failed spawn (no execute permission, wrong architecture) arrives as an
@@ -235,6 +242,21 @@ export async function compilePolicy(project: unknown): Promise<CompiledPolicy> {
     return { files: parsed.files, sourceMap: parsed.source_map ?? {} };
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable compile result'), { details: result.stdout });
+  }
+}
+
+/** Deployment's Build: `cfbs build` in a saved project, then lint + cf-promises (cfpb_build.py). */
+export async function buildPolicySet(path: string, onStage?: (stage: string) => void): Promise<BuildResult> {
+  const result = await runSidecar(['build'], JSON.stringify({ path }), BUILD_TIMEOUT_MS, line => {
+    const stage = /^::stage (\w+)/.exec(line);
+    if (stage) onStage?.(stage[1]);
+  });
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, BUILD_TIMEOUT_MS);
+  try {
+    return JSON.parse(result.stdout) as BuildResult;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable build result'), { details: result.stdout });
   }
 }
 

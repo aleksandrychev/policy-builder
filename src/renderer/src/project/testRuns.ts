@@ -53,6 +53,9 @@ export interface EnvironmentRuntime {
   error: string | null;
   hosts: Record<string, HostRuntime>;
   hub: { setupCode: string | null; url: string | null } | null;
+  // The last Deploy & run: when, on what policy (the request's content, as JSON) and how many
+  // hosts, and whether it passed (null while running) — Deployment's "Tested?".
+  lastRun: { at: number; content: string; hosts: number; passed: boolean | null } | null;
   lines: LogLine[];
   // How the last action ended, until the tab is looked at (the tab name's check / red dot).
   outcome: 'error' | 'ok' | null;
@@ -63,7 +66,18 @@ export interface EnvironmentRuntime {
 }
 
 const MAX_LINES = 5000;
-const EMPTY: EnvironmentRuntime = { action: null, error: null, hosts: {}, hub: null, lines: [], outcome: null, problems: {}, results: [], runId: null };
+const EMPTY: EnvironmentRuntime = {
+  action: null,
+  error: null,
+  hosts: {},
+  hub: null,
+  lastRun: null,
+  lines: [],
+  outcome: null,
+  problems: {},
+  results: [],
+  runId: null
+};
 const runtimes = new Map<string, EnvironmentRuntime>();
 const environmentOfRun = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -80,6 +94,20 @@ function update(environmentId: string, change: (runtime: EnvironmentRuntime) => 
 const appended = (runtime: EnvironmentRuntime, ...lines: Omit<LogLine, 'time'>[]) => ({
   lines: [...runtime.lines, ...lines.map(line => ({ ...line, time: Date.now() }))].slice(-MAX_LINES)
 });
+
+// How a run ending updates the runtime; a Deploy & run also records whether it passed.
+function exited(runId: string, runtime: EnvironmentRuntime, event: Extract<TestEnvEvent, { t: 'exit' }>): Partial<EnvironmentRuntime> {
+  environmentOfRun.delete(runId);
+  const running = runtime.lastRun?.passed === null && (runtime.action === 'run' || runtime.action === 'test');
+  const clean = Object.values(runtime.problems).every(list => list.length === 0) && runtime.results.every(result => !result.notKept);
+  return {
+    lastRun: running ? { ...runtime.lastRun!, passed: event.ok && clean } : runtime.lastRun,
+    action: null,
+    runId: null,
+    outcome: event.ok ? 'ok' : 'error',
+    error: event.ok ? runtime.error : (runtime.error ?? event.message ?? 'Failed')
+  };
+}
 
 function handle(runId: string, event: TestEnvEvent) {
   const environmentId = environmentOfRun.get(runId);
@@ -120,13 +148,7 @@ function handle(runId: string, event: TestEnvEvent) {
       case 'error':
         return { ...appended(runtime, { kind: 'error', text: event.message }), error: event.message };
       case 'exit':
-        environmentOfRun.delete(runId);
-        return {
-          action: null,
-          runId: null,
-          outcome: event.ok ? 'ok' : 'error',
-          error: event.ok ? runtime.error : (runtime.error ?? event.message ?? 'Failed')
-        };
+        return exited(runId, runtime, event);
       default:
         return {};
     }
@@ -159,7 +181,11 @@ export async function startAction(environment: TestEnvironment, action: Action, 
     error: null,
     outcome: null,
     results: action === 'run' || action === 'test' ? [] : runtime.results,
-    problems: action === 'run' || action === 'test' ? {} : runtime.problems
+    problems: action === 'run' || action === 'test' ? {} : runtime.problems,
+    lastRun:
+      action === 'run' || action === 'test'
+        ? { at: Date.now(), content: JSON.stringify(request.content ?? null), hosts: request.hosts?.length ?? environment.hosts.length, passed: null }
+        : runtime.lastRun
   }));
   try {
     const runId = await window.api.testEnvStart(action, request);

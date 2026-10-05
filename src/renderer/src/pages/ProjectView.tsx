@@ -20,6 +20,7 @@ import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosi
 import { tidyPositions } from '../canvas/tidy';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
+import { DeploymentView } from '../components/DeploymentView';
 import { CANVAS_DROPPABLE_ID, type CanvasEdge, type CanvasNode, FlowCanvas, type NodeSizes, type ZoomControls } from '../components/FlowCanvas';
 import { GeneratedPolicyView } from '../components/GeneratedPolicyView';
 import { GroupPanel } from '../components/GroupPanel';
@@ -45,6 +46,7 @@ import {
   clamp,
   useLayoutSettings
 } from '../hooks/useLayoutSettings';
+import { markDeploySeen, useDeployActivity } from '../project/deployRuns';
 import { markTestActivitySeen, useTestActivity } from '../project/testRuns';
 import { useCompiledPolicy } from '../project/useCompiledPolicy';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -140,13 +142,26 @@ function TestActivityBadge() {
   return null;
 }
 
+// The Deployment tab name: a spinner while a Build or deploy runs, then how it ended until looked at.
+function DeployActivityBadge({ path }: { path: string | null }) {
+  const { outcome, running } = useDeployActivity(path);
+  if (running) return <CircularProgress size={12} thickness={5} aria-label="Deployment busy" />;
+  if (outcome === 'ok') return <CheckCircleIcon color="success" sx={{ fontSize: 14 }} aria-label="Deployment done" />;
+  if (outcome === 'error')
+    return <Box component="span" aria-label="Deployment failed" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />;
+  return null;
+}
+
 // The tabs besides the canvas.
 function OtherTab({
   tab,
+  onSave,
   onShowBlock,
   ...policy
-}: { onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
-  return tab === 1 ? <GeneratedPolicyView {...policy} /> : <TestResultsView onShowBlock={onShowBlock} />;
+}: { onSave: () => Promise<boolean>; onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
+  if (tab === 1) return <GeneratedPolicyView {...policy} />;
+  if (tab === 3) return <DeploymentView compiled={policy.compiled} onSave={onSave} onShowBlock={onShowBlock} />;
+  return <TestResultsView onShowBlock={onShowBlock} />;
 }
 
 function initialParams(descriptor: BlockDescriptor): Record<string, string> {
@@ -239,7 +254,8 @@ interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
   onOpenSettings: () => void;
-  onSave: () => void;
+  // Resolves with whether the project ended up saved.
+  onSave: () => Promise<boolean>;
 }
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
@@ -258,7 +274,8 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   const edges = useMemo(() => allEdges.filter(edge => edge.fileId === currentFileId), [allEdges, currentFileId]);
   const derivedPositions = useAppSelector(selectDerivedNodePositions);
   const [activeTab, setActiveTab] = useState(0);
-  const compiled = useCompiledPolicy(activeTab === 1);
+  // Generated Policy shows it; Deployment traces build problems to blocks with its source map.
+  const compiled = useCompiledPolicy(activeTab === 1 || activeTab === 3);
   const {
     selectedInstanceId,
     setSelectedInstanceId,
@@ -302,13 +319,18 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
   const canRedo = useAppSelector(state => state.history.future.length > 0);
   // In-app "full screen": side panels hidden, properties as an overlay.
   const [maximized, setMaximized] = useState(false);
-  // The Test Results tab has its own layout: no block palette or Properties panel.
-  const showSidebars = !maximized && activeTab !== 2;
+  // Test Results and Deployment have their own layout: no block palette or Properties panel.
+  const showSidebars = !maximized && activeTab < 2;
   const testActivity = useTestActivity();
   // Looking at the Test Results tab acknowledges how the last action ended.
   useEffect(() => {
     if (activeTab === 2 && testActivity.outcome) markTestActivitySeen();
   }, [activeTab, testActivity.outcome]);
+  const projectPath = project?.path ?? null;
+  const deployActivity = useDeployActivity(projectPath);
+  useEffect(() => {
+    if (activeTab === 3 && deployActivity.outcome) markDeploySeen(projectPath);
+  }, [activeTab, deployActivity.outcome, projectPath]);
   const [addBlockAnchor, setAddBlockAnchor] = useState<HTMLElement | null>(null);
   const [tidyConfirmOpen, setTidyConfirmOpen] = useState(false);
   const [convertTargetId, setConvertTargetId] = useState<string | null>(null);
@@ -899,7 +921,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
           blockCount={instances.length}
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          tabBadges={{ 2: <TestActivityBadge /> }}
+          tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
           onSave={onSave}
           onOpenSettings={onOpenSettings}
           savedToDisk={Boolean(project.path)}
@@ -1052,6 +1074,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
           ) : (
             <OtherTab
               tab={activeTab}
+              onSave={onSave}
               compiled={compiled}
               currentFileId={currentFileId}
               selectedId={selectedGroupId ?? selectedInstanceId}

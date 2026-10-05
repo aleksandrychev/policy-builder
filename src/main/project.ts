@@ -39,6 +39,9 @@ const MAX_RECENTS = 5;
 // Project folders this session created or opened; saves may only write into these.
 const knownProjects = new Set<string>();
 
+/** Whether `path` is a project folder this session created or opened (deployment acts only on those). */
+export const isKnownProject = (path: string) => knownProjects.has(path);
+
 let versionsRequest: Promise<MasterfilesVersions> | null = null;
 
 class InvalidRequest extends Error {}

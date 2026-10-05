@@ -5,6 +5,7 @@ diagnostics on stderr, non-zero exit on failure.
   cfpb-backend init       JSON options on stdin -> JSON result on stdout
   cfpb-backend compile    builder project on stdin -> {"files": {path: policy}} on stdout
   cfpb-backend masterfiles  {"version"} on stdin -> the masterfiles build entry on stdout
+  cfpb-backend build      {"path"} on stdin -> the built policy set and its checks on stdout
 
 Calls cfengine_cli and cfbs in-process. Import cfengine_cli.format, never
 cfengine_cli.main — that one pulls in cf_remote and ~27 MB of libcloud.
@@ -338,6 +339,26 @@ def compile_command() -> int:
     return 0
 
 
+def build_command() -> int:
+    """Deployment: cfbs build in a saved project, then lint + cf-promises (cfpb_build)."""
+    import cfpb_build
+
+    try:
+        request = json.loads(sys.stdin.read() or "{}")
+        path = request.get("path") if isinstance(request, dict) else None
+        if not isinstance(path, str) or not os.path.isabs(path):
+            raise cfpb_build.BuildFailed('Expected {"path": <absolute project folder>} on stdin')
+        result = cfpb_build.build(path)
+    except (json.JSONDecodeError, cfpb_build.BuildFailed) as error:
+        print(f"Build failed: {error}", file=sys.stderr)
+        return 1
+    except Exception as error:
+        print(f"Build failed: {type(error).__name__}: {error}", file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    return 0
+
+
 def testenv_command(action: str) -> int:
     """Test environments (cfpb_testenv): `doctor`, `images`, `package`, `platforms`, `search`, `status` answer with one JSON
     object; the rest stream events, one JSON object per line, ending with a `done` or `error` event."""
@@ -405,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("init", help="create a cfbs project")
     commands.add_parser("compile", help="generate policy from the builder's project data")
     commands.add_parser("masterfiles", help="the masterfiles build entry for a version")
+    commands.add_parser("build", help="build a saved project's policy set and check it")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
     testenv.add_argument(
         "action",
@@ -430,7 +452,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "testenv":
         return testenv_command(args.action)
 
-    commands = {"init": init_command, "compile": compile_command, "masterfiles": masterfiles_command}
+    commands = {
+        "init": init_command,
+        "compile": compile_command,
+        "masterfiles": masterfiles_command,
+        "build": build_command,
+    }
     return commands.get(args.command, format_command)()
 
 

@@ -6,7 +6,7 @@ import { Box, Button, IconButton, Tab, Tabs, Typography } from '@mui/material';
 import type { ProjectType } from '../store/projectSlice/types';
 import { BlockNodesIcon } from './icons/BlockNodesIcon';
 
-export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results & Logs'] as const;
+export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results & Logs', 'Deployment'] as const;
 
 interface TopBarProps {
   activeTab: number;

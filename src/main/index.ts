@@ -6,6 +6,7 @@ import { pathToFileURL } from 'url';
 
 import type { RecentProject } from '../preload/api';
 import { compilePolicy, formatPolicy, warmUpSidecar } from './backend';
+import { registerDeployHandlers } from './deploy';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 import { registerTestEnvHandlers } from './testenv';
 
@@ -231,6 +232,7 @@ app.whenReady().then(() => {
 
   registerProjectHandlers(isTrustedFrame);
   registerTestEnvHandlers(isTrustedFrame);
+  registerDeployHandlers(isTrustedFrame);
   // The File menu and the start screen both list recent projects.
   onRecentsChanged(() => {
     void refreshMenu();
