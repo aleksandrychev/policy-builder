@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-import type { BuildResult } from '../../../preload/api';
+import type { BuildResult, HubState } from '../../../preload/api';
 
 /**
  * The Deployment tab's Build and SSH deploy, outside React: a run keeps going (and its result
@@ -37,10 +37,20 @@ export const SSH_STAGES: Stage[] = [
   { id: 'policy', label: 'Running the policy on the hub' }
 ];
 
+export const HUB_STAGES: Stage[] = [
+  { id: 'enable', label: 'Turning on deploys from version control (CMDB class)' },
+  { id: 'agent', label: 'Running the hub’s agent: pull, cfbs build, validate, deploy' },
+  { id: 'verify', label: 'Reading what the hub runs now' }
+];
+
+export type HubDeploy =
+  { at: number; deployed: 'no' | 'unknown' | 'yes'; output: string; phase: 'done' } | { failure: Failure; phase: 'failed' } | { phase: 'idle' };
+
 export interface DeployRun {
-  action: 'build' | 'ssh' | null;
+  action: 'build' | 'hub' | 'ssh' | null;
   build: BuildResult | null;
   buildFailure: Failure | null;
+  hub: HubDeploy;
   // How the last run ended, until the tab is looked at.
   outcome: 'error' | 'ok' | null;
   ssh: SshState;
@@ -48,7 +58,7 @@ export interface DeployRun {
   stage: string | null;
 }
 
-const EMPTY: DeployRun = { action: null, build: null, buildFailure: null, outcome: null, ssh: { phase: 'idle' }, stage: null };
+const EMPTY: DeployRun = { action: null, build: null, buildFailure: null, hub: { phase: 'idle' }, outcome: null, ssh: { phase: 'idle' }, stage: null };
 // One per project folder.
 const runs = new Map<string, DeployRun>();
 const listeners = new Set<() => void>();
@@ -127,3 +137,24 @@ export async function startSshDeploy(
 }
 
 export const resetSsh = (path: string) => runOf(path).ssh.phase !== 'deploying' && update(path, { ssh: { phase: 'idle' } });
+
+/** Deploy now on an Enterprise hub; `onState` gets what the hub runs afterwards. */
+export async function startHubDeploy(path: string, url: string, onState: (state: HubState) => void): Promise<void> {
+  if (!window.api || runOf(path).action) return;
+  current = path;
+  update(path, { action: 'hub', stage: 'agent', outcome: null, hub: { phase: 'idle' } });
+  try {
+    const result = await window.api.hubDeploy(url);
+    if (!result.ok) {
+      update(path, { hub: { phase: 'failed', failure: result }, outcome: 'error' });
+      return;
+    }
+    onState(result.state);
+    update(path, {
+      hub: { phase: 'done', deployed: result.deployed, output: result.output, at: Date.now() },
+      outcome: result.deployed === 'no' ? 'error' : 'ok'
+    });
+  } finally {
+    update(path, { action: null, stage: null });
+  }
+}

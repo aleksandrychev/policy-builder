@@ -24,6 +24,7 @@ import { useEnvironmentRuntime } from '../project/testRuns';
 import type { CompiledPolicyState } from '../project/useCompiledPolicy';
 import { store, useAppSelector } from '../store';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
+import { EnterpriseHub } from './deploy/EnterpriseHub';
 
 type Tone = 'error' | 'muted' | 'success' | 'warning';
 // Where step 3 delivers the policy set.
@@ -456,7 +457,7 @@ export function DeploymentView({
             ) : target === 'ssh' ? (
               <SshSummary state={ssh} running={run.action === 'ssh'} />
             ) : (
-              <Chip tone="muted" text="Coming next" />
+              <HubSummary run={run} />
             )
           }
         >
@@ -514,16 +515,18 @@ export function DeploymentView({
               onDeploy={target => void startSshDeploy(path, onSave, target)}
             />
           )}
-          {target === 'hub' && (
-            <Typography sx={{ fontSize: 13, color: 'text.muted' }}>
-              For now, point the hub at the git repository: Mission Portal → Settings → Version control, type <b>GIT_CFBS</b> (it builds the cfbs project
-              itself), then push from the first tab. Connecting a hub from here — setting that up, and results per block across hosts — comes next.
-            </Typography>
-          )}
+          {target === 'hub' && path && <EnterpriseHub path={path} git={git} busy={Boolean(gitBusy)} />}
         </Step>
       </Stack>
     </Box>
   );
+}
+
+function HubSummary({ run }: { run: DeployRun }) {
+  if (run.action === 'hub' || run.hub.phase === 'idle') return null;
+  if (run.hub.phase === 'failed' || run.hub.deployed === 'no') return <Chip tone="error" text="Hub deploy failed" />;
+  if (run.hub.deployed === 'unknown') return <Chip tone="warning" text={`Hub ran (${ago(run.hub.at)}): result unknown`} />;
+  return <Chip tone="success" text={`Deployed on the hub (${ago(run.hub.at)})`} />;
 }
 
 function SshSummary({ running, state }: { running: boolean; state: SshState }) {

@@ -153,6 +153,41 @@ export interface BuildResult {
   tarball: string | null;
 }
 
+// A saved Enterprise hub (its password stays in main, encrypted).
+export interface SavedHub {
+  // SHA-256 of the pinned certificate, when the system doesn't trust it.
+  fingerprint?: string;
+  url: string;
+  username: string;
+}
+
+// The hub's certificate, for the user to accept when the system doesn't trust it.
+export interface HubProbe {
+  fingerprint: string;
+  pem: string;
+  subject: string;
+  trusted: boolean;
+  url: string;
+  validTo: string;
+}
+
+export interface HubInfo {
+  hostkey: string;
+  hostname: string;
+  license: string;
+  version: string;
+}
+
+// What a hub deploys from and runs: its VCS settings, whether VCS deploys are on (the CMDB class
+// cfengine_internal_masterfiles_update), and the policy release (git commit) it last reported.
+export interface HubState {
+  deploysEnabled: boolean;
+  hosts: number | null;
+  info: HubInfo;
+  releaseId: string | null;
+  vcs: { hasKey: boolean; refspec: string; subdirectory: string; type: string; url: string; username: string } | null;
+}
+
 // The project folder's git state, for Deployment's Commit & push.
 export interface GitStatus {
   ahead: number;
@@ -244,6 +279,32 @@ declare global {
       gitStatus: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
       /** After a rejected push: rebase onto the remote's commits then push ('rebase', aborted on conflicts), or force-push with lease ('force'). */
       gitSync: (path: string, mode: 'force' | 'rebase') => Promise<OperationResult<{ pulled: boolean; status: GitStatus }>>;
+      /** Points an Enterprise hub's VCS deployment at a cfbs project repository (GIT_CFBS); credentials left out are cleared on the hub. */
+      hubConfigureVcs: (
+        url: string,
+        settings: {
+          gitPassword?: string;
+          gitPrivateKeyFile?: string;
+          gitRefspec: string;
+          gitServer: string;
+          gitUsername?: string;
+          projectSubdirectory?: string;
+        }
+      ) => Promise<OperationResult<{ state: HubState }>>;
+      /** Logs in to a hub and saves it (password encrypted in main); `fingerprint` is the accepted certificate, null when the system trusts it. */
+      hubConnect: (request: {
+        fingerprint: string | null;
+        password: string;
+        url: string;
+        username: string;
+      }) => Promise<OperationResult<{ hub: SavedHub; state: HubState }>>;
+      /** Deploy now: turns VCS deploys on if needed, then runs the hub's agent (pull, cfbs build, validate, swap). */
+      hubDeploy: (url: string) => Promise<OperationResult<{ deployed: 'no' | 'unknown' | 'yes'; enabledDeploys?: boolean; output: string; state: HubState }>>;
+      hubForget: (url: string) => Promise<void>;
+      hubList: () => Promise<SavedHub[]>;
+      /** The hub's certificate, and whether the system trusts it. */
+      hubProbe: (url: string) => Promise<OperationResult<{ probe: HubProbe }>>;
+      hubState: (url: string) => Promise<OperationResult<{ state: HubState }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
       /** Each step of a running Build or SSH deploy as it starts (build, lint, promises, copy, validate, install, update, policy). */

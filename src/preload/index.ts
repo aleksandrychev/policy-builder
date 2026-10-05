@@ -7,6 +7,8 @@ import type {
   CreateProjectRequest,
   DockerStatus,
   GitStatus,
+  HubProbe,
+  HubState,
   ImageSearch,
   MasterfilesVersions,
   OpenedProject,
@@ -14,6 +16,7 @@ import type {
   ProjectContent,
   ProjectStorage,
   RecentProject,
+  SavedHub,
   TargetCheck,
   TestEnvEvent,
   TestEnvRequest
@@ -114,6 +117,23 @@ const api = {
     path: string,
     target: { host: string; key: string | null; port: number | null }
   ): Promise<OperationResult<{ build: BuildResult; deployed: boolean; log: string }>> => invoke('deploy:ssh', path, target),
+  /** Enterprise hubs: saved ones, a certificate check, log in + save, and the Deployment actions. */
+  hubList: (): Promise<SavedHub[]> => invoke('hub:list'),
+  hubProbe: (url: string): Promise<OperationResult<{ probe: HubProbe }>> => invoke('hub:probe', url),
+  hubConnect: (request: {
+    fingerprint: string | null;
+    password: string;
+    url: string;
+    username: string;
+  }): Promise<OperationResult<{ hub: SavedHub; state: HubState }>> => invoke('hub:connect', request),
+  hubForget: (url: string): Promise<void> => invoke('hub:forget', url),
+  hubState: (url: string): Promise<OperationResult<{ state: HubState }>> => invoke('hub:state', url),
+  hubConfigureVcs: (
+    url: string,
+    settings: { gitPassword?: string; gitPrivateKeyFile?: string; gitRefspec: string; gitServer: string; gitUsername?: string; projectSubdirectory?: string }
+  ): Promise<OperationResult<{ state: HubState }>> => invoke('hub:configure-vcs', url, settings),
+  hubDeploy: (url: string): Promise<OperationResult<{ deployed: 'no' | 'unknown' | 'yes'; enabledDeploys?: boolean; output: string; state: HubState }>> =>
+    invoke('hub:deploy', url),
   /** A file picker in ~/.ssh for the hub's private key; null if cancelled. */
   pickSshKey: (): Promise<string | null> => invoke('deploy:pick-key'),
   /** Shows a file of the project in the OS file manager. */
