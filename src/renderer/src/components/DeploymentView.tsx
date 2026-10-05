@@ -269,10 +269,13 @@ function BuildDetails({
  */
 export function DeploymentView({
   compiled,
+  onReload,
   onSave,
   onShowBlock
 }: {
   compiled: CompiledPolicyState;
+  // Reads the project from disk again (after pulling the remote's commits into it).
+  onReload: () => Promise<void>;
   onSave: () => Promise<boolean>;
   onShowBlock: (fileId: string, id: string) => void;
 }) {
@@ -283,7 +286,7 @@ export function DeploymentView({
   const files = useAppSelector(state => state.files);
   const [git, setGit] = useState<GitStatus | null>(null);
   const [gitFailure, setGitFailure] = useState<Failure | null>(null);
-  const [gitBusy, setBusy] = useState<'commit' | 'init' | 'push' | 'remote' | null>(null);
+  const [gitBusy, setBusy] = useState<'commit' | 'force' | 'init' | 'push' | 'rebase' | 'remote' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [remote, setRemote] = useState<string | null>(null);
   const [target, setTarget] = useState<Target>(() => (localStorage.getItem(`cfpb.deploy.target:${project?.path}`) as Target | null) ?? 'git');
@@ -383,6 +386,8 @@ export function DeploymentView({
           commit: `Committed ${commit}.`,
           init: `Initialized git, first commit ${commit}.`,
           push: `Pushed ${result.status.branch} to origin.`,
+          rebase: `Pulled the remote’s commits under yours and pushed ${result.status.branch}; the project was reloaded from disk.`,
+          force: `Overwrote ${result.status.branch} on origin with yours.`,
           remote: 'Remote set.'
         };
         setNotice(notices[step] ?? null);
@@ -483,6 +488,14 @@ export function DeploymentView({
                 }
                 onSetRemote={() => void gitAction('remote', () => window.api!.gitSetRemote(path!, (remote ?? '').trim())).then(ok => ok && setRemote(null))}
                 onPush={() => void gitAction('push', () => window.api!.gitPush(path!))}
+                rejected={Boolean(gitFailure && /\[rejected\]|fetch first|non-fast-forward/.test(`${gitFailure.message}\n${gitFailure.details}`))}
+                onSync={mode =>
+                  void gitAction(mode, async () => {
+                    const result = await window.api!.gitSync(path!, mode);
+                    if (result.ok && result.pulled) await onReload();
+                    return result;
+                  })
+                }
               />
               <FailureAlert failure={gitFailure} />
               {notice && !gitFailure && (
@@ -615,7 +628,7 @@ function GitSummary({ git }: { git: GitStatus | null }) {
   if (!git) return null;
   if (!git.repo) return <Chip tone="warning" text="Not a git repository" />;
   if (!git.remote) return <Chip tone="warning" text={`${git.branch ?? 'no branch'} · no remote`} />;
-  if (git.behind > 0) return <Chip tone="warning" text={`${git.behind} new on the remote: pull in git first`} />;
+  if (git.behind > 0) return <Chip tone="warning" text={`${git.behind} new on the remote`} />;
   if (git.ahead > 0) return <Chip tone="warning" text={`${git.ahead} to push`} />;
   return <Chip tone="success" text={`${git.branch} · up to date with ${git.upstream ?? 'origin'}`} />;
 }
@@ -629,8 +642,11 @@ function CommitStep(props: {
   onPush: () => void;
   onRemoteChange: (value: string) => void;
   onSetRemote: () => void;
+  onSync: (mode: 'force' | 'rebase') => void;
   onTextChange: (value: string) => void;
   path: string | null;
+  // The last push was refused: the remote has commits this project doesn't.
+  rejected: boolean;
   remote: string;
   text: string;
 }) {
@@ -685,6 +701,24 @@ function CommitStep(props: {
           {busy === 'push' ? 'Pushing…' : `Push${git.branch ? ` ${git.branch}` : ''}`}
         </Button>
       </Stack>
+      {(git.behind > 0 || props.rejected) && (
+        <Alert
+          severity="warning"
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button color="inherit" size="small" disabled={Boolean(busy)} onClick={() => props.onSync('rebase')}>
+                {busy === 'rebase' ? 'Pulling…' : 'Pull theirs, then push'}
+              </Button>
+              <Button color="error" size="small" disabled={Boolean(busy)} onClick={() => props.onSync('force')}>
+                Overwrite the remote
+              </Button>
+            </Stack>
+          }
+        >
+          The remote has {git.behind > 0 ? `${git.behind} ${git.behind === 1 ? 'commit' : 'commits'}` : 'commits'} this project doesn’t. Pull them in under
+          yours (your commits are replayed on top, then pushed; the project reloads from disk), or overwrite the remote with yours (theirs are lost).
+        </Alert>
+      )}
       <Typography sx={{ fontSize: 11, color: 'text.muted' }}>
         Pushing uses your own git credentials (SSH agent or credential helper); the app stores none.
       </Typography>

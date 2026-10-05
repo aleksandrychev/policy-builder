@@ -123,6 +123,7 @@ const api = {
   gitCommit: (path: string, message: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:commit', path, message),
   gitSetRemote: (path: string, url: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:set-remote', path, url),
   gitPush: (path: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:push', path),
+  gitSync: (path: string, mode: 'force' | 'rebase'): Promise<OperationResult<{ pulled: boolean; status: GitStatus }>> => invoke('git:sync', path, mode),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */
   setDocument: (document: { edited: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),

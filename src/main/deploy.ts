@@ -39,6 +39,7 @@ const REMOTE_DEPLOY = [
   '/var/cfengine/bin/cf-agent -K'
 ].join('\n');
 const PUSH_TIMEOUT_MS = 120_000;
+const FETCH_TIMEOUT_MS = 15_000;
 // http(s), ssh, git, file URLs, scp-like `user@host:path`, or a local path.
 const REMOTE_URL = /^(?:(?:https?|ssh|git|file):\/\/\S+|[\w.-]+@[\w.-]+:\S+|\/\S+)$/;
 
@@ -93,6 +94,8 @@ async function status(path: string): Promise<GitStatus> {
   const repo = top.code === 0 && normalize(top.stdout.trim()) === real;
   const empty: GitStatus = { repo, branch: null, remote: null, upstream: null, ahead: 0, behind: 0, changedFiles: 0, lastCommit: null, headBuilder: null };
   if (!repo) return empty;
+  // What the remote has that we don't (best effort: offline, the last fetch's view).
+  if ((await git(path, ['remote', 'get-url', 'origin'])).code === 0) await git(path, ['fetch', '--quiet', 'origin'], FETCH_TIMEOUT_MS).catch(() => null);
   const [branch, remote, upstream, changed, last, head] = await Promise.all([
     git(path, ['symbolic-ref', '--short', 'HEAD']),
     git(path, ['remote', 'get-url', 'origin']),
@@ -298,6 +301,38 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
         const set = await git(root, ['remote', known ? 'set-url' : 'add', 'origin', url.trim()]);
         if (set.code !== 0) throw commandError('Setting the remote failed', set);
         return { status: await status(root) };
+      })
+    )
+  );
+  // A push the remote rejected (it has commits we don't): bring theirs in under ours, or overwrite.
+  ipcMain.handle(
+    'git:sync',
+    trusted((_event, path: unknown, mode: unknown) =>
+      attempt(async () => {
+        const root = projectPath(path);
+        if (mode !== 'rebase' && mode !== 'force') throw new Error('Unknown sync');
+        if (mode === 'rebase') {
+          if ((await git(root, ['status', '--porcelain'])).stdout.trim()) throw new Error('Commit your changes first: there are uncommitted files.');
+          const fetch = await git(root, ['fetch', 'origin'], PUSH_TIMEOUT_MS);
+          if (fetch.code !== 0) throw commandError('git fetch failed', fetch);
+          const branch = (await git(root, ['symbolic-ref', '--short', 'HEAD'])).stdout.trim();
+          const upstream = await git(root, ['rev-parse', '--abbrev-ref', '@{u}']);
+          const onto = upstream.code === 0 ? upstream.stdout.trim() : `origin/${branch}`;
+          const rebase = await git(root, [...(await identity(root)), 'rebase', onto]);
+          if (rebase.code !== 0) {
+            const conflicts = (await git(root, ['diff', '--name-only', '--diff-filter=U'])).stdout.trim().split('\n').filter(Boolean);
+            await git(root, ['rebase', '--abort']);
+            throw Object.assign(
+              new Error(
+                `Your commits and the remote’s change the same ${conflicts.length ? `files (${conflicts.join(', ')})` : 'lines'}: nothing was changed. Merge them in git, or overwrite the remote.`
+              ),
+              { details: `${rebase.stdout}${rebase.stderr}`.trim() }
+            );
+          }
+        }
+        const push = await git(root, ['push', ...(mode === 'force' ? ['--force-with-lease'] : []), '--set-upstream', 'origin', 'HEAD'], PUSH_TIMEOUT_MS);
+        if (push.code !== 0) throw commandError('git push failed', push);
+        return { status: await status(root), pulled: mode === 'rebase' };
       })
     )
   );

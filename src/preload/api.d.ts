@@ -242,6 +242,8 @@ declare global {
       /** Sets (or adds) the origin remote. */
       gitSetRemote: (path: string, url: string) => Promise<OperationResult<{ status: GitStatus }>>;
       gitStatus: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      /** After a rejected push: rebase onto the remote's commits then push ('rebase', aborted on conflicts), or force-push with lease ('force'). */
+      gitSync: (path: string, mode: 'force' | 'rebase') => Promise<OperationResult<{ pulled: boolean; status: GitStatus }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
       /** Each step of a running Build or SSH deploy as it starts (build, lint, promises, copy, validate, install, update, policy). */

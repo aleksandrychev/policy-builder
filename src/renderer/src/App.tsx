@@ -73,7 +73,7 @@ export default function App() {
   return (
     <>
       {project ? (
-        <ProjectView key={project.id} dirty={dirty} onSave={session.save} onOpenSettings={() => setSettingsOpen(true)} />
+        <ProjectView key={project.id} dirty={dirty} onSave={session.save} onReload={session.reloadProject} onOpenSettings={() => setSettingsOpen(true)} />
       ) : (
         <NoProjectScreen onNewProject={session.newProject} onOpenProject={session.openProject} onTryDemo={session.startDemo} recentsVersion={recentsVersion} />
       )}

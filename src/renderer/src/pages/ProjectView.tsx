@@ -155,12 +155,15 @@ function DeployActivityBadge({ path }: { path: string | null }) {
 // The tabs besides the canvas.
 function OtherTab({
   tab,
+  onReload,
   onSave,
   onShowBlock,
   ...policy
-}: { onSave: () => Promise<boolean>; onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<typeof GeneratedPolicyView>[0]) {
+}: { onReload: () => Promise<void>; onSave: () => Promise<boolean>; onShowBlock: (fileId: string, id: string) => void; tab: number } & Parameters<
+  typeof GeneratedPolicyView
+>[0]) {
   if (tab === 1) return <GeneratedPolicyView {...policy} />;
-  if (tab === 3) return <DeploymentView compiled={policy.compiled} onSave={onSave} onShowBlock={onShowBlock} />;
+  if (tab === 3) return <DeploymentView compiled={policy.compiled} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
   return <TestResultsView onShowBlock={onShowBlock} />;
 }
 
@@ -254,12 +257,14 @@ interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
   onOpenSettings: () => void;
+  // Opens the project from disk again (Deployment, after pulling commits into it).
+  onReload: () => Promise<void>;
   // Resolves with whether the project ended up saved.
   onSave: () => Promise<boolean>;
 }
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -1075,6 +1080,7 @@ export default function ProjectView({ dirty, onOpenSettings, onSave }: ProjectVi
             <OtherTab
               tab={activeTab}
               onSave={onSave}
+              onReload={onReload}
               compiled={compiled}
               currentFileId={currentFileId}
               selectedId={selectedGroupId ?? selectedInstanceId}

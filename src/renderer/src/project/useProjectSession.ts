@@ -182,6 +182,11 @@ export function useProjectSession() {
     error,
     newProject: () => guarded(() => setProjectDialog('new')),
     openProject: (path?: string) => guarded(() => void openProject(path)),
+    // The open project again from disk, as it is (Deployment pulled commits into it; nothing unsaved).
+    reloadProject: async () => {
+      const path = store.getState().project?.path;
+      if (path) await openProject(path);
+    },
     project,
     projectDialog,
     requestClose: () => guarded(() => window.api?.confirmWindowClose()),
