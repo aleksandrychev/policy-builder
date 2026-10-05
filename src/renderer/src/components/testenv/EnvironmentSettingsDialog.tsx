@@ -9,7 +9,7 @@ export interface EnvironmentSettingsDialogProps {
   // The Docker engine's own architecture, when known (another one is emulated).
   engineArch?: string;
   environment: TestEnvironment;
-  onChange: (changes: Partial<Pick<TestEnvironment, 'arch' | 'edition' | 'envFile' | 'name' | 'version'>>) => void;
+  onChange: (changes: Partial<Pick<TestEnvironment, 'arch' | 'edition' | 'envFile' | 'maxRuns' | 'name' | 'version'>>) => void;
   onClose: () => void;
   onDestroy: () => void;
   onEnvChange: (env: Record<string, string>) => void;
@@ -64,6 +64,22 @@ export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps)
               sx={{ flex: 1 }}
             />
           </Stack>
+          <TextField
+            select
+            label="Agent runs per Deploy & run"
+            size="small"
+            value={environment.maxRuns ?? 3}
+            disabled={busy}
+            onChange={event => onChange({ maxRuns: Number(event.target.value) })}
+            helperText="At most this many per host: runs repeat until one repairs nothing (later runs settle what earlier ones changed)."
+          >
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(count => (
+              <MenuItem key={count} value={count}>
+                {count === 1 ? '1 (a single run)' : `Up to ${count}`}
+                {count === 3 ? ' (default)' : ''}
+              </MenuItem>
+            ))}
+          </TextField>
           <EnvVarsField label="Environment variables (all hosts)" env={environment.env} onChange={props.onEnvChange} />
           <TextField
             label="Secrets file (.env), optional"

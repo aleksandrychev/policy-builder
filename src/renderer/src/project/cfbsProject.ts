@@ -381,6 +381,9 @@ export function environmentsFrom(value: unknown): TestEnvironment[] {
           hub,
           env: stringMap(environment.env),
           envFile: typeof environment.envFile === 'string' ? environment.envFile : null,
+          ...(Number.isInteger(environment.maxRuns) && (environment.maxRuns as number) >= 1 && (environment.maxRuns as number) <= 10
+            ? { maxRuns: environment.maxRuns as number }
+            : {}),
           hosts
         }
       ];

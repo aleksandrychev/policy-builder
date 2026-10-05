@@ -289,6 +289,7 @@ def package(query: dict) -> dict:
 
 LABEL_ENV, LABEL_HOST, LABEL_CONFIG = "cfpb.env", "cfpb.host", "cfpb.config"
 CFENGINE = "/var/cfengine/bin"
+# Agent runs per host and Deploy & run, until one repairs nothing (the environment's maxRuns, 1-10).
 MAX_RUNS = 3
 # promise_summary.log, one line per agent run (update.cf runs get their own). Community:
 # "... Promises observed to be kept 97.44%, Promises repaired 2.56%, Promises not repaired 0.00%";
@@ -796,7 +797,7 @@ def _compliance(engine, container) -> dict | None:
 
 def run(request: dict, masterfiles_dir: str | None = None) -> None:
     """Run policy: rebuild (unless just built) and redeploy the current edits, then run the agent on
-    every host (hub first) until a run repairs nothing, at most MAX_RUNS times."""
+    every host (hub first) until a run repairs nothing, at most the environment's maxRuns times."""
     env, engine = request["environment"], client()
     hosts = env.get("hosts") or []
     hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
@@ -826,14 +827,15 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
     }
     dotenv = read_dotenv(request.get("envFile"))
+    max_runs = env.get("maxRuns") if isinstance(env.get("maxRuns"), int) and 1 <= env["maxRuns"] <= 10 else MAX_RUNS
     for host in sorted(hosts, key=lambda h: h is not hub_host):
         if host["id"] not in only:
             continue
         container, environment = containers[host["id"]], host_env(env, host, dotenv)
         emit("host", host=host["id"], state="running")
         result = None
-        for number in range(1, MAX_RUNS + 1):
-            emit("step", host=host["id"], step="run", message=f"Run {number} of {MAX_RUNS}")
+        for number in range(1, max_runs + 1):
+            emit("step", host=host["id"], step="run", message=f"Run {number} of {max_runs}")
             # update.cf's errors are problems too (its compliance isn't in the summary we read).
             updating: list[str] = []
             run_in(

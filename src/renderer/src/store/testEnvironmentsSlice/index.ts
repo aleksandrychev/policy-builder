@@ -22,7 +22,7 @@ const testEnvironmentsSlice = createSlice({
     },
     environmentChanged(
       state,
-      action: PayloadAction<{ changes: Partial<Pick<TestEnvironment, 'arch' | 'edition' | 'envFile' | 'name' | 'version'>>; environmentId: string }>
+      action: PayloadAction<{ changes: Partial<Pick<TestEnvironment, 'arch' | 'edition' | 'envFile' | 'maxRuns' | 'name' | 'version'>>; environmentId: string }>
     ) {
       const environment = find(state, action.payload.environmentId);
       if (environment) Object.assign(environment, action.payload.changes);

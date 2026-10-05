@@ -25,6 +25,8 @@ export interface TestEnvironment {
   hosts: TestHost[];
   hub: string;
   id: string;
+  // Agent runs per host on Deploy & run, until one repairs nothing (default 3).
+  maxRuns?: number;
   name: string;
   // "latest" or an exact release, e.g. "3.27.1".
   version: string;
