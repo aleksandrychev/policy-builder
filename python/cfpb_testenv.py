@@ -616,8 +616,8 @@ def _ip(engine, container, env: dict) -> str:
     return container.attrs["NetworkSettings"]["Networks"][network_name(env)]["IPAddress"]
 
 
-def _deploy(engine, hub, masterfiles: str) -> None:
-    """Replaces the hub's /var/cfengine/masterfiles with the built policy set."""
+def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
+    """Replaces the hub's /var/cfengine/masterfiles with the built policy set, and tags it."""
     import io
     import tarfile
 
@@ -627,6 +627,10 @@ def _deploy(engine, hub, masterfiles: str) -> None:
     _check(run_in(engine, hub, "rm -rf /var/cfengine/masterfiles", None, "setup"), "Clearing masterfiles")
     if not hub.put_archive("/var/cfengine", buffer.getvalue()):
         raise RunnerError("Couldn't copy the policy to the hub")
+    # Clients' update.cf (and a bootstrap) needs masterfiles/cf_promises_validated, which clearing
+    # removed and only the hub's own run writes again: tag it now, which also validates the policy.
+    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", host_id, "setup")
+    _check(tagged, "Validating the policy on the hub")
 
 
 def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
@@ -688,7 +692,7 @@ def up(request: dict, finish: bool = True) -> str:
         )
         containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
     hub = containers[hub_host["id"]]
-    _deploy(engine, hub, masterfiles_dir)
+    _deploy(engine, hub, masterfiles_dir, hub_host["id"])
     hub_ip = _ip(engine, hub, env)
     for host in sorted(hosts, key=lambda h: h is not hub_host):
         container = containers[host["id"]]
@@ -813,11 +817,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
     hub = containers[hub_host["id"]]
-    _deploy(engine, hub, masterfiles_dir)
-    # Clients' update.cf needs masterfiles/cf_promises_validated, which the deploy removed and only the
-    # hub's own run writes again: tag it now, so running only some clients works too.
-    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", hub_host["id"], "setup")
-    _check(tagged, "Validating the policy on the hub")
+    _deploy(engine, hub, masterfiles_dir, hub_host["id"])
     # Where each block's lines are, to trace errors back to blocks.
     from cfpb_compiler import compile_project
 
