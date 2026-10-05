@@ -10,6 +10,8 @@ export interface PolicyFile {
   // Gates the whole file — every block, variables and classes included. It
   // compiles to a class guard over the file's calls and definitions.
   condition?: Condition;
+  // What the file is for: shown on hovering its name.
+  description?: string;
   id: string;
   name: string;
   // Organizational, and the file's path: a top-level folder is one cfbs

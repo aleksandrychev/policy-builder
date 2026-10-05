@@ -52,6 +52,7 @@ export interface FileMeta {
   // The entry bundle, and the prefix of the file's other bundles.
   bundle: string;
   condition?: Condition;
+  description?: string;
   edges: Omit<BlockEdge, 'fileId'>[];
   // What a group compiles from; its look is in layout.groups.
   groups: Pick<BlockGroup, 'condition' | 'id' | 'incomingMode' | 'name'>[];
@@ -153,6 +154,7 @@ function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta
     bundle: file.bundle,
     path,
     ...(file.condition ? { condition: file.condition } : {}),
+    ...(file.description ? { description: file.description } : {}),
     blocks: instances.map(({ fileId: _fileId, position: _position, ...rest }) => rest),
     edges: edges.map(withoutFileId),
     groups: groups.map(({ condition, id, incomingMode, name }) => ({
@@ -269,9 +271,10 @@ export function fromBuilderProject(json: unknown): ProjectData {
 
   // A file's folder is the one whose directory holds it.
   const folderOf = (path: string) => folders.find(folder => typeof folder.path === 'string' && path === `${folder.path}${path.split('/').pop()}`);
-  const files: PolicyFile[] = modules.map(({ file: { bundle, condition, id, name }, path }) => ({
+  const files: PolicyFile[] = modules.map(({ file: { bundle, condition, description, id, name }, path }) => ({
     bundle: typeof bundle === 'string' && bundle ? bundle : deriveBundle(typeof name === 'string' ? name : ''),
     ...(condition ? { condition } : {}),
+    ...(typeof description === 'string' && description ? { description } : {}),
     id,
     name: typeof name === 'string' ? name : id,
     parentId: folderOf(path)?.id ?? null

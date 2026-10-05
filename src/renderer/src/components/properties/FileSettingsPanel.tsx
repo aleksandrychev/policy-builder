@@ -1,4 +1,4 @@
-import { Box, Divider, Stack, Typography } from '@mui/material';
+import { Box, Divider, Stack, TextField, Typography } from '@mui/material';
 
 import type { BlockInstance } from '../../store/canvasSlice/types';
 import type { PolicyFile } from '../../store/filesSlice/types';
@@ -13,12 +13,14 @@ export function FileSettingsPanel({
   onEnable,
   onRemove,
   onModeChange,
-  onClassNameChange
+  onClassNameChange,
+  onDescriptionChange
 }: {
   allInstances: BlockInstance[];
   file: PolicyFile;
   files: PolicyFile[];
   onClassNameChange: (className: string) => void;
+  onDescriptionChange: (description: string) => void;
   onEnable: () => void;
   onModeChange: (mode: 'if' | 'unless') => void;
   onRemove: () => void;
@@ -33,6 +35,17 @@ export function FileSettingsPanel({
         <Typography sx={{ fontSize: 15, fontWeight: 700 }}>{file.name}</Typography>
         <Typography sx={{ fontSize: 12, color: 'text.muted', fontFamily: 'monospace' }}>bundle: {file.bundle}</Typography>
       </Box>
+      <TextField
+        label="Description"
+        size="small"
+        multiline
+        minRows={2}
+        maxRows={8}
+        placeholder="What this file is for"
+        helperText="Shown on hovering the file's name."
+        value={file.description ?? ''}
+        onChange={event => onDescriptionChange(event.target.value)}
+      />
       <Divider />
       <ConditionSection
         key={file.id}

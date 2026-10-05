@@ -98,6 +98,7 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileConditionRemoved,
+  fileDescriptionChanged,
   fileRemoved,
   fileRenamed,
   fileSelected,
@@ -197,6 +198,7 @@ function CurrentFileSettings() {
       onRemove={() => dispatch(fileConditionRemoved({ fileId }))}
       onModeChange={mode => dispatch(fileConditionModeChanged({ fileId, mode }))}
       onClassNameChange={className => dispatch(fileConditionClassNameChanged({ fileId, className }))}
+      onDescriptionChange={description => dispatch(fileDescriptionChanged({ fileId, description }))}
     />
   );
 }

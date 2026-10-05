@@ -8,7 +8,7 @@ import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
-import { Box, IconButton, Menu, MenuItem, TextField, Typography } from '@mui/material';
+import { Box, IconButton, Menu, MenuItem, TextField, Tooltip, Typography } from '@mui/material';
 import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 
 import { describeFileCondition } from '../canvas/fileCondition';
@@ -193,11 +193,13 @@ function FileRow({
         </Box>
       ) : (
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography
-            sx={{ fontSize: 13, fontWeight: selected ? 700 : 400, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {file.name}.cf
-          </Typography>
+          <Tooltip title={file.description ?? ''} placement="right" enterDelay={400} slotProps={{ tooltip: { sx: { whiteSpace: 'pre-line', maxWidth: 320 } } }}>
+            <Typography
+              sx={{ fontSize: 13, fontWeight: selected ? 700 : 400, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+            >
+              {file.name}.cf
+            </Typography>
+          </Tooltip>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
             <Typography sx={{ fontSize: 11, color: 'text.muted', flexShrink: 0 }}>{blockCount} blocks</Typography>
             {gate && (

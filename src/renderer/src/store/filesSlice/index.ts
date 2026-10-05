@@ -85,6 +85,12 @@ const filesSlice = createSlice({
       const file = state.files.find(item => item.id === action.payload.fileId);
       if (file?.condition) file.condition.className = action.payload.className;
     },
+    fileDescriptionChanged(state, action: PayloadAction<{ description: string; fileId: string }>) {
+      const file = state.files.find(item => item.id === action.payload.fileId);
+      if (!file) return;
+      if (action.payload.description.trim()) file.description = action.payload.description;
+      else delete file.description;
+    },
     fileSelected(state, action: PayloadAction<{ fileId: string }>) {
       state.currentFileId = action.payload.fileId;
     },
@@ -139,6 +145,7 @@ export const {
   fileConditionRemoved,
   fileConditionModeChanged,
   fileConditionClassNameChanged,
+  fileDescriptionChanged,
   fileSelected,
   fileRenamed,
   folderRenamed,

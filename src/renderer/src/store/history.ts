@@ -33,6 +33,7 @@ const TYPING_FIELDS: Record<string, string> = {
   'canvas/inventoryAttributeNameChanged': 'attributeName',
   'canvas/sampleInputChanged': 'value',
   'files/fileConditionClassNameChanged': 'className',
+  'files/fileDescriptionChanged': 'description',
   'groups/groupConditionClassNameChanged': 'className',
   'groups/groupRenamed': 'name',
   'testEnvironments/hostRenamed': 'name'

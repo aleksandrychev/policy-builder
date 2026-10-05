@@ -7,7 +7,7 @@ import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types'
 import { derivedNodeMoved } from '../store/derivedNodesSlice';
 import { edgeAdded } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
-import { fileAdded, fileSelected, projectFilesInitialized } from '../store/filesSlice';
+import { fileAdded, fileDescriptionChanged, fileSelected, projectFilesInitialized } from '../store/filesSlice';
 import { groupCreated } from '../store/groupsSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
@@ -296,10 +296,15 @@ const POSITIONS: Record<string, Position> = {
 const positionOf = (block: DemoBlock) => POSITIONS[block.label] ?? { x: 0, y: 0 };
 
 export function createNginxDemoProject(dispatch: AppDispatch): void {
+  const describe = (fileId: string, description: string) => dispatch(fileDescriptionChanged({ fileId, description }));
   dispatch(projectCreated({ name: 'Nginx Web Server Demo' }));
 
   const commonFile = dispatch(projectFilesInitialized('Common'));
   const commonFileId = commonFile.payload.id;
+  describe(
+    commonFileId,
+    'Settings the other files share. It names the nginx package, sizes its workers from the CPU count, and caps connections per worker. It also defines the webserver_role class that marks a host as a web server.'
+  );
   const commonBlocks = buildCommonBlocks();
   commonBlocks.forEach(block => dispatch(blockAdded({ ...block, fileId: commonFileId, position: positionOf(block) })));
 
@@ -309,6 +314,10 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   // before it, they'd get root-only folders and clash with the package's own.
   const webserverFile = dispatch(fileAdded('Webserver'));
   const webserverFileId = webserverFile.payload.id;
+  describe(
+    webserverFileId,
+    'Turns a webserver_role host into an nginx web server. It installs nginx, removes a conflicting Apache, renders nginx.conf from a template and restarts nginx only when that file changes. It keeps the service running and publishes a landing page. It also tidies up: removes the default site, locks down config permissions, prunes old logs and creates a deploy user.'
+  );
   const [install, ...beforeTemplate] = buildWebserverBlocksBeforeTemplate();
   const renderTemplate = buildRenderTemplateBlock();
   const manageService = buildManageServiceBlock();
@@ -327,6 +336,10 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   arrow(webRoot, landingPage, ['kept', 'repaired']);
 
   const securityFileId = dispatch(fileAdded('Security')).payload.id;
+  describe(
+    securityFileId,
+    'Baseline hardening for every host. Where an SSH server is installed, it tightens sshd_config and restarts SSH when that changes. It enforces permissions on the account files and reports when they change. It also sets a login banner in /etc/issue.'
+  );
   const security = buildSecurityBlocks();
   const securityColumn = [
     security.sshdPresent,
