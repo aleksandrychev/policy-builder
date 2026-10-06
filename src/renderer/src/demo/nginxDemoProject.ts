@@ -295,6 +295,9 @@ const POSITIONS: Record<string, Position> = {
 };
 const positionOf = (block: DemoBlock) => POSITIONS[block.label] ?? { x: 0, y: 0 };
 
+// The demo's test environment, the same every session; a project saved from the demo gets its own.
+export const DEMO_ENVIRONMENT_ID = 'demo-web-server';
+
 export function createNginxDemoProject(dispatch: AppDispatch): void {
   const describe = (fileId: string, description: string) => dispatch(fileDescriptionChanged({ fileId, description }));
   dispatch(projectCreated({ name: 'Nginx Web Server Demo' }));
@@ -368,7 +371,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   // One Ubuntu host serving the landing page on http://localhost:8080/. Fixed ids: every demo
   // session finds the same container again (Docker labels carry them) instead of orphaning it.
   const demoEnvironment = newEnvironment('Demo web server', { id: 'demo-web', name: 'web', ports: [{ host: 8080, container: 80 }] });
-  dispatch(environmentAdded({ ...demoEnvironment, id: 'demo-web-server', hub: 'demo-web' }));
+  dispatch(environmentAdded({ ...demoEnvironment, id: DEMO_ENVIRONMENT_ID, hub: 'demo-web' }));
   // Adding a file opens it; the demo opens on the web server.
   dispatch(fileSelected({ fileId: webserverFileId }));
   dispatch(historyCleared());

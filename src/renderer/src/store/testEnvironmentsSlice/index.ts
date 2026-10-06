@@ -27,6 +27,11 @@ const testEnvironmentsSlice = createSlice({
       const environment = find(state, action.payload.environmentId);
       if (environment) Object.assign(environment, action.payload.changes);
     },
+    // A new identity: its containers and runs are another environment's from now on.
+    environmentIdChanged(state, action: PayloadAction<{ environmentId: string; id: string }>) {
+      const environment = find(state, action.payload.environmentId);
+      if (environment) environment.id = action.payload.id;
+    },
     hubChanged(state, action: PayloadAction<{ environmentId: string; hostId: string }>) {
       const environment = find(state, action.payload.environmentId);
       if (environment?.hosts.some(host => host.id === action.payload.hostId)) environment.hub = action.payload.hostId;
@@ -68,6 +73,6 @@ const testEnvironmentsSlice = createSlice({
   }
 });
 
-export const { environmentAdded, environmentChanged, hubChanged, hostAdded, hostRemoved, hostRenamed, hostChanged, envVarsChanged } =
+export const { environmentAdded, environmentChanged, environmentIdChanged, hubChanged, hostAdded, hostRemoved, hostRenamed, hostChanged, envVarsChanged } =
   testEnvironmentsSlice.actions;
 export default testEnvironmentsSlice.reducer;

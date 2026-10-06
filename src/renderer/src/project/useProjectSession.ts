@@ -2,13 +2,14 @@ import { useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import type { ProjectFormValues, SubmitResult } from '../components/dialogs/NewProjectDialog';
-import { createNginxDemoProject } from '../demo/nginxDemoProject';
+import { DEMO_ENVIRONMENT_ID, createNginxDemoProject } from '../demo/nginxDemoProject';
 import { type RootState, createAppStore, useAppDispatch, useAppSelector } from '../store';
 import { projectFilesInitialized } from '../store/filesSlice';
 import { UNDOABLE_KEYS, historyCleared } from '../store/history';
 import { projectCreated, projectLoaded, projectLocated, projectTypeChanged } from '../store/projectSlice';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
 import type { Project, ProjectType } from '../store/projectSlice/types';
+import { environmentIdChanged } from '../store/testEnvironmentsSlice';
 import { type ProjectData, loadCfbsProject, toCfbsProject } from './cfbsProject';
 import { moduleNameFor } from './moduleName';
 
@@ -78,14 +79,29 @@ export function useProjectSession() {
 
   const saveProjectAs = async (values: ProjectFormValues): Promise<SubmitResult> => {
     if (!window.api || !values.parent) return { ok: false, message: 'Saving needs the desktop app', details: '' };
-    const data = snapshotOf(store.getState());
+    const current = snapshotOf(store.getState());
+    // A copy of the demo gets an environment of its own: the demo's fixed id would share its containers and runs.
+    const renewed = current.testEnvironments.some(environment => environment.id === DEMO_ENVIRONMENT_ID) ? crypto.randomUUID() : null;
+    const data = renewed
+      ? {
+          ...current,
+          testEnvironments: current.testEnvironments.map(environment =>
+            environment.id === DEMO_ENVIRONMENT_ID ? { ...environment, id: renewed } : environment
+          )
+        }
+      : current;
     const moduleName = moduleNameFor(values.name);
     const content = toCfbsProject(data, { description: values.description, moduleName, name: values.name });
     const result = await window.api.createProject({ ...values, parent: values.parent, ...content });
     if (!result.ok) return result;
     const { description, name, type } = values;
     dispatch(projectLocated({ description, masterfiles: result.masterfiles, moduleName, name, path: result.path, type }));
-    markSaved(data);
+    if (renewed) {
+      dispatch(environmentIdChanged({ environmentId: DEMO_ENVIRONMENT_ID, id: renewed }));
+      // Undo would bring the demo's id back.
+      dispatch(historyCleared());
+    }
+    markSaved({ ...data, testEnvironments: store.getState().testEnvironments });
     return { ok: true };
   };
 
