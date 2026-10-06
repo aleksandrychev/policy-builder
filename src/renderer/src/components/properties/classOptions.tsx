@@ -32,7 +32,7 @@ function definitionToken(promiseType: string | undefined, definedName: string, b
 // A gated file's definitions only exist on hosts where that file runs.
 function otherFileGroup(file: PolicyFile): string {
   const gate = describeFileCondition(file.condition);
-  return `Defined in ${file.name}${gate ? ` · only where it ${gate}` : ''}`;
+  return `Defined in ${file.name}${gate ? ` · ${gate}` : ''}`;
 }
 
 // Every entry of a multi-entry block is its own token; `excludeEntryId` drops
