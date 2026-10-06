@@ -8,7 +8,7 @@ import { projectFilesInitialized } from '../store/filesSlice';
 import { UNDOABLE_KEYS, historyCleared } from '../store/history';
 import { projectCreated, projectLoaded, projectLocated, projectTypeChanged } from '../store/projectSlice';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
-import type { ProjectType } from '../store/projectSlice/types';
+import type { Project, ProjectType } from '../store/projectSlice/types';
 import { type ProjectData, loadCfbsProject, toCfbsProject } from './cfbsProject';
 import { moduleNameFor } from './moduleName';
 
@@ -44,7 +44,7 @@ export function useProjectSession() {
   const [projectDialog, setProjectDialog] = useState<'new' | 'saveAs' | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const saving = useRef(false);
+  const saving = useRef<Promise<boolean> | null>(null);
   // Resolves the save a "Save Project As" dialog was opened for.
   const saveAsDone = useRef<((saved: boolean) => void) | null>(null);
 
@@ -105,21 +105,12 @@ export function useProjectSession() {
     return result;
   };
 
-  // Resolves with whether the project ended up saved.
-  const save = async (): Promise<boolean> => {
-    const current = store.getState().project;
-    if (!current || !window.api || saving.current) return false;
-    if (!current.path) {
-      saveAsDone.current?.(false);
-      setProjectDialog('saveAs');
-      return new Promise(resolve => (saveAsDone.current = resolve));
-    }
-    saving.current = true;
+  const write = async (current: Project & { path: string }, api: NonNullable<Window['api']>): Promise<boolean> => {
     const data = snapshotOf(store.getState());
     try {
       const content = toCfbsProject(data, current);
       // The stored type is what cfbs.json becomes: a type change in Project Settings converts it here.
-      const result = await window.api.saveProject(current.path, content, { masterfiles: current.masterfiles, type: current.type });
+      const result = await api.saveProject(current.path, content, { masterfiles: current.masterfiles, type: current.type });
       if (!result.ok) throw new Error(result.message);
       // A conversion to a policy set brings masterfiles: show the version it got.
       if (result.masterfiles !== current.masterfiles) dispatch(projectTypeChanged({ masterfiles: result.masterfiles, type: current.type }));
@@ -128,8 +119,25 @@ export function useProjectSession() {
     } catch (cause) {
       setError(`Couldn’t save the project: ${errorMessage(cause)}`);
       return false;
+    }
+  };
+
+  // Resolves with whether the project ended up saved. One already running is waited for, then this one saves.
+  const save = async (): Promise<boolean> => {
+    while (saving.current) await saving.current;
+    const current = store.getState().project;
+    if (!current || !window.api) return false;
+    if (!current.path) {
+      saveAsDone.current?.(false);
+      setProjectDialog('saveAs');
+      return new Promise(resolve => (saveAsDone.current = resolve));
+    }
+    const run = write({ ...current, path: current.path }, window.api);
+    saving.current = run;
+    try {
+      return await run;
     } finally {
-      saving.current = false;
+      saving.current = null;
     }
   };
 
