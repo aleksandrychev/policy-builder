@@ -236,6 +236,15 @@ describe('loadCfbsProject', () => {
     expect(() => loadCfbsProject(json, builder, 'x')).toThrow();
   });
 
+  it.each([
+    ['a null block', { files: [{ id: 'f1', blocks: [null] }] }],
+    ['a null folder', { folders: [null], files: [{ id: 'f1', path: './a.cf' }] }]
+  ])('names the builder data, not a TypeError, for %s', (_what, builder) => {
+    expect(() => loadCfbsProject({ build: [] }, { schema_version: SCHEMA_VERSION, ...builder }, 'x')).toThrow(
+      'The project’s builder data (.policy-builder/project.json) is malformed'
+    );
+  });
+
   it('tolerates corrupt per-file lists', () => {
     const file = { id: 'f1', name: 'A', bundle: 'a', path: './a.cf', blocks: 'oops', layout: 'oops' };
     const { data } = loadCfbsProject({ build: [] }, { schema_version: SCHEMA_VERSION, files: [file] }, 'x');

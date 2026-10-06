@@ -264,6 +264,16 @@ export function fromBuilderProject(json: unknown): ProjectData {
   if (!isObject(json)) throw new Error('The project’s builder data (.policy-builder/project.json) is not a JSON object');
   const project = json as unknown as ProjectMeta;
   checkSchemaVersion(project.schema_version);
+  try {
+    return readBuilderProject(project);
+  } catch (cause) {
+    // A wrong type somewhere inside (hand-edited or corrupt): say which file, not the TypeError.
+    if (cause instanceof TypeError) throw new Error('The project’s builder data (.policy-builder/project.json) is malformed', { cause });
+    throw cause;
+  }
+}
+
+function readBuilderProject(project: ProjectMeta): ProjectData {
   const folders = listOf(project.folders);
   const modules = listOf(project.files)
     .filter(file => isObject(file) && typeof file.id === 'string')
