@@ -22,9 +22,13 @@ export interface EnvironmentSettingsDialogProps {
 export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps) {
   const { environment, busy, onChange } = props;
   const emulated = Boolean(props.engineArch) && props.engineArch !== environment.arch;
-  // Text is committed on blur: one undo step per edit.
+  // Text is committed on blur: one undo step per edit (and one platform lookup per version).
   const name = useDraft(environment.name, text => {
     if (text !== environment.name) onChange({ name: text });
+  });
+  const version = useDraft(environment.version, text => {
+    const value = text.trim() || 'latest';
+    if (value !== environment.version) onChange({ version: value });
   });
   const envFile = useDraft(environment.envFile ?? '', text => {
     const value = text.trim() || null;
@@ -66,9 +70,10 @@ export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps)
             <TextField
               label="CFEngine version"
               size="small"
-              value={environment.version}
+              value={version.value}
               disabled={busy}
-              onChange={event => onChange({ version: event.target.value.trim() || 'latest' })}
+              onChange={event => version.setDraft(event.target.value)}
+              onBlur={version.flush}
               helperText="latest, or e.g. 3.27.1"
               sx={{ flex: 1 }}
             />

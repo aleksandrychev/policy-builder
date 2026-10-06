@@ -80,12 +80,17 @@ describe('EnvironmentSettingsDialog', () => {
     expect(screen.getByText('Native')).toBeInTheDocument();
   });
 
-  it('trims the version and falls back to latest', () => {
-    const { onChange } = setup();
+  it('saves the version once, on blur, trimmed and falling back to latest', () => {
+    const { onChange } = setup({ environment: { version: '3.26.0' } });
     const version = screen.getByRole('textbox', { name: 'CFEngine version' });
+    fireEvent.change(version, { target: { value: '' } });
+    expect(version).toHaveValue('');
     fireEvent.change(version, { target: { value: ' 3.27.1 ' } });
-    expect(onChange).toHaveBeenLastCalledWith({ version: '3.27.1' });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(version);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ version: '3.27.1' });
     fireEvent.change(version, { target: { value: '  ' } });
+    fireEvent.blur(version);
     expect(onChange).toHaveBeenLastCalledWith({ version: 'latest' });
   });
 
