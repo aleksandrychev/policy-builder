@@ -68,3 +68,15 @@ describe('the renderer it loads', () => {
     expect(state.loaded).toEqual(['app://bundle/index.html']);
   });
 });
+
+describe('app://bundle/', () => {
+  const serve = async (url: string) => (await state.protocols.get('app')!(new Request(url))).status;
+
+  it('serves the built renderer’s files, and answers 404 to anything else', async () => {
+    await launch({ isPackaged: true });
+    expect(await serve('app://bundle/index.html')).toBe(200);
+    for (const url of ['app://bundle/%E0%A4%A', 'app://bundle/%', 'app://bundle/..%2f..%2fpackage.json', 'app://other/index.html']) {
+      expect(await serve(url)).toBe(404);
+    }
+  });
+});

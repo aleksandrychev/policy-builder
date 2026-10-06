@@ -73,7 +73,12 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 // app://bundle/<path> → the built renderer's file; nothing outside its folder.
 function serveRenderer(request: Request): Promise<Response> | Response {
   const url = new URL(request.url);
-  const path = normalize(join(rendererDir, decodeURIComponent(url.pathname)));
+  let path: string;
+  try {
+    path = normalize(join(rendererDir, decodeURIComponent(url.pathname)));
+  } catch {
+    return new Response('Not found', { status: 404 }); // a malformed %-escape
+  }
   if (url.host !== 'bundle' || !path.startsWith(rendererDir + sep)) return new Response('Not found', { status: 404 });
   return net.fetch(pathToFileURL(path).href).catch(() => new Response('Not found', { status: 404 }));
 }
