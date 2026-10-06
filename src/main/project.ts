@@ -291,7 +291,7 @@ async function fetchMasterfilesVersions(): Promise<MasterfilesVersions> {
     const versions = Object.keys(index.masterfiles ?? {});
     return { latest: highestRelease(versions, '3.27') ?? FALLBACK_VERSIONS.latest };
   } catch (error) {
-    console.error(`[project] masterfiles versions unavailable, using built-in ones: ${error}`);
+    console.warn(`[project] masterfiles versions unavailable, using built-in ones: ${error}`);
     versionsRequest = null; // retry next time
     return FALLBACK_VERSIONS;
   }
