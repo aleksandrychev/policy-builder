@@ -12,7 +12,7 @@ export const SAVE_TIMEOUT_MS = 20_000;
 
 type Fixtures = {
   app: ElectronApplication;
-  // Console errors and page errors seen so far; assert it is empty at the end of a test.
+  // Console errors (main process and windows) and page errors seen so far; assert it is empty at the end of a test.
   consoleErrors: string[];
   // A temp folder for project fixtures, removed after the test. The profile lives in user-data/,
   // and New Project defaults to projects/ (never the real Documents folder).
@@ -32,19 +32,27 @@ export const test = base.extend<Fixtures>({
   },
   // eslint-disable-next-line no-empty-pattern -- Playwright requires the fixtures arg to be destructured
   consoleErrors: async ({}, provide) => provide([]),
-  app: async ({ scratchDir }, provide) => {
+  app: async ({ scratchDir, consoleErrors }, provide) => {
     const app = await launch(join(scratchDir, 'user-data'));
+    // From launch on. The sidecar's stderr reaches the main console as diagnostics, not errors.
+    app.on('console', message => {
+      if (message.type() === 'error' && !message.text().startsWith('[cfpb-backend]')) consoleErrors.push(`main: ${message.text()}`);
+    });
+    const watch = (page: Page) => {
+      page.on('console', message => {
+        if (message.type() === 'error') consoleErrors.push(message.text());
+      });
+      page.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
+    };
+    app.windows().forEach(watch);
+    app.on('window', watch);
     await provide(app);
     // exit() skips the unsaved-changes prompt a plain close() would wait on.
     await app.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {});
     await app.close();
   },
-  window: async ({ app, consoleErrors }, provide, testInfo) => {
+  window: async ({ app }, provide, testInfo) => {
     const window = await shownWindow(app);
-    window.on('console', message => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
-    });
-    window.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
     await provide(window);
     if (testInfo.status !== testInfo.expectedStatus) {
       const path = testInfo.outputPath('failure.png');
