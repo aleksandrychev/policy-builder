@@ -352,6 +352,15 @@ async function removeEmptyFolders(projectPath: string, folder: string): Promise<
   }
 }
 
+// Saving writes and deletes only inside the project, also once symlinked folders are followed.
+async function checkInProject(projectPath: string, path: string): Promise<void> {
+  const root = await fs.realpath(projectPath);
+  let folder = dirname(join(projectPath, path));
+  let real = await fs.realpath(folder).catch(() => null);
+  while (real === null && dirname(folder) !== folder) real = await fs.realpath((folder = dirname(folder))).catch(() => null);
+  if (real === null || (real !== root && !isInside(real, root))) throw new Error(`Refusing to save through a link out of the project: ${path}`);
+}
+
 /**
  * Saves the project: its generated files first, then .policy-builder/project.json,
  * then cfbs.json. Files the previous save generated and this one doesn't are removed.
@@ -371,14 +380,16 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
   if (missing) throw new Error(`No policy was generated for ${missing}`);
   const outside = generated.find(path => !isGeneratedPath(path));
   if (outside) throw new Error(`Refusing to write generated policy outside the project: ${outside}`);
+  const stale = generatedPaths(previous).filter(path => !generated.includes(path));
+  for (const path of [...generated, ...stale, BUILDER_FILE, TEST_ENVIRONMENTS_FILE]) await checkInProject(projectPath, path);
   for (const path of generated) {
     const target = join(projectPath, path);
     await fs.mkdir(dirname(target), { recursive: true });
     await writeFileAtomic(target, files[path]);
   }
-  for (const stale of generatedPaths(previous).filter(path => !generated.includes(path))) {
-    await fs.rm(join(projectPath, stale), { force: true });
-    await removeEmptyFolders(projectPath, dirname(stale));
+  for (const path of stale) {
+    await fs.rm(join(projectPath, path), { force: true });
+    await removeEmptyFolders(projectPath, dirname(path));
   }
   const saved = withGenerated(stamped(content), generated, storage.type);
   await fs.mkdir(dirname(join(projectPath, BUILDER_FILE)), { recursive: true });
@@ -395,6 +406,7 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
 // The project's test environments (the Test Results & Logs tab); no file when there are none.
 export async function writeTestEnvironments(projectPath: string, environments: object[] | undefined): Promise<void> {
   const path = join(projectPath, TEST_ENVIRONMENTS_FILE);
+  await checkInProject(projectPath, TEST_ENVIRONMENTS_FILE);
   if (!environments?.length) return fs.rm(path, { force: true });
   await fs.mkdir(dirname(path), { recursive: true });
   await writeFileAtomic(path, `${JSON.stringify({ environments }, null, 2)}\n`);

@@ -339,6 +339,38 @@ describe('IPC handlers', () => {
     expect(await fs.readFile(join(temp, 'outside.cf'), 'utf-8')).toBe('x');
   });
 
+  it('neither writes nor deletes through a symlinked folder out of the project', async () => {
+    const outside = join(temp, 'outside');
+    await fs.mkdir(outside);
+    await fs.writeFile(join(outside, 'promises.cf'), 'theirs');
+    await fs.symlink(outside, join(project(), 'services'));
+    await open();
+    const refused = { ok: false, message: 'Refusing to save through a link out of the project: ./services/promises.cf' };
+
+    compiled.mockResolvedValue({ files: { './main.cf': 'x', './services/promises.cf': 'ours' }, sourceMap: {} });
+    expect(await save()).toEqual(expect.objectContaining(refused));
+    compiled.mockResolvedValue({ files: { './main.cf': 'x', './services/new/promises.cf': 'ours' }, sourceMap: {} });
+    expect(await save()).toMatchObject({ ok: false, message: expect.stringContaining('./services/new/promises.cf') });
+    await expect(fs.stat(join(outside, 'new'))).rejects.toThrow();
+
+    // A stale file listed by the project itself.
+    compiled.mockResolvedValue({ files: { './main.cf': 'x' }, sourceMap: {} });
+    await fs.mkdir(join(project(), '.policy-builder'));
+    await fs.writeFile(join(project(), '.policy-builder', 'project.json'), JSON.stringify({ files: [], generated: ['./services/promises.cf'] }));
+    expect(await save()).toEqual(expect.objectContaining(refused));
+    expect(await fs.readFile(join(outside, 'promises.cf'), 'utf-8')).toBe('theirs');
+    await expect(fs.stat(join(project(), 'main.cf'))).rejects.toThrow();
+  });
+
+  it('doesn’t write the builder’s data through a symlinked folder', async () => {
+    await fs.mkdir(join(temp, 'outside'));
+    await fs.symlink(join(temp, 'outside'), join(project(), '.policy-builder'));
+    await open();
+    expect(await save()).toMatchObject({ ok: false, message: 'Refusing to save through a link out of the project: .policy-builder/project.json' });
+    expect(await fs.readdir(join(temp, 'outside'))).toEqual([]);
+    await expect(writeTestEnvironments(project(), [{ name: 'debian' }])).rejects.toThrow('Refusing to save through a link');
+  });
+
   it('counts only paths inside an opened project as known', async () => {
     await open();
     await fs.mkdir(join(temp, 'outside'));
