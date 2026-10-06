@@ -159,6 +159,18 @@ const builderModules = (project: unknown) => {
   return modules;
 };
 
+// The cfbs steps the builder writes: never `run` (a command), nor a path out of the project.
+const BUILDER_STEP = /^(?:copy|directory|policy_files|bundles)(?: [^\s/~]\S*)+$/;
+const isBuilderStep = (step: unknown) => typeof step === 'string' && BUILDER_STEP.test(step) && !step.split(/[ /\\]/).includes('..');
+
+/** Refuses the builder's modules (and the module it provides) unless every step is one the builder writes. */
+export function checkedBuilderModules(modules: unknown[], provided: Record<string, unknown>): void {
+  if (!Array.isArray(provided.steps) || !provided.steps.every(isBuilderStep)) throw new InvalidRequest('Invalid provided module');
+  if (!modules.every(module => isRecord(module) && Array.isArray(module.steps) && module.steps.every(isBuilderStep))) {
+    throw new InvalidRequest('Invalid policy module');
+  }
+}
+
 export function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
   if (!isRecord(content) || !isRecord(content.project) || !Array.isArray(content.modules) || !isRecord(content.provided)) {
@@ -167,17 +179,12 @@ export function checkedContent(value: unknown): ProjectContent {
   if (typeof content.project.module_name !== 'string' || !MODULE_NAME.test(content.project.module_name)) {
     throw new InvalidRequest('Invalid module name');
   }
-  const provided = content.provided;
-  if (!Array.isArray(provided.steps) || !provided.steps.every(step => typeof step === 'string')) throw new InvalidRequest('Invalid provided module');
   const paths = builderPaths(content.project);
   if (!paths.every(isPolicyPath) || new Set(paths).size !== paths.length) throw new InvalidRequest('Invalid policy file path');
   const modules = builderModules(content.project);
   const names = content.modules.map(module => (isRecord(module) ? module.name : undefined));
-  const ok =
-    names.length === modules.size &&
-    names.every(name => typeof name === 'string' && modules.has(name)) &&
-    content.modules.every(module => isRecord(module) && Array.isArray(module.steps));
-  if (!ok) throw new InvalidRequest('Invalid policy module');
+  if (names.length !== modules.size || !names.every(name => typeof name === 'string' && modules.has(name))) throw new InvalidRequest('Invalid policy module');
+  checkedBuilderModules(content.modules, content.provided);
   const environments = content.testEnvironments;
   if (environments !== undefined && !(Array.isArray(environments) && environments.every(isRecord) && environments.every(hasValidEnvFile))) {
     throw new InvalidRequest('Invalid test environments');
