@@ -266,6 +266,17 @@ def test_the_file_condition_guards_every_promise():
     assert "  reports:\n    linux::\n" in policy
 
 
+@pytest.mark.parametrize("name, expected", [("linux", "!linux"), ("linux|darwin", "!(linux|darwin)")])
+def test_unless_negates_the_whole_expression(name: str, expected: str):
+    meta = _demo()
+    block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "manage-users")
+    block["condition"] = {"kind": "class", "className": name, "mode": "unless"}
+
+    users = _block(compile_project(meta)[WEBSERVER], "Create deploy user")
+
+    assert f'if => "{expected}"' in users
+
+
 def test_unknown_block_types_fail_the_compile():
     meta = _demo()
     _webserver(meta)["blocks"][0]["blockId"] = "no-such-block"

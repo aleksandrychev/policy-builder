@@ -96,9 +96,13 @@ def cases_of(value: str) -> list[dict]:
     ]
 
 
+def negated(expression: str) -> str:
+    return f"!({expression})" if re.search(r"[|.&!()]", expression) else f"!{expression}"
+
+
 def class_expression(condition: dict) -> str:
     name = condition["className"].strip()
-    return f"!{name}" if condition.get("mode") == "unless" else name
+    return negated(name) if condition.get("mode") == "unless" else name
 
 
 def combined(expressions: list[str]) -> str:
@@ -184,9 +188,7 @@ def compile_value(expr, ctx: Context) -> str:
         args = []
         for row in cases_of(ctx.params.get(expr["cases_param"], "")):
             name = row["className"]
-            condition = (
-                (f"!({name})" if re.search(r"[|.&!]", name) else f"!{name}") if row.get("mode") == "unless" else name
-            )
+            condition = negated(name) if row.get("mode") == "unless" else name
             args += [quote(condition), quote(row.get("value", ""))]
         otherwise = compile_value(expr["otherwise"], ctx)
         return f"ifelse({', '.join([*args, otherwise])})" if args else otherwise
