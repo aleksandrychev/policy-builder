@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
 import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
+import { contentKey } from './useCompiledPolicy';
 
 /**
  * What the test environments are doing right now, per environment: the action
@@ -53,7 +54,7 @@ export interface EnvironmentRuntime {
   error: string | null;
   hosts: Record<string, HostRuntime>;
   hub: { setupCode: string | null; url: string | null } | null;
-  // The last Deploy & run: when, on what policy (the request's content, as JSON) and how many
+  // The last Deploy & run: when, on what policy (the request's contentKey) and how many
   // hosts, and whether it passed (null while running) — Deployment's "Tested?".
   lastRun: { at: number; content: string; hosts: number; passed: boolean | null } | null;
   lines: LogLine[];
@@ -192,7 +193,12 @@ export async function startAction(environment: TestEnvironment, action: Action, 
     problems: action === 'run' || action === 'test' ? {} : runtime.problems,
     lastRun:
       action === 'run' || action === 'test'
-        ? { at: Date.now(), content: JSON.stringify(request.content ?? null), hosts: request.hosts?.length ?? environment.hosts.length, passed: null }
+        ? {
+            at: Date.now(),
+            content: request.content ? contentKey(request.content) : 'null',
+            hosts: request.hosts?.length ?? environment.hosts.length,
+            passed: null
+          }
         : runtime.lastRun
   }));
   try {

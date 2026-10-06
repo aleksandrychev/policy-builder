@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAppSelector } from '../store';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
-import { toCfbsProject } from './cfbsProject';
+import { type ProjectMeta, toCfbsProject } from './cfbsProject';
 
 type CompiledPolicy = Awaited<ReturnType<NonNullable<Window['api']>['compilePolicy']>>;
 
@@ -16,6 +16,12 @@ export interface CompiledPolicyState {
 }
 
 const DEBOUNCE_MS = 400;
+
+// What the compiler reads: everything but the open file and positions.
+const compiledPart = (meta: ProjectMeta) => ({ ...meta, current_file_id: null, files: meta.files.map(({ layout: _layout, ...file }) => file) });
+
+/** Saved project content as a key that layout-only changes and switching files leave alone. */
+export const contentKey = (content: { project: object }) => JSON.stringify({ ...content, project: compiledPart(content.project as ProjectMeta) });
 
 /**
  * The project's generated policy, compiled by the sidecar exactly as a save
@@ -34,11 +40,8 @@ export function useCompiledPolicy(enabled: boolean): CompiledPolicyState {
     () => (project ? toCfbsProject({ canvas, derivedNodes, edges, files, groups, testEnvironments: [] }, project).project : null),
     [project, canvas, derivedNodes, edges, files, groups]
   );
-  // What the compiler reads (and is sent): everything but the open file and positions.
-  const key = useMemo(
-    () => (meta ? JSON.stringify({ ...meta, current_file_id: null, files: meta.files.map(({ layout: _layout, ...file }) => file) }) : null),
-    [meta]
-  );
+  // What the compiler is sent.
+  const key = useMemo(() => (meta ? JSON.stringify(compiledPart(meta)) : null), [meta]);
   const pathOf = useMemo(() => Object.fromEntries((meta?.files ?? []).map(file => [file.id, file.path])), [meta]);
 
   const [result, setResult] = useState<CompiledPolicy | null>(null);

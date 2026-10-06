@@ -2,6 +2,8 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 
 import type { BuildResult, GitStatus, HubState, OperationResult, SavedHub } from '../../../preload/api';
 import type { CompiledPolicyState } from '../project/useCompiledPolicy';
+import { blockLabelChanged, blockMoved } from '../store/canvasSlice';
+import { fileSelected } from '../store/filesSlice';
 import { addBlock, addFile } from '../store/test/storeTestUtils';
 import { installApi, renderWithProviders, uninstallApi } from '../test/render';
 
@@ -172,6 +174,27 @@ describe('DeploymentView', () => {
       expect(screen.getByText('Undefined variable')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Show Say hello' }));
       expect(onShowBlock).toHaveBeenCalledWith(fileId, blockId);
+    });
+
+    it('keeps the check current when blocks only move or another file is opened', async () => {
+      const ids = { first: '', second: '', block: '' };
+      await setup({
+        prepare: created => {
+          ids.first = addFile(created);
+          ids.second = addFile(created, 'Other');
+          ids.block = addBlock(created, ids.first);
+        }
+      });
+      await checksOut();
+      fireEvent.click(check('Valid policy'));
+      const stale = 'The project changed since this check: Run pre-flight to check it again.';
+      act(() => {
+        store.dispatch(blockMoved({ instanceId: ids.block, position: { x: 300, y: 200 } }));
+        store.dispatch(fileSelected({ fileId: ids.second }));
+      });
+      expect(screen.queryByText(stale)).not.toBeInTheDocument();
+      act(() => void store.dispatch(blockLabelChanged({ instanceId: ids.block, label: 'Renamed' })));
+      expect(screen.getByText(stale)).toBeInTheDocument();
     });
 
     it('shows the build’s progress, then its failure with details, until Close', async () => {

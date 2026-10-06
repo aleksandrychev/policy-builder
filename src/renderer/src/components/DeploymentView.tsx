@@ -21,7 +21,7 @@ import {
 } from '../project/deployRuns';
 import { commitMessage, projectChanges } from '../project/projectChanges';
 import { useEnvironmentRuntime } from '../project/testRuns';
-import type { CompiledPolicyState } from '../project/useCompiledPolicy';
+import { type CompiledPolicyState, contentKey } from '../project/useCompiledPolicy';
 import { store, useAppSelector } from '../store';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
 import { PreflightRow } from './deploy/Preflight';
@@ -67,7 +67,7 @@ function useGitStatus(path: string | null) {
   return { git, setGit, failure, setFailure, refresh };
 }
 
-// The changes since the last commit, and the project content as saving writes it (what checks compare).
+// The changes since the last commit, and the project content as saving writes it, keyed without layout (what checks compare).
 function useProjectState(git: GitStatus | null) {
   const project = useAppSelector(selectCurrentProject);
   const canvas = useAppSelector(state => state.canvas);
@@ -75,11 +75,12 @@ function useProjectState(git: GitStatus | null) {
   const groups = useAppSelector(state => state.groups);
   const files = useAppSelector(state => state.files);
   const derivedNodes = useAppSelector(state => state.derivedNodes);
-  const content = useMemo(
-    () => (project ? JSON.stringify(toCfbsProject(snapshot(), project)) : ''),
+  const saved = useMemo(
+    () => (project ? toCfbsProject(snapshot(), project) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the slices are what the snapshot reads
     [project, canvas, edges, groups, files, derivedNodes]
   );
+  const content = useMemo(() => (saved ? contentKey(saved) : ''), [saved]);
   const changes = useMemo(() => {
     let head: ProjectData | null = null;
     try {
@@ -90,13 +91,12 @@ function useProjectState(git: GitStatus | null) {
     // Through the same save and load as the commit went, so both sides have the same shape.
     let now = snapshot();
     try {
-      if (project) now = fromBuilderProject(JSON.parse(content).project);
+      if (saved) now = fromBuilderProject(JSON.parse(JSON.stringify(saved.project)));
     } catch {
       // Unsaveable state: compare as it is.
     }
     return projectChanges(head, now);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- content stands for the slices
-  }, [git, content]);
+  }, [git, saved]);
   return { project, canvas, content, changes };
 }
 
