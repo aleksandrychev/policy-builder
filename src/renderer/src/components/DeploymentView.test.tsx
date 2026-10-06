@@ -59,6 +59,7 @@ interface Setup {
   build?: () => Promise<BuildReply>;
   // Read after `prepare`, which may add the blocks it maps.
   compiled?: () => CompiledPolicyState;
+  dirty?: boolean;
   git?: GitStatus;
   hubs?: SavedHub[];
   overrides?: Partial<Api>;
@@ -66,7 +67,7 @@ interface Setup {
 }
 
 // deployRuns, testRuns and the app store live at module level: fresh ones per test.
-async function setup({ build, compiled, git = gitStatus(), hubs = [], overrides = {}, prepare }: Setup = {}) {
+async function setup({ build, compiled, dirty = false, git = gitStatus(), hubs = [], overrides = {}, prepare }: Setup = {}) {
   vi.resetModules();
   api = installApi({
     buildPolicySet: vi.fn(build ?? (async () => ({ ok: true as const, build: goodBuild }))),
@@ -90,7 +91,7 @@ async function setup({ build, compiled, git = gitStatus(), hubs = [], overrides 
     onSave: vi.fn(async () => true),
     onShowBlock: vi.fn()
   };
-  const ui = () => <DeploymentView dirty={false} {...props} />;
+  const ui = () => <DeploymentView dirty={dirty} {...props} />;
   const view = renderWithProviders(ui(), { store });
   await waitFor(() => expect(api.gitStatus).toHaveBeenCalledWith(PATH));
   return { ...props, ui, view };
@@ -340,6 +341,23 @@ describe('DeploymentView', () => {
       expect(check('Pushed')).toHaveAttribute('title', 'Pushed: The remote has commits you don’t');
       fireEvent.click(screen.getByRole('button', { name: 'Close' }));
       expect(screen.queryByText('Push rejected')).not.toBeInTheDocument();
+    });
+
+    it('saves unsaved edits before pulling the remote’s commits, and doesn’t pull when that fails', async () => {
+      const sync = vi.fn(async () => ({ ok: true as const, status: clean(), pulled: true }));
+      const { onReload, onSave } = await setup({ dirty: true, git: clean({ behind: 1 }), overrides: { gitSync: sync } });
+      fireEvent.click(check('Pushed'));
+      const pull = async () => fireEvent.click(await screen.findByRole('button', { name: 'Pull theirs, then push' }));
+      onSave.mockResolvedValueOnce(false);
+      await pull();
+      expect(await screen.findByText('Not pulled: the project isn’t saved.')).toBeInTheDocument();
+      expect(sync).not.toHaveBeenCalled();
+      expect(onReload).not.toHaveBeenCalled();
+
+      await pull();
+      await waitFor(() => expect(onReload).toHaveBeenCalled());
+      expect(onSave).toHaveBeenCalledTimes(2);
+      expect(onSave.mock.invocationCallOrder[1]).toBeLessThan(sync.mock.invocationCallOrder[0]);
     });
   });
 });

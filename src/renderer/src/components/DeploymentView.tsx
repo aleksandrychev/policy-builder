@@ -333,6 +333,8 @@ export function DeploymentView({
         void gitAction(
           mode === 'rebase' ? 'Pulling the remote’s commits' : 'Overwriting the remote',
           async () => {
+            // Pulling reloads the project from disk: unsaved edits are saved first.
+            if (mode === 'rebase' && !(await saveIfEdited())) return { ok: false, message: 'Not pulled: the project isn’t saved.', details: '' };
             const result = await window.api!.gitSync(path!, mode);
             if (result.ok && result.pulled) await onReload();
             return result;
