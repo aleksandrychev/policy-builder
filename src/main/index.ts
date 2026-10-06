@@ -131,6 +131,11 @@ async function refreshMenu(): Promise<void> {
   if (window === menuWindow && !window.isDestroyed()) Menu.setApplicationMenu(buildApplicationMenu(window, recents));
 }
 
+// End-to-end runs (development builds only): no window on screen and no Dock icon, so tests
+// don't steal focus. Playwright drives the page all the same.
+const HIDDEN = !app.isPackaged && process.env.CFPB_E2E_HIDDEN === '1';
+if (HIDDEN) app.dock?.hide();
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -144,7 +149,9 @@ function createWindow(): void {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
-      contextIsolation: true
+      contextIsolation: true,
+      // A hidden window would otherwise have its timers throttled.
+      backgroundThrottling: !HIDDEN
     }
   });
 
@@ -166,7 +173,7 @@ function createWindow(): void {
   });
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show();
+    if (!HIDDEN) mainWindow.show();
     warmUpSidecar();
   });
 
