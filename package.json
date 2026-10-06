@@ -22,6 +22,7 @@
     "backend:sync": "uv sync --directory python",
     "backend:build": "uv run --directory python --group build pyinstaller --noconfirm cfpb-backend.spec",
     "backend:test": "uv run --directory python pytest",
+    "backend:coverage": "uv run --directory python pytest --cov --cov-report=xml --cov-report=term:skip-covered",
     "backend:format": "uv run --directory python black .",
     "backend:format:check": "uv run --directory python black --check .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -33,6 +34,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"scripts/**/*.mjs\"",
     "test": "vitest run --project renderer --project components --project main",
     "test:fast": "vitest run --project renderer --project main",
+    "test:coverage": "vitest run --project renderer --project components --project main --coverage",
     "test:integration": "vitest run --project integration",
     "test:watch": "vitest --project renderer --project main",
     "test:e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts"
@@ -70,6 +72,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^5.0.1",
     "electron": "^44.4.3",
     "electron-builder": "^26.16.1",
     "electron-vite": "^5.0.0",

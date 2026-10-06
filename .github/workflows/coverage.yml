@@ -1,0 +1,55 @@
+name: Coverage
+
+# Measures test coverage and uploads it to Codecov, one flag per language (badges in README.md).
+# Codecov's GitHub app authenticates the upload through OIDC: no token, so it runs in the
+# org's own repository only (forks get no OIDC token for it).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typescript:
+    name: TypeScript
+    if: github.repository_owner == 'cfengine'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          files: coverage/lcov.info
+          flags: typescript
+          fail_ci_if_error: true
+
+  python:
+    name: Python
+    if: github.repository_owner == 'cfengine'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
+      - run: uv run --no-sync --directory python pytest --cov --cov-report=xml
+      - uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          files: python/coverage.xml
+          flags: python
+          fail_ci_if_error: true

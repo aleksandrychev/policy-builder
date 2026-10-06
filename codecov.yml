@@ -1,0 +1,22 @@
+# Two languages, uploaded by separate jobs (.github/workflows/coverage.yml): each flag keeps its
+# last result when a commit uploads only the other, and coverage only informs, never fails a PR.
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: typescript
+      paths: [src/]
+    - name: python
+      paths: [python/]
+
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+comment:
+  layout: 'condensed_header, flags, files'

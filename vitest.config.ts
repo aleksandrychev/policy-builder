@@ -24,6 +24,13 @@ const electron = { alias: { electron: resolve('src/main/test/electron.ts') } };
 
 export default defineConfig({
   test: {
+    // npm run test:coverage → coverage/lcov.info (uploaded to Codecov) and a summary.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/test/**', 'src/**/*.d.ts'],
+      reporter: ['text-summary', 'lcov']
+    },
     projects: [
       // Logic: *.test.ts.
       rendererProject('renderer', 'src/renderer/**/*.test.ts'),

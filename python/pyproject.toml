@@ -22,6 +22,7 @@ dev = [
   "black>=24.10",
   "jsonschema>=4.23",
   "pytest>=8.3",
+  "pytest-cov>=7.1.0",
 ]
 # Only `npm run backend:build` needs PyInstaller (it runs with --group build);
 # a plain `uv sync` — including CI's lint/test job — skips it.
@@ -38,6 +39,11 @@ only-include = ["cfpb_backend.py", "cfpb_build.py", "cfpb_compiler.py", "cfpb_te
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# npm run backend:coverage: the sidecar's own modules, not its tests or the venv.
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", ".venv/*", "build/*", "dist/*", "cfpb-backend.spec"]
 
 # Black is the only Python tool here — formatting, no linting.
 [tool.black]

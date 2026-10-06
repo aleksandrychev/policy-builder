@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml)
 [![Electron security](https://github.com/cfengine/policy-builder/actions/workflows/electron-security.yml/badge.svg?branch=main)](SECURITY-CHECKLIST.md)
+[![TypeScript coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=typescript&label=TypeScript%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=typescript)
+[![Python coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=python&label=Python%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=python)
 
 Desktop application for building CFEngine policy.
 
