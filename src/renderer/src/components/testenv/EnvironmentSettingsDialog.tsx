@@ -90,7 +90,7 @@ export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps)
             slotProps={{ inputLabel: { shrink: true } }}
             helperText={
               props.saved
-                ? 'A file in the project folder with KEY=value lines (e.g. ./.env). The hosts get them as environment variables, like the ones above; they’re read at every run and never stored in the project or git, so put secrets there. Add the file to .gitignore.'
+                ? 'A file in the project folder with KEY=value lines (e.g. ./.env). The hosts get them as environment variables, like the ones above; they’re read at every run and never stored in the project or git, so put secrets there. Commits from here add it to .gitignore.'
                 : 'Save the project to use one: the path is relative to its folder.'
             }
             onChange={event => onChange({ envFile: event.target.value.trim() || null })}

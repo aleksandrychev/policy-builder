@@ -2,13 +2,13 @@ import { execFile } from 'child_process';
 import { BrowserWindow, type IpcMainInvokeEvent, type WebFrameMain, dialog, ipcMain, shell } from 'electron';
 import { promises as fs } from 'fs';
 import { homedir, hostname } from 'os';
-import { isAbsolute, join, normalize, relative } from 'path';
+import { isAbsolute, join, normalize, relative, sep } from 'path';
 
 import type { GitStatus } from '../preload/api';
 import { buildPolicySet } from './backend';
 // Runs on the hub as root: the deploy itself (see the script).
 import REMOTE_DEPLOY from './deploy.sh?raw';
-import { isKnownProject } from './project';
+import { isKnownProject, testEnvironmentSecretFiles } from './project';
 
 /**
  * The Deployment tab: Build (cfbs build + checks, in the sidecar) and Commit & push (the
@@ -51,11 +51,16 @@ function projectPath(value: unknown): string {
   return path;
 }
 
-async function ensureGitignore(path: string) {
+// Keeps cfbs's build output and the test environments' secrets (.env) files out of git.
+async function ensureGitignore(path: string, secrets: string[]) {
   const file = join(path, '.gitignore');
   const text = await fs.readFile(file, 'utf-8').catch(() => '');
-  if (text.split('\n').some(line => ['out', 'out/', '/out', '/out/'].includes(line.trim()))) return;
-  await fs.writeFile(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}out/\n`);
+  const lines = text.split('\n').map(line => line.trim());
+  const missing = [
+    ...(['out', 'out/', '/out', '/out/'].some(entry => lines.includes(entry)) ? [] : ['out/']),
+    ...secrets.map(secret => `/${secret.split(sep).join('/')}`).filter(entry => !lines.includes(entry) && !lines.includes(entry.slice(1)))
+  ];
+  if (missing.length) await fs.writeFile(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${missing.join('\n')}\n`);
 }
 
 // git's own identity when there is one, else the same fallback the project's first commit used.
@@ -131,7 +136,10 @@ async function status(path: string): Promise<GitStatus> {
 }
 
 async function commitAll(path: string, message: string) {
-  await ensureGitignore(path);
+  const secrets = await testEnvironmentSecretFiles(path);
+  await ensureGitignore(path, secrets);
+  // A secrets file committed before it was ignored leaves the index (it stays on disk).
+  if (secrets.length) await git(path, ['rm', '--cached', '--quiet', '--ignore-unmatch', '--', ...secrets]);
   const add = await git(path, ['add', '--all']);
   if (add.code !== 0) throw commandError('git add failed', add);
   const commit = await git(path, [...(await identity(path)), 'commit', '--quiet', '-m', message]);

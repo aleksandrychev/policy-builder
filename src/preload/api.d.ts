@@ -271,7 +271,7 @@ declare global {
       getPathForFile: (file: File) => string;
       /** The last few opened/created projects, most recent first. */
       getRecentProjects: () => Promise<RecentProject[]>;
-      /** Commits everything in the project folder (adding out/ to .gitignore). */
+      /** Commits everything in the project folder (adding out/ and the test environments’ .env files to .gitignore). */
       gitCommit: (path: string, message: string) => Promise<OperationResult<{ status: GitStatus }>>;
       /** Makes the project folder a git repository, with a first commit. */
       gitInit: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;

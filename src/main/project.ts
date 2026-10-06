@@ -393,6 +393,14 @@ async function readTestEnvironments(folder: string): Promise<unknown[] | null> {
   return isRecord(parsed) && Array.isArray(parsed.environments) ? parsed.environments : null;
 }
 
+/** The test environments' secrets (.env) files, relative to the project ("./.env" → ".env"); none outside it. */
+export async function testEnvironmentSecretFiles(folder: string): Promise<string[]> {
+  const files = ((await readTestEnvironments(folder)) ?? []).flatMap(environment =>
+    isRecord(environment) && typeof environment.envFile === 'string' && environment.envFile.trim() ? [normalize(environment.envFile.trim())] : []
+  );
+  return [...new Set(files.filter(file => !isAbsolute(file) && file !== '.' && !file.startsWith('..')))];
+}
+
 const failure = (error: unknown): OperationResult<never> => ({
   ok: false,
   message: error instanceof Error ? error.message : String(error),
