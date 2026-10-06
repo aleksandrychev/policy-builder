@@ -243,6 +243,8 @@ def compile_value(expr, ctx: Context) -> str:
         return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
     if "variable" in expr:
         name = ctx.qualified(ctx.substitute(expr["variable"]))
+        if not re.fullmatch(r"[\w.:\[\]]+", name, re.ASCII):
+            raise Skip(f"{name!r} isn't a variable name")
         if expr["as"] == "scalar":
             return quote(f"$({name})")
         if expr["as"] == "list" and not ctx.as_argument:
@@ -348,6 +350,20 @@ def params_with_defaults(declared: list[dict], given: dict) -> dict[str, str]:
         # CFEngine booleans are "true"/"false"; Python's str() would give "True".
         params[param["name"]] = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
     return params
+
+
+def invalid_values(declared: list[dict], params: dict[str, str]) -> list[str]:
+    """Parameters holding characters their allowed_chars rule out (names: bundles, variables, classes…)."""
+    return [
+        param.get("label", param["name"])
+        for param in declared
+        if param.get("allowed_chars") and not re.fullmatch(f"[{param['allowed_chars']}]*", params[param["name"]])
+    ]
+
+
+def entry_source(descriptor: dict, entry: dict) -> dict:
+    sources = {s["id"]: s for s in descriptor.get("value_sources", [])}
+    return sources.get(entry.get("valueSourceId")) or next(iter(sources.values()))
 
 
 def missing_required(declared: list[dict], params: dict[str, str]) -> list[str]:
@@ -573,8 +589,14 @@ class FileCompiler:
         return f"bundle common {self.vars_name}\n{{\n" + "\n".join(body) + "\n}"
 
     def entry_promises(self, block: dict, descriptor: dict, entry: dict) -> tuple[str, list[str]]:
-        sources = {s["id"]: s for s in descriptor.get("value_sources", [])}
-        source = sources.get(entry.get("valueSourceId")) or next(iter(sources.values()))
+        try:
+            return self.entry_lines(block, descriptor, entry)
+        except Skip as skip:
+            name = (entry.get("params") or {}).get(descriptor["entries"]["name_param"], "")
+            return entry_source(descriptor, entry)["steps"][0]["promise_type"], [f"# Skipped {one_line(name)}: {skip}."]
+
+    def entry_lines(self, block: dict, descriptor: dict, entry: dict) -> tuple[str, list[str]]:
+        source = entry_source(descriptor, entry)
         declared = [*descriptor.get("parameters", []), *source.get("parameters", [])]
         params = params_with_defaults(declared, entry.get("params") or {})
         step = source["steps"][0]
@@ -583,6 +605,9 @@ class FileCompiler:
         missing = missing_required(declared, params)
         if missing:
             return kind, [f"# Skipped: {', '.join(missing)} not set."]
+        invalid = invalid_values(declared, params)
+        if invalid:
+            raise Skip(f"{', '.join(invalid)} not valid")
 
         conditions = [
             class_expression(c)
@@ -600,12 +625,8 @@ class FileCompiler:
             )
 
         if kind != "vars":
-            try:
-                attributes = attributes_of(step, ctx)
-            except Skip as skip:
-                return kind, [f"# Skipped {one_line(name)}: {skip}."]
             return kind, promise(
-                quote(ctx.substitute(step["promiser"])), [*attributes, *condition_attributes(conditions)]
+                quote(ctx.substitute(step["promiser"])), [*attributes_of(step, ctx), *condition_attributes(conditions)]
             )
 
         [(value_type, value)] = step["attributes"].items()
@@ -711,7 +732,10 @@ class FileCompiler:
         name = names[block["instanceId"]]
         label = one_line(block.get("label") or self.descriptor(block)["name"])
         # Locals are prefixed with the block's own name: blocks share a bundle.
-        parts = self.block_parts(block, name, prefix=f"{name[len(self.bundle) + 1:]}_", owner=owner)
+        try:
+            parts = self.block_parts(block, name, prefix=f"{name[len(self.bundle) + 1:]}_", owner=owner)
+        except Skip as skip:
+            parts = f'Skipped "{label}": {skip}.'
         if isinstance(parts, str):
             self.chunks.append((block["instanceId"], parts))
             return [f"  # {parts}", ""]
@@ -785,6 +809,9 @@ class FileCompiler:
         missing = [*missing_required([p for p in declared if p["name"] not in bound], params), *missing_data]
         if missing:
             return f"Skipped \"{label}\": {', '.join(missing)} not set."
+        invalid = invalid_values([p for p in declared if p["name"] not in bound], params)
+        if invalid:
+            return f"Skipped \"{label}\": {', '.join(invalid)} not valid."
         # A parameter computed from data reads the local variable holding it (a list iterates).
         params.update({param: f"$({prefix}{param})" for param in computed})
         steps = descriptor.get("steps", [])
@@ -1008,6 +1035,8 @@ def compile_files(
             or not isinstance(file.get("bundle"), str)
         ):
             raise CompileError("Every file needs a path and a bundle")
+        if not re.fullmatch(r"[A-Za-z_]\w*", file["bundle"], re.ASCII):
+            raise CompileError(f"{file['bundle']!r} isn't a valid bundle name")
     types = variable_types(files, library)
     # Everything shares the default namespace: masterfiles' bundles and every file's own two.
     taken = set(library.reserved_bundles) | {

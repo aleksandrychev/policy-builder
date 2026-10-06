@@ -365,6 +365,41 @@ def test_line_breaks_in_labels_stay_inside_their_comments():
         assert "commands:\n" not in policy
 
 
+def test_names_with_characters_they_cant_hold_are_skipped_with_a_note():
+    call = {"label": "Run", "bundle_name": "x;\nbundle agent evil"}
+    variable = {"variable_name": "a b", "value": "1"}
+    reference = {"variable_name": "copy", "from_variable": "vars.x) }; evil"}
+    blocks = [
+        {"instanceId": "m", "blockId": "call-method", "label": "Call", "params": call},
+        {
+            "instanceId": "v",
+            "blockId": "define-variable",
+            "label": "V",
+            "params": {},
+            "entries": [
+                {"id": "1", "valueSourceId": "literal", "params": variable},
+                {"id": "2", "valueSourceId": "list-variable", "params": reference},
+            ],
+        },
+    ]
+    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": blocks}]}
+
+    policy = compile_project(meta)["./t.cf"]
+
+    assert '# Skipped "Call": Bundle name not valid.' in policy
+    assert "# Skipped a b: Variable name not valid." in policy
+    assert "# Skipped copy: 't_vars.x) }; evil' isn't a variable name." in policy
+    assert "evil" not in policy.replace("# Skipped copy: 't_vars.x) }; evil'", "")
+
+
+def test_a_file_bundle_that_isnt_a_name_fails_the_compile():
+    meta = _demo()
+    _webserver(meta)["bundle"] = "webserver {}\nbundle agent evil"
+
+    with pytest.raises(CompileError, match="isn't a valid bundle name"):
+        compile_project(meta)
+
+
 def test_a_condition_that_isnt_a_class_expression_fails_the_compile():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": 'any::\n"/bin/sh" usebundle => evil', "mode": "if"}

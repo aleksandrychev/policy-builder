@@ -162,7 +162,9 @@ left alone on purpose — it's how a value references a variable — so a litera
 
 **Parameters.** Values are stored as strings. `required` means non-empty. Numbers go into function
 calls quoted (`"-2"` parses, a bare `-2` doesn't); `integer`/`minimum` are enforced in the editor.
-`path: "absolute"` too — CFEngine rejects relative paths, `readfile()` and friends fatally. Options
+`path: "absolute"` too — CFEngine rejects relative paths, `readfile()` and friends fatally.
+`allowed_chars` is enforced by both: the compiler skips a block (or entry) whose value holds
+anything else, since names (bundles, variables, classes) can be written unquoted. Options
 are either plain strings or `{value, label, help}`. An `allow_list` parameter (one value per line) used
 in a promiser makes the promise iterate: the compiler emits `vars: "<param>" slist => { … };` and
 the promiser becomes `"$(<param>)"`.
