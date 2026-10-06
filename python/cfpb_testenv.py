@@ -578,10 +578,15 @@ def _network(engine, env: dict):
     return existing[0] if existing else engine.networks.create(name, labels={LABEL_ENV: env["id"]})
 
 
+# Published ports listen on this machine only: Docker's default (every interface) would open a
+# test hub's Mission Portal and cf-serverd to the network.
+PUBLISH_ADDRESS = "127.0.0.1"
+
+
 def _config_hash(image: str, host: dict) -> str:
     """What a container is created with that can't change afterwards: image, name and ports."""
     ports = sorted((int(p["host"]), int(p["container"])) for p in host.get("ports") or [])
-    return hashlib.sha256(json.dumps([image, host["name"], ports]).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps([image, host["name"], ports, PUBLISH_ADDRESS]).encode()).hexdigest()[:16]
 
 
 def _ensure_container(engine, env: dict, host: dict, image: str, environment: dict):
@@ -605,7 +610,7 @@ def _ensure_container(engine, env: dict, host: dict, image: str, environment: di
         init=True,  # reaps zombies (an Enterprise hub leaves defunct httpd / php-fpm otherwise)
         network=network_name(env),
         platform=DOCKER_PLATFORM.get(env.get("arch") or "x86_64"),
-        ports={f"{int(p['container'])}/tcp": int(p["host"]) for p in host.get("ports") or []},
+        ports={f"{int(p['container'])}/tcp": (PUBLISH_ADDRESS, int(p["host"])) for p in host.get("ports") or []},
         environment=environment,
         labels={LABEL_ENV: env["id"], LABEL_HOST: host["id"], LABEL_CONFIG: config},
     )
