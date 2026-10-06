@@ -186,6 +186,25 @@ describe('loadCfbsProject', () => {
     expect(loaded.data.files).toEqual(state.files);
   });
 
+  it('keeps file descriptions and test environments', () => {
+    const { state } = buildProject();
+    const content = toCfbsProject(state, IDENTITY);
+    const environments = JSON.parse(JSON.stringify(content.testEnvironments));
+
+    const { data } = loadCfbsProject(asCfbsJson(content), asBuilderJson(content), 'web', environments);
+
+    expect(data.files.files.filter(file => file.description)).toHaveLength(3);
+    expect(data.files).toEqual(state.files);
+    expect(data.testEnvironments).toHaveLength(1);
+    expect(data.testEnvironments).toEqual(state.testEnvironments);
+  });
+
+  it('saves no description for a file without one', () => {
+    const { fileId, state } = buildProject();
+    const { files } = toCfbsProject(state, IDENTITY).project;
+    expect(files.find(file => file.id === fileId)).not.toHaveProperty('description');
+  });
+
   it('falls back to the folder name, and no masterfiles', () => {
     const loaded = loadCfbsProject({ build: [] }, null, 'my-policy');
     expect(loaded).toMatchObject({ name: 'my-policy', description: '', masterfiles: null });

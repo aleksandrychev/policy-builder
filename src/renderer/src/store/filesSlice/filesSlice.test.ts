@@ -3,6 +3,7 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileConditionRemoved,
+  fileDescriptionChanged,
   fileRemoved,
   fileRenamed,
   fileSelected,
@@ -176,6 +177,31 @@ describe('filesSlice', () => {
       store.dispatch(fileConditionModeChanged({ fileId, mode: 'unless' }));
       store.dispatch(fileConditionClassNameChanged({ fileId, className: 'x' }));
       expect(fileOf(store, fileId)?.condition).toBeUndefined();
+    });
+  });
+
+  describe('fileDescriptionChanged', () => {
+    it('sets the description as typed', () => {
+      const store = makeStore();
+      const fileId = addFile(store);
+      store.dispatch(fileDescriptionChanged({ fileId, description: ' Web tier. ' }));
+      expect(fileOf(store, fileId)?.description).toBe(' Web tier. ');
+    });
+
+    it('removes a description cleared to whitespace', () => {
+      const store = makeStore();
+      const fileId = addFile(store);
+      store.dispatch(fileDescriptionChanged({ fileId, description: 'Web tier.' }));
+      store.dispatch(fileDescriptionChanged({ fileId, description: '  \n ' }));
+      expect(fileOf(store, fileId)).not.toHaveProperty('description');
+    });
+
+    it('ignores an unknown file', () => {
+      const store = makeStore();
+      addFile(store);
+      const before = store.getState().files;
+      store.dispatch(fileDescriptionChanged({ fileId: 'nope', description: 'x' }));
+      expect(store.getState().files).toBe(before);
     });
   });
 

@@ -21,7 +21,7 @@ export interface PolicyReference {
   name: string;
 }
 
-const lineRegions = (regions: PolicyRegion[]) => {
+export const lineRegions = (regions: PolicyRegion[]) => {
   const byLine = new Map<number, PolicyRegion>();
   // Groups first, so their blocks win the lines they share.
   for (const region of [...regions].sort((a, b) => Number(b.isGroup) - Number(a.isGroup))) {
