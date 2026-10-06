@@ -54,14 +54,18 @@ test.describe('with Docker', () => {
   // The first run pulls the base image and installs CFEngine; later ones reuse the cached image.
   test.setTimeout(900_000);
 
+  // Set once no demo containers existed before: only then are the ones found later ours to remove.
+  let owned = false;
+
   test.beforeAll(() => {
     // The demo's containers have fixed labels: don't take over (and then destroy) someone's own.
     test.skip(demoContainers().length > 0, `the demo's containers (label cfpb.env=${DEMO_ENV}) already exist`);
+    owned = true;
   });
 
   test.afterAll(() => {
-    // Even after a failure: no container or network left behind.
-    if (!dockerUp()) return;
+    // Even after a failure: no container or network of ours left behind.
+    if (!owned || !dockerUp()) return;
     const containers = demoContainers();
     if (containers.length) docker('rm', '-f', ...containers);
     const networks = docker('network', 'ls', '-q', '--filter', `label=cfpb.env=${DEMO_ENV}`).split('\n').filter(Boolean);
