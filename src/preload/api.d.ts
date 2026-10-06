@@ -287,7 +287,8 @@ declare global {
         url: string,
         settings: {
           gitPassword?: string;
-          gitPrivateKeyFile?: string;
+          // The token hubPickKey gave for the key file.
+          gitPrivateKey?: string;
           gitRefspec: string;
           gitServer: string;
           gitUsername?: string;
@@ -305,6 +306,8 @@ declare global {
       hubDeploy: (url: string) => Promise<OperationResult<{ deployed: 'no' | 'unknown' | 'yes'; enabledDeploys?: boolean; output: string; state: HubState }>>;
       hubForget: (url: string) => Promise<void>;
       hubList: () => Promise<SavedHub[]>;
+      /** A file picker for the hub's deploy key: main reads and keeps the key, the page gets its path and a token; null if cancelled. */
+      hubPickKey: () => Promise<OperationResult<{ path: string; token: string }> | null>;
       /** The hub's certificate, and whether the system trusts it. */
       hubProbe: (url: string) => Promise<OperationResult<{ probe: HubProbe }>>;
       hubState: (url: string) => Promise<OperationResult<{ state: HubState }>>;

@@ -1,6 +1,8 @@
-import { type IpcMainInvokeEvent, type WebFrameMain, app, ipcMain, safeStorage } from 'electron';
+import { randomUUID } from 'crypto';
+import { BrowserWindow, type IpcMainInvokeEvent, type WebFrameMain, app, dialog, ipcMain, safeStorage } from 'electron';
 import { promises as fs } from 'fs';
 import { request } from 'https';
+import { homedir } from 'os';
 import { join } from 'path';
 import { type PeerCertificate, connect as tlsConnect } from 'tls';
 
@@ -13,6 +15,7 @@ import type { HubInfo, HubProbe, HubState, SavedHub } from '../preload/api';
  */
 
 const TIMEOUT_MS = 20_000;
+const MAX_KEY_BYTES = 64_000;
 // agent_run waits for the hub's own update.cf + policy run (Mission Portal allows ~2 min).
 const AGENT_RUN_TIMEOUT_MS = 200_000;
 // The class masterfiles' update policy deploys from VCS under (off by default).
@@ -23,6 +26,17 @@ interface StoredHub extends SavedHub {
   password: string;
   // The pinned certificate when it isn't trusted by the system.
   pem?: string;
+}
+
+// Deploy keys read when the user picked them, by the token the renderer got instead of a path.
+const pickedKeys = new Map<string, string>();
+
+async function readKey(path: string): Promise<string> {
+  const stats = await fs.stat(path);
+  if (!stats.isFile() || stats.size > MAX_KEY_BYTES) throw new Error('That isn’t a private key file');
+  const key = await fs.readFile(path, 'utf-8');
+  if (key.includes('\0')) throw new Error('That isn’t a private key file');
+  return key;
 }
 
 const storePath = () => join(app.getPath('userData'), 'hubs.json');
@@ -261,6 +275,26 @@ export function registerHubHandlers(isTrustedFrame: (frame: WebFrameMain | null)
     'hub:state',
     trusted((_event, url: unknown) => attempt(async () => ({ state: await state(await hubFor(url)) })))
   );
+  // The deploy key for the hub's VCS settings: read here, and only a token goes back with its path.
+  ipcMain.handle(
+    'hub:pick-key',
+    trusted(async event => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      const options = {
+        title: 'Deploy key for the repository',
+        defaultPath: join(homedir(), '.ssh'),
+        properties: ['openFile' as const, 'showHiddenFiles' as const]
+      };
+      const picked = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+      const path = picked.canceled ? undefined : picked.filePaths[0];
+      if (!path) return null;
+      return attempt(async () => {
+        const token = randomUUID();
+        pickedKeys.set(token, await readKey(path));
+        return { path, token };
+      });
+    })
+  );
   // Points the hub's VCS deployment at a cfbs project repository (as Mission Portal's Build app does).
   ipcMain.handle(
     'hub:configure-vcs',
@@ -278,7 +312,11 @@ export function registerHubHandlers(isTrustedFrame: (frame: WebFrameMain | null)
         // A POST rewrites every setting: credentials left out are cleared, so the old ones aren't kept.
         if (given.gitUsername) body.gitUsername = text(given.gitUsername, 'git username', 200);
         if (given.gitPassword) body.gitPassword = text(given.gitPassword, 'git token', 2000);
-        if (given.gitPrivateKeyFile) body.gitPrivateKey = await fs.readFile(text(given.gitPrivateKeyFile, 'key file', 4096), 'utf-8');
+        if (given.gitPrivateKey) {
+          const key = pickedKeys.get(text(given.gitPrivateKey, 'key', 100));
+          if (key === undefined) throw new Error('Choose the key file again');
+          body.gitPrivateKey = key;
+        }
         await call(hub, 'POST', '/api/vcs/settings', body);
         return { state: await state(hub) };
       })

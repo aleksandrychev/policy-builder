@@ -188,6 +188,15 @@ export function ConnectForm({ onConnected }: { onConnected: (hub: SavedHub, stat
   );
 }
 
+const NO_KEY = { error: '', path: '', token: '' };
+
+// A deploy key main read and keeps: its path to show, and the token that names it.
+async function pickHubKey(): Promise<typeof NO_KEY | null> {
+  const picked = await window.api?.hubPickKey();
+  if (!picked) return null;
+  return picked.ok ? { error: '', path: picked.path, token: picked.token } : { ...NO_KEY, error: picked.message };
+}
+
 // Points the hub at this project's repository: GIT_CFBS, so the hub builds it with cfbs itself.
 export function VcsForm({
   busy,
@@ -207,7 +216,7 @@ export function VcsForm({
   const [access, setAccess] = useState<'key' | 'none' | 'token'>(vcs?.hasKey ? 'key' : vcs?.username ? 'token' : 'none');
   const [gitUsername, setGitUsername] = useState(vcs?.username ?? '');
   const [token, setToken] = useState('');
-  const [keyFile, setKeyFile] = useState('');
+  const [key, setKey] = useState(NO_KEY);
   const replaces = vcs && !(vcs.type === 'GIT_CFBS' && sameRepo(vcs.url, repository));
   const sshWithoutKey = access !== 'key' && isSsh(repository);
   const https = httpsOf(repository);
@@ -258,12 +267,14 @@ export function VcsForm({
             <TextField
               label="Key file"
               size="small"
-              value={keyFile}
+              value={key.path}
+              error={Boolean(key.error)}
+              helperText={key.error || undefined}
               placeholder={vcs?.hasKey ? 'A key is set: choose one to replace it' : 'The private half of a deploy key on the repository'}
               sx={{ flex: 1 }}
               slotProps={{ inputLabel: { shrink: true }, htmlInput: { readOnly: true, style: { fontFamily: 'monospace', fontSize: 12 } } }}
             />
-            <Button size="small" variant="outlined" onClick={() => void window.api?.pickSshKey().then(picked => picked && setKeyFile(picked))}>
+            <Button size="small" variant="outlined" onClick={() => void pickHubKey().then(picked => picked && setKey(picked))}>
               Choose…
             </Button>
           </>
@@ -293,7 +304,7 @@ export function VcsForm({
           variant="contained"
           size="small"
           disabled={
-            busy || !repository.trim() || !branch.trim() || (access === 'key' && !keyFile && !vcs?.hasKey) || (access === 'token' && (!gitUsername || !token))
+            busy || !repository.trim() || !branch.trim() || (access === 'key' && !key.token && !vcs?.hasKey) || (access === 'token' && (!gitUsername || !token))
           }
           onClick={() =>
             onSave({
@@ -301,7 +312,7 @@ export function VcsForm({
               gitRefspec: branch.trim(),
               projectSubdirectory: subdirectory.trim(),
               ...(access === 'token' ? { gitUsername, gitPassword: token } : {}),
-              ...(access === 'key' && keyFile ? { gitPrivateKeyFile: keyFile } : {})
+              ...(access === 'key' && key.token ? { gitPrivateKey: key.token } : {})
             })
           }
         >

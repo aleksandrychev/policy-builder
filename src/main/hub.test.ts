@@ -10,13 +10,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { call, checkedUrl, hostkeyPath, registerHubHandlers } from './hub';
 import { type Handler, invoker, isTrustedFrame } from './test/ipc';
 
-const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), userData: '' }));
+const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), picked: null as null | string, userData: '' }));
 
 vi.mock('electron', async importOriginal => {
   const original = await importOriginal<typeof import('./test/electron')>();
   return {
     ...original,
     app: { ...original.app, getPath: () => electron.userData },
+    dialog: { showOpenDialog: async () => ({ canceled: electron.picked === null, filePaths: electron.picked === null ? [] : [electron.picked] }) },
     ipcMain: { ...original.ipcMain, handle: (channel: string, handler: Handler) => void electron.handlers.set(channel, handler) }
   };
 });
@@ -196,6 +197,20 @@ describe('IPC handlers', () => {
     const stored = { url: 'https://hub.example.com', username: 'admin', fingerprint: 'AA:BB', password: 'c2VjcmV0', pem: 'PEM' };
     await fs.writeFile(join(temp, 'hubs.json'), JSON.stringify([stored]));
     expect(await invoke('hub:list')).toEqual([{ url: 'https://hub.example.com', username: 'admin', fingerprint: 'AA:BB' }]);
+  });
+
+  it('reads a picked deploy key in main and hands the page only a token', async () => {
+    const key = join(temp, 'deploy_key');
+    await fs.writeFile(key, 'PRIVATE KEY\n');
+    electron.picked = key;
+    const picked = (await invoke('hub:pick-key')) as { ok: true; path: string; token: string };
+    expect(picked).toEqual({ ok: true, path: key, token: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+    expect(JSON.stringify(picked)).not.toContain('PRIVATE KEY');
+
+    await fs.writeFile(key, 'x'.repeat(64_001));
+    expect(await invoke('hub:pick-key')).toMatchObject({ ok: false, message: 'That isn’t a private key file' });
+    electron.picked = null;
+    expect(await invoke('hub:pick-key')).toBeNull();
   });
 
   it('acts only on a hub connected before', async () => {

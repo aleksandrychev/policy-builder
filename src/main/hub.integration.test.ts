@@ -12,7 +12,7 @@ import { call, registerHubHandlers } from './hub';
 import { type Certificate, DEPLOY_CLASS, type FakeHub, HOSTKEY, STAGE, makeCertificate, startFakeHub } from './test/fakeHub';
 import { type Handler, invoker, isTrustedFrame, trustedFrame } from './test/ipc';
 
-const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), userData: '' }));
+const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), picked: '', userData: '' }));
 
 // A reversible stand-in for the keychain, so a stored password is visibly not plain text.
 const scramble = (buffer: Buffer) => Buffer.from(buffer.map(byte => byte ^ 0x5a));
@@ -22,6 +22,7 @@ vi.mock('electron', async importOriginal => {
   return {
     ...original,
     app: { ...original.app, getPath: () => electron.userData },
+    dialog: { showOpenDialog: async () => ({ canceled: false, filePaths: [electron.picked] }) },
     ipcMain: { ...original.ipcMain, handle: (channel: string, handler: Handler) => void electron.handlers.set(channel, handler) },
     safeStorage: {
       isEncryptionAvailable: () => true,
@@ -215,6 +216,8 @@ describe.skipIf(!hasOpenssl)('hub client against a fake Mission Portal (needs op
       await connect();
       const keyFile = join(temp, 'deploy_key');
       await fs.writeFile(keyFile, 'PRIVATE KEY\n');
+      electron.picked = keyFile;
+      const { token } = (await invoke('hub:pick-key')) as { token: string };
       hub.requests.length = 0;
       const result = (await invoke('hub:configure-vcs', hub.url, {
         gitServer: ' https://git.example.com/policy.git ',
@@ -222,7 +225,7 @@ describe.skipIf(!hasOpenssl)('hub client against a fake Mission Portal (needs op
         projectSubdirectory: '/cfbs',
         gitUsername: 'deployer',
         gitPassword: 'token',
-        gitPrivateKeyFile: keyFile
+        gitPrivateKey: token
       })) as Outcome<{ state: HubState }>;
       expect(hub.requests[0]).toMatchObject({
         method: 'POST',
@@ -238,6 +241,16 @@ describe.skipIf(!hasOpenssl)('hub client against a fake Mission Portal (needs op
         }
       });
       expect(result).toMatchObject({ ok: true, state: { vcs: { type: 'GIT_CFBS', url: 'https://git.example.com/policy.git', hasKey: true } } });
+    });
+
+    it('never reads a key file the page names', async () => {
+      await connect();
+      const keyFile = join(temp, 'id_ed25519');
+      await fs.writeFile(keyFile, 'PRIVATE KEY\n');
+      hub.requests.length = 0;
+      const settings = { gitServer: 'https://git.example.com/policy.git', gitRefspec: 'main', gitPrivateKey: keyFile, gitPrivateKeyFile: keyFile };
+      expect(await invoke('hub:configure-vcs', hub.url, settings)).toMatchObject({ ok: false, message: 'Choose the key file again' });
+      expect(paths()).not.toContain('POST /api/vcs/settings');
     });
 
     it('leaves out credentials not given', async () => {

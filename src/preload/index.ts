@@ -130,8 +130,9 @@ const api = {
   hubState: (url: string): Promise<OperationResult<{ state: HubState }>> => invoke('hub:state', url),
   hubConfigureVcs: (
     url: string,
-    settings: { gitPassword?: string; gitPrivateKeyFile?: string; gitRefspec: string; gitServer: string; gitUsername?: string; projectSubdirectory?: string }
+    settings: { gitPassword?: string; gitPrivateKey?: string; gitRefspec: string; gitServer: string; gitUsername?: string; projectSubdirectory?: string }
   ): Promise<OperationResult<{ state: HubState }>> => invoke('hub:configure-vcs', url, settings),
+  hubPickKey: (): Promise<OperationResult<{ path: string; token: string }> | null> => invoke('hub:pick-key'),
   hubDeploy: (url: string): Promise<OperationResult<{ deployed: 'no' | 'unknown' | 'yes'; enabledDeploys?: boolean; output: string; state: HubState }>> =>
     invoke('hub:deploy', url),
   /** A file picker in ~/.ssh for the hub's private key; null if cancelled. */
