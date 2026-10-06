@@ -130,9 +130,9 @@ def test_templates_ship_as_one_directory_module_only_when_there_are_any():
 def test_a_template_gets_only_the_data_it_reads_named_after_its_block():
     render = _block(compile_project(DEMO)[WEBSERVER], "Render nginx config")
 
-    assert '"render_nginx_config_worker_processes"\n      string => "$(common_vars.worker_processes)";' in render
-    assert """'{ "vars": { "common_vars": { "worker_processes": render_nginx_config_worker_processes, \
-"worker_connections": render_nginx_config_worker_connections } } }'""" in render
+    assert '"render_nginx_config_tpl_worker_processes"\n      string => "$(common_vars.worker_processes)";' in render
+    assert """'{ "vars": { "common_vars": { "worker_processes": render_nginx_config_tpl_worker_processes, \
+"worker_connections": render_nginx_config_tpl_worker_connections } } }'""" in render
     assert "template_data => @(render_nginx_config_template_data)," in render
 
 
@@ -148,13 +148,25 @@ def test_template_classes_become_true_or_false_and_special_variables_are_copied(
 
     assert """'{ "classes": { "webserver_role": %s } }',""" in render
     assert 'ifelse("webserver_role", "true", "false")' in render
-    assert '"render_nginx_config_fqhost" string => "$(sys.fqhost)";' in render
+    assert '"render_nginx_config_tpl_fqhost" string => "$(sys.fqhost)";' in render
 
 
 def test_a_template_reading_anything_else_keeps_datastate():
     render = _render_template("{{#-top-}}{{@}}{{/-top-}}")
 
     assert "template_data" not in render
+
+
+def test_template_copies_keep_clear_of_parameters_computed_from_data():
+    meta = _demo()
+    block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "render-template")
+    block["params"]["template_content"] = "{{{vars.common_vars.owner}}}"
+    block["paramBindings"] = {"owner": {"valueSourceId": "command-output", "params": {"command": "/usr/bin/id -un"}}}
+
+    render = _block(compile_project(meta)[WEBSERVER], "Render nginx config")
+
+    assert '"render_nginx_config_owner"\n      string => execresult(' in render
+    assert '"render_nginx_config_tpl_owner" string => "$(common_vars.owner)";' in render
 
 
 def test_default_if_empty_splits_into_an_intermediate_and_two_promises():

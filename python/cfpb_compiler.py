@@ -824,8 +824,9 @@ class FileCompiler:
         if refs is None:
             return None
         names = [name for _bundle, name in refs.variables]
+        # `tpl_`: apart from the block's other locals, which are named after its parameters.
         local = {
-            ref: prefix + (ref[1] if names.count(ref[1]) == 1 else canonical(f"{ref[0]}_{ref[1]}"))
+            ref: f"{prefix}tpl_" + (ref[1] if names.count(ref[1]) == 1 else canonical(f"{ref[0]}_{ref[1]}"))
             for ref in refs.variables
         }
         lines, bundles = [], {}

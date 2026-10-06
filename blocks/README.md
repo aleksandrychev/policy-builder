@@ -114,9 +114,9 @@ implements this; the output is run through `cfengine format`.
   a file module can't carry extra files). The policy refers to it relative to itself, so it
   resolves the same in the project and on hosts.
 - **Mustache templates** get an explicit `template_data` with just what they read, rather than
-  the whole `datastate()`: local copies of the variables the template names, wrapped by
-  `mergedata()` (safe for any value, unlike `"$(x)"` inside inline JSON), plus its classes as
-  `true`/`false`. It has `datastate()`'s shape, so templates are written the same way. A template
+  the whole `datastate()`: local copies of the variables the template names
+  (`<block>_tpl_<name>`, apart from the block's other locals), wrapped by `mergedata()` (safe for
+  any value, unlike `"$(x)"` inside inline JSON), plus its classes as `true`/`false`. It has `datastate()`'s shape, so templates are written the same way. A template
   reading anything else (e.g. `{{#-top-}}`) keeps rendering against `datastate()`.
 - **A block missing a required parameter** (or a data-fed one missing its source's) compiles to an
   empty bundle with a `# Skipped` note, so saving never fails on an unfinished block.

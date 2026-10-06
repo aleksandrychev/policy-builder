@@ -1,10 +1,12 @@
 ### example
   # Case 0
   vars:
-    "case_0_fqhost" string => "$(sys.fqhost)";
+    "case_0_tpl_fqhost" string => "$(sys.fqhost)";
 
     "case_0_template_data"
-      data => mergedata('{ "vars": { "sys": { "fqhost": case_0_fqhost } } }');
+      data => mergedata(
+        '{ "vars": { "sys": { "fqhost": case_0_tpl_fqhost } } }'
+      );
 
   files:
     "/etc/app.conf"
