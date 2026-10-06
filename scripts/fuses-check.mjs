@@ -8,7 +8,8 @@ const EXPECTED = {
   EnableNodeOptionsEnvironmentVariable: 'Disabled',
   EnableNodeCliInspectArguments: 'Disabled',
   EnableEmbeddedAsarIntegrityValidation: 'Enabled',
-  OnlyLoadAppFromAsar: 'Enabled'
+  OnlyLoadAppFromAsar: 'Enabled',
+  GrantFileProtocolExtraPrivileges: 'Disabled'
 };
 
 const app = process.argv[2];

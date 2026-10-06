@@ -1,7 +1,7 @@
-import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, net, protocol, session, shell } from 'electron';
 import type { MenuItemConstructorOptions, WebFrameMain } from 'electron';
 import { promises as fs } from 'fs';
-import { basename, join } from 'path';
+import { basename, join, normalize, sep } from 'path';
 import { pathToFileURL } from 'url';
 
 import type { RecentProject } from '../preload/api';
@@ -64,16 +64,26 @@ function openExternalIfSafe(url: string): void {
   }
 }
 
-// IPC handlers only answer our own renderer: the dev-server origin in dev,
-// the bundled file: page in production.
+// The built renderer is served from app://bundle/, not file:// (Electron's security checklist #18):
+// a standard, secure origin of its own, so file:// keeps no extra privileges (see electron-builder.yml).
+const APP_ORIGIN = 'app://bundle';
+const rendererDir = join(__dirname, '../renderer');
+protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+
+// app://bundle/<path> → the built renderer's file; nothing outside its folder.
+function serveRenderer(request: Request): Promise<Response> | Response {
+  const url = new URL(request.url);
+  const path = normalize(join(rendererDir, decodeURIComponent(url.pathname)));
+  if (url.host !== 'bundle' || !path.startsWith(rendererDir + sep)) return new Response('Not found', { status: 404 });
+  return net.fetch(pathToFileURL(path).href).catch(() => new Response('Not found', { status: 404 }));
+}
+
+// IPC handlers only answer our own renderer: the dev-server origin in dev, app://bundle in production.
 function isTrustedFrame(frame: WebFrameMain | null): boolean {
   if (!frame || frame !== frame.top) return false;
-  if (rendererDevUrl) return new URL(frame.url).origin === new URL(rendererDevUrl).origin;
-  // Compare URLs, not a raw `file://${path}` string: Chromium reports frame.url
-  // percent-encoded (the install path "CFEngine Policy Builder.app" contains
-  // spaces) and Windows paths contain backslashes, so a plain string
-  // comparison never matches in a packaged build.
-  return frame.url === pathToFileURL(join(__dirname, '../renderer/index.html')).href;
+  const url = new URL(frame.url);
+  // Node gives non-special schemes like app: a "null" origin: compare scheme and host.
+  return rendererDevUrl ? url.origin === new URL(rendererDevUrl).origin : `${url.protocol}//${url.host}` === APP_ORIGIN;
 }
 
 // Mirrors the three entry points on NoProjectScreen's welcome card — the
@@ -198,11 +208,12 @@ function createWindow(): void {
   if (rendererDevUrl) {
     mainWindow.loadURL(rendererDevUrl);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    mainWindow.loadURL(`${APP_ORIGIN}/index.html`);
   }
 }
 
 app.whenReady().then(() => {
+  protocol.handle('app', serveRenderer);
   app.setAppUserModelId('com.northerntech.cfengine-policy-builder');
 
   // The app needs no web permissions (camera, geolocation, notifications…) except writing

@@ -39,6 +39,15 @@ test('the window runs isolated, sandboxed and without Node', async ({ app, windo
   expect(api.every(entry => entry.endsWith(':function'))).toBe(true);
 });
 
+test('the page is served from app://, not file://', async ({ window: page }) => {
+  expect(page.url()).toBe('app://bundle/index.html');
+  // Nothing outside the built renderer is reachable through the scheme, encoded ".." included.
+  const status = (path: string) => page.evaluate(url => fetch(url).then(response => response.status), `app://bundle/${path}`);
+  expect(await status('index.html')).toBe(200);
+  expect(await status('%2e%2e/main/index.js')).toBe(404);
+  expect(await status('..%2fmain%2findex.js')).toBe(404);
+});
+
 test('the page has a strict Content Security Policy', async ({ window: page }) => {
   const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
   expect(csp).toContain(`default-src 'self'`);

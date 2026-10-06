@@ -76,6 +76,11 @@ const CHECKS = [
   ],
   ['17. IPC senders validated', unguardedIpc],
   [
+    '18. No file:// (app:// scheme)',
+    () =>
+      nowhere(/\.loadFile\(/) ?? missing(mainIndex, /protocol\.handle\('app'/, `protocol.handle('app', …)`) ?? fuse('grantFileProtocolExtraPrivileges', false)
+  ],
+  [
     '19. Fuses',
     () =>
       fuse('runAsNode', false) ??
@@ -83,7 +88,8 @@ const CHECKS = [
       fuse('enableNodeCliInspectArguments', false) ??
       fuse('enableCookieEncryption', true) ??
       fuse('onlyLoadAppFromAsar', true) ??
-      fuse('enableEmbeddedAsarIntegrityValidation', true)
+      fuse('enableEmbeddedAsarIntegrityValidation', true) ??
+      fuse('grantFileProtocolExtraPrivileges', false)
   ],
   [
     '20. Electron APIs not exposed',
