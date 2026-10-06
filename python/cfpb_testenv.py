@@ -6,6 +6,7 @@ one JSON event per line on stdout (see `emit`); everything else answers with one
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ import sys
 import tempfile
 import urllib.request
 from pathlib import Path
+from typing import Iterator
 
 # The platforms CFEngine supports that run in a Linux container: the base image, the CFEngine
 # package platform it takes (release data classexpr) and how packages install. RHEL-compatible
@@ -683,8 +685,50 @@ def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
 MASTERFILES = re.compile(r"^(\d+\.\d+\.\d+(-\d+)?|master)$")
 
 
-def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
-    """Builds the project as a policy set (cfbs) in a scratch copy; returns its out/masterfiles.
+@contextlib.contextmanager
+def _locked(path: str) -> Iterator[None]:
+    """Holds an exclusive lock on the file `path` (across processes) for the block."""
+    with open(path, "a+b") as handle:
+        if sys.platform == "win32":
+            import msvcrt
+
+            handle.seek(0)
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:  # LK_LOCK gives up after 10 s
+                    continue
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            yield  # closing the file unlocks it
+
+
+@contextlib.contextmanager
+def built_policy(request: dict, built: str | None = None) -> Iterator[str]:
+    """The project built as a policy set in a folder of this run's own (runs may overlap),
+    removed afterwards; yields its out/masterfiles. `built`: one the caller built already."""
+    if built:
+        yield built
+        return
+    builds = os.path.join(request["cacheDir"], "build")
+    os.makedirs(builds, exist_ok=True)
+    work = tempfile.mkdtemp(dir=builds)
+    try:
+        yield build_policy(request["content"], request["masterfiles"], request["cacheDir"], work)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def build_policy(content: dict, masterfiles: str, cache_dir: str, work: str) -> str:
+    """Builds the project as a policy set (cfbs) in `work`; returns its out/masterfiles.
     One pristine `cfbs init` per masterfiles version is kept, so a rebuild needs no network."""
     import cfbs.main
     from cfbs.cfbs_config import CFBSConfig
@@ -698,19 +742,20 @@ def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
     if os.path.dirname(os.path.realpath(base)) != os.path.realpath(os.path.join(cache_dir, "masterfiles")):
         raise RunnerError(f"Unsupported masterfiles version: {masterfiles}")
     if not os.path.isfile(os.path.join(base, "cfbs.json")):
-        emit("step", step="build", message=f"Downloading masterfiles {masterfiles}")
-        # cfbs writes cfbs.json before downloading: move it into place only once complete.
         os.makedirs(os.path.dirname(base), exist_ok=True)
-        scratch = tempfile.mkdtemp(prefix=".init-", dir=os.path.dirname(base))
-        try:
-            cfpb_backend._run_cfbs_init(scratch, masterfiles)
-            shutil.rmtree(base, ignore_errors=True)
-            os.replace(scratch, base)
-        finally:
-            shutil.rmtree(scratch, ignore_errors=True)
-    work = os.path.join(cache_dir, "build")
-    shutil.rmtree(work, ignore_errors=True)
-    shutil.copytree(base, work)
+        with _locked(os.path.join(os.path.dirname(base), ".lock")):
+            # Another run may have downloaded it while this one waited.
+            if not os.path.isfile(os.path.join(base, "cfbs.json")):
+                emit("step", step="build", message=f"Downloading masterfiles {masterfiles}")
+                # cfbs writes cfbs.json before downloading: move it into place only once complete.
+                scratch = tempfile.mkdtemp(prefix=".init-", dir=os.path.dirname(base))
+                try:
+                    cfpb_backend._run_cfbs_init(scratch, masterfiles)
+                    shutil.rmtree(base, ignore_errors=True)
+                    os.replace(scratch, base)
+                finally:
+                    shutil.rmtree(scratch, ignore_errors=True)
+    shutil.copytree(base, work, dirs_exist_ok=True)
     options = {"type": "policy-set", "name": "test", "description": "Test build", "git": False, "content": content}
     cfpb_backend._update_cfbs_json(work, options)
     emit("step", step="build", message="Building the policy set")
@@ -728,10 +773,10 @@ def _bootstrapped(engine, container) -> bool:
     return run_in(engine, container, "test -s /var/cfengine/policy_server.dat", None, "quiet") == 0
 
 
-def up(request: dict, finish: bool = True) -> str:
+def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -> None:
     """Start: build the policy, make sure every host's container exists and runs CFEngine, deploy
-    the policy to the hub and bootstrap everyone to it. Returns the built masterfiles. With
-    `hosts`, only those (and the hub they bootstrap to) are set up."""
+    the policy to the hub and bootstrap everyone to it (`masterfiles_dir`: a policy set built already).
+    With `hosts`, only those (and the hub they bootstrap to) are set up."""
     env, engine = request["environment"], client()
     sweep_orphans(engine)
     every = env.get("hosts") or []
@@ -743,36 +788,42 @@ def up(request: dict, finish: bool = True) -> str:
     # x86-64 by default, also on Apple Silicon (emulated there): the widest set of packages.
     arch = env.get("arch") or "x86_64"
     edition, version = env.get("edition", "community"), env.get("version", "latest")
-    masterfiles_dir = build_policy(request["content"], request["masterfiles"], request["cacheDir"])
-    dotenv = read_dotenv(request.get("envFile"))
-    _network(engine, env)
-    containers = {}
-    for host in sorted(hosts, key=lambda h: h is not hub_host):
-        emit("host", host=host["id"], state="provisioning")
-        image = ensure_image(
-            engine, host["platform"], edition, version, host is hub_host, arch, host["id"], host.get("image") or None
-        )
-        containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
-    hub = containers[hub_host["id"]]
-    _deploy(engine, hub, masterfiles_dir, hub_host["id"])
-    hub_ip = _ip(engine, hub, env)
-    for host in sorted(hosts, key=lambda h: h is not hub_host):
-        container = containers[host["id"]]
-        if not _bootstrapped(engine, container):
-            emit("step", host=host["id"], step="bootstrap", message=f"Bootstrapping to {hub_ip}")
-            environment = host_env(env, host, dotenv)
-            _check(
-                run_in(
-                    engine, container, f"{CFENGINE}/cf-agent --bootstrap {hub_ip}", host["id"], "setup", environment
-                ),
-                "Bootstrap",
+    with built_policy(request, masterfiles_dir) as masterfiles_dir:
+        dotenv = read_dotenv(request.get("envFile"))
+        _network(engine, env)
+        containers = {}
+        for host in sorted(hosts, key=lambda h: h is not hub_host):
+            emit("host", host=host["id"], state="provisioning")
+            image = ensure_image(
+                engine,
+                host["platform"],
+                edition,
+                version,
+                host is hub_host,
+                arch,
+                host["id"],
+                host.get("image") or None,
             )
-        emit("host", host=host["id"], state="ready", container=container.name, ip=_ip(engine, container, env))
-    if edition == "enterprise":
-        _setup_code(engine, hub, hub_host)
-    if finish:
-        emit("done")
-    return masterfiles_dir
+            containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
+        hub = containers[hub_host["id"]]
+        _deploy(engine, hub, masterfiles_dir, hub_host["id"])
+        hub_ip = _ip(engine, hub, env)
+        for host in sorted(hosts, key=lambda h: h is not hub_host):
+            container = containers[host["id"]]
+            if not _bootstrapped(engine, container):
+                emit("step", host=host["id"], step="bootstrap", message=f"Bootstrapping to {hub_ip}")
+                environment = host_env(env, host, dotenv)
+                _check(
+                    run_in(
+                        engine, container, f"{CFENGINE}/cf-agent --bootstrap {hub_ip}", host["id"], "setup", environment
+                    ),
+                    "Bootstrap",
+                )
+            emit("host", host=host["id"], state="ready", container=container.name, ip=_ip(engine, container, env))
+        if edition == "enterprise":
+            _setup_code(engine, hub, hub_host)
+        if finish:
+            emit("done")
 
 
 def _setup_code(engine, hub, hub_host: dict) -> None:
@@ -877,9 +928,9 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
     missing = [h["name"] for h in needed if h["id"] not in containers or containers[h["id"]].status != "running"]
     if hub_host is None or missing:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
-    masterfiles_dir = masterfiles_dir or build_policy(request["content"], request["masterfiles"], request["cacheDir"])
     hub = containers[hub_host["id"]]
-    _deploy(engine, hub, masterfiles_dir, hub_host["id"])
+    with built_policy(request, masterfiles_dir) as built:
+        _deploy(engine, hub, built, hub_host["id"])
     # Where each block's lines are, to trace errors back to blocks.
     from cfpb_compiler import compile_project
 
@@ -931,7 +982,9 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
 
 def test(request: dict) -> None:
     """Run Test: Start what isn't up yet, then run the policy everywhere."""
-    run(request, up(request, finish=False))
+    with built_policy(request) as masterfiles_dir:
+        up(request, finish=False, masterfiles_dir=masterfiles_dir)
+        run(request, masterfiles_dir)
 
 
 def reset(request: dict) -> None:

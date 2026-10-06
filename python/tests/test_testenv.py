@@ -199,7 +199,9 @@ def test_build_policy_refuses_a_masterfiles_version_that_is_not_a_release(tmp_pa
     victim.mkdir()
     (victim / "keep").write_text("mine")
     with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
-        cfpb_testenv.build_policy({}, str(victim) if version == "/victim" else version, str(tmp_path / "cache"))
+        cfpb_testenv.build_policy(
+            {}, str(victim) if version == "/victim" else version, str(tmp_path / "cache"), str(tmp_path / "work")
+        )
     assert (victim / "keep").read_text() == "mine"
 
 
@@ -210,7 +212,7 @@ def test_build_policy_never_deletes_outside_the_cache(tmp_path: Path):
     (tmp_path / "cache" / "masterfiles").mkdir(parents=True)
     (tmp_path / "cache" / "masterfiles" / "3.27.1").symlink_to(victim)
     with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
-        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path / "cache"))
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path / "cache"), str(tmp_path / "work"))
     assert (victim / "keep").read_text() == "mine"
 
 
@@ -234,8 +236,8 @@ def _stop_building(*_args):
 def test_a_failed_masterfiles_download_leaves_no_cache_behind(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(cfpb_backend, "_run_cfbs_init", _init_writing_cfbs_json(fail=True))
     with pytest.raises(cfpb_backend.InitFailed):
-        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path))
-    assert os.listdir(tmp_path / "masterfiles") == []
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path), str(tmp_path / "work"))
+    assert os.listdir(tmp_path / "masterfiles") == [".lock"]
 
 
 def test_a_masterfiles_download_moves_into_place_once_complete(tmp_path: Path, monkeypatch):
@@ -243,9 +245,33 @@ def test_a_masterfiles_download_moves_into_place_once_complete(tmp_path: Path, m
     monkeypatch.setattr(cfpb_backend, "_run_cfbs_init", _init_writing_cfbs_json(fail=False))
     monkeypatch.setattr(cfpb_backend, "_update_cfbs_json", _stop_building)
     with pytest.raises(_Built):
-        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path))
-    assert os.listdir(tmp_path / "masterfiles") == ["3.27.1"]
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path), str(tmp_path / "work"))
+    assert sorted(os.listdir(tmp_path / "masterfiles")) == [".lock", "3.27.1"]
     assert os.listdir(tmp_path / "masterfiles" / "3.27.1") == ["cfbs.json"]
+
+
+def test_overlapping_runs_build_in_folders_of_their_own(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cfpb_testenv, "build_policy", lambda content, masterfiles, cache, work: work)
+    request = {"content": {}, "masterfiles": "3.27.1", "cacheDir": str(tmp_path)}
+    with cfpb_testenv.built_policy(request) as first, cfpb_testenv.built_policy(request) as second:
+        assert first != second
+        assert Path(first).parent == Path(second).parent == tmp_path / "build"
+        with cfpb_testenv.built_policy(request, first) as reused:
+            assert reused == first
+        assert Path(first).is_dir()
+    assert os.listdir(tmp_path / "build") == []
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="checks the lock with flock")
+def test_the_masterfiles_lock_is_held_for_the_block(tmp_path: Path):
+    import fcntl
+
+    lock = tmp_path / ".lock"
+    with cfpb_testenv._locked(str(lock)):
+        with open(lock, "a+b") as other, pytest.raises(BlockingIOError):
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with open(lock, "a+b") as other:
+        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 class _Container:
