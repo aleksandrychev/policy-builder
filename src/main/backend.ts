@@ -18,6 +18,8 @@ const INIT_TIMEOUT_MS = 120_000;
 const TESTENV_TIMEOUT_MS = 60_000;
 // cfbs build may download masterfiles, then lint + cf-promises run (maybe in a container).
 const BUILD_TIMEOUT_MS = 300_000;
+// cf-remote deploy: discovery, the copy and two agent runs on the hub.
+const DEPLOY_TIMEOUT_MS = 600_000;
 
 const isWindows = process.platform === 'win32';
 const executableName = isWindows ? 'cfpb-backend.exe' : 'cfpb-backend';
@@ -257,6 +259,24 @@ export async function buildPolicySet(path: string, onStage?: (stage: string) => 
     return JSON.parse(result.stdout) as BuildResult;
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable build result'), { details: result.stdout });
+  }
+}
+
+/** Deployment over SSH: `cf-remote deploy` in a built project (its out/masterfiles.tgz) to `host` (user@host[:port]). */
+export async function deployPolicySet(
+  request: { host: string; key: string | null; path: string },
+  onStage?: (stage: string) => void
+): Promise<{ deployed: boolean; log: string }> {
+  const result = await runSidecar(['deploy'], JSON.stringify(request), DEPLOY_TIMEOUT_MS, line => {
+    const stage = /^::stage (\w+)/.exec(line);
+    if (stage) onStage?.(stage[1]);
+  });
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, DEPLOY_TIMEOUT_MS);
+  try {
+    return JSON.parse(result.stdout) as { deployed: boolean; log: string };
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable deploy result'), { details: result.stdout });
   }
 }
 

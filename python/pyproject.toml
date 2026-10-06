@@ -7,8 +7,8 @@ requires-python = ">=3.12"
 dependencies = [
   # The whole CFEngine Python toolchain: the `cfengine` distribution installs
   # the `cfengine_cli` package (policy formatting, linting) and pulls in cfbs
-  # for policy generation. cf-remote comes along transitively but is
-  # deliberately not imported — see the notes in cfpb-backend.spec.
+  # for policy generation. cf-remote comes along transitively: it deploys
+  # policy sets to a hub over SSH (`deploy`).
   "cfengine>=0.20.0",
   # Test environments (cfpb_testenv.py): the official Docker SDK, talking to the Engine socket.
   "docker>=7.1",

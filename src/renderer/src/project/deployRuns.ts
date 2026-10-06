@@ -28,14 +28,7 @@ export const BUILD_STAGES: Stage[] = [
   { id: 'lint', label: 'Checking with the linter' },
   { id: 'promises', label: 'Checking with cf-promises' }
 ];
-export const SSH_STAGES: Stage[] = [
-  ...BUILD_STAGES,
-  { id: 'copy', label: 'Copying it to the hub' },
-  { id: 'validate', label: 'Validating it on the hub (cf-promises)' },
-  { id: 'install', label: 'Installing it as /var/cfengine/masterfiles' },
-  { id: 'update', label: 'Running update.cf on the hub' },
-  { id: 'policy', label: 'Running the policy on the hub' }
-];
+export const SSH_STAGES: Stage[] = [...BUILD_STAGES, { id: 'deploy', label: 'Deploying it with cf-remote: copy, install, run the agent' }];
 
 export const HUB_STAGES: Stage[] = [
   { id: 'enable', label: 'Turning on deploys from version control (CMDB class)' },

@@ -10,6 +10,7 @@ non-zero exit.
 | `init` | `{"directory", "name", "description", "masterfiles", "git", "content"?}` | `{"path", "masterfiles"}` | 1 failed (cleaned up), 2 invalid input (nothing touched) |
 | `masterfiles` | `{"version"}` (`3.27.1` or `master`) | the masterfiles `build` entry `cfbs init` writes | 1 failed, 2 invalid input |
 | `compile` | the project's `.policy-builder/project.json` | `{"files": {<path>: <contents>}, "source_map": {<path>: {<block or group id>: [[first, last], …]}}}` | 1 can't compile, 2 compiler fault |
+| `deploy` | `{"path", "host": "user@host[:port]", "key"?}` | `{"deployed", "log"}`: `cf-remote deploy`'s outcome and output | 2 invalid input |
 | `testenv doctor` / `images` | nothing | one JSON object: Docker's state / the base images and which are pulled | 1 can't answer |
 | `testenv package` | `{edition, version, platform, arch, hub}` | `{url, sha256, version, filename}` from CFEngine's release data | 1 no such package |
 | `testenv pull` | `{image}` | streamed: one JSON event per line (`progress`, `log`, then `done` or `error`) | 1 failed |
@@ -51,5 +52,6 @@ uv run pyinstaller --clean --noconfirm cfpb-backend.spec   # → dist/cfpb-backe
 Also available from the repo root as `npm run backend:*`, which is what CI and
 the packaging scripts use.
 
-**Import `cfengine_cli.format`, never `cfengine_cli.main`** — the latter pulls in
-`cf_remote` and ~27 MB of libcloud drivers. `cfpb-backend.spec` excludes them.
+`deploy` runs `cf-remote deploy` in-process in the built project, which ships its
+`out/masterfiles.tgz`; a chosen key goes in as `CF_REMOTE_SSH_KEY`. Bundling cf-remote brings ~27 MB of libcloud
+drivers along.

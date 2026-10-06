@@ -5,9 +5,7 @@ import { homedir, hostname } from 'os';
 import { isAbsolute, join, normalize, relative, sep } from 'path';
 
 import type { GitStatus } from '../preload/api';
-import { buildPolicySet } from './backend';
-// Runs on the hub as root: the deploy itself (see the script).
-import REMOTE_DEPLOY from './deploy.sh?raw';
+import { buildPolicySet, deployPolicySet } from './backend';
 import { isKnownProject, testEnvironmentSecretFiles } from './project';
 
 /**
@@ -17,8 +15,7 @@ import { isKnownProject, testEnvironmentSecretFiles } from './project';
 
 const GIT_TIMEOUT_MS = 30_000;
 // Copying the policy set and two agent runs on the hub.
-const SSH_TIMEOUT_MS = 600_000;
-// `host`, `user@host`, an ~/.ssh/config alias; never an option (no leading dash).
+// `host` or `user@host` that cf-remote can reach (no ~/.ssh/config aliases); never an option.
 const SSH_HOST = /^(?:[\w.-]+@)?[\w][\w.-]*$/;
 const PUSH_TIMEOUT_MS = 120_000;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -149,75 +146,14 @@ async function commitAll(path: string, message: string) {
   }
 }
 
-// `::stage <name>` lines the sidecar and the hub script print as each step starts.
-const STAGE_LINE = /^::stage (\w+)\s*$/;
-
-// One command, its output collected; `input` goes to its stdin, and `onStage` hears its stage lines.
-function run(command: string, args: string[], timeout: number, input?: string, onStage?: (stage: string) => void): Promise<Git> {
-  return new Promise((resolve, reject) => {
-    const child = execFile(command, args, { timeout, maxBuffer: 50_000_000 }, (error, stdout, stderr) => {
-      if (error && (error as NodeJS.ErrnoException).code === 'ENOENT') return reject(new Error(`${command} isn’t installed (or not on PATH).`));
-      resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout, stderr });
-    });
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      for (const line of String(chunk).split('\n')) {
-        const stage = STAGE_LINE.exec(line.trim());
-        if (stage) onStage?.(stage[1]);
-      }
-    });
-    child.stdin?.end(input ?? '');
-  });
-}
-
-// Why ssh/scp couldn't get in, when it's one of the usual reasons.
-const sshHint = (result: Git, key: string | null) =>
-  /REMOTE HOST IDENTIFICATION HAS CHANGED/.test(result.stderr)
-    ? ' (the host key changed since you last connected: if that is expected, ssh-keygen -R the host)'
-    : key && /passphrase|Permission denied \(publickey/.test(result.stderr)
-      ? ' (a key with a passphrase must be in your ssh agent: ssh-add)'
-      : '';
-
-/** Copies a built policy set to a hub over SSH and makes it the hub's masterfiles. */
-async function deployOverSsh(tarball: string, host: string, port: number | null, key: string | null, onStage: (stage: string) => void): Promise<string> {
-  // A chosen key is the only one tried (not every key the agent holds). A new host's key is
-  // trusted on first use (no prompt in BatchMode); a changed one still fails.
-  const options = [
-    '-o',
-    'BatchMode=yes',
-    '-o',
-    'ConnectTimeout=15',
-    '-o',
-    'StrictHostKeyChecking=accept-new',
-    ...(key ? ['-i', key, '-o', 'IdentitiesOnly=yes'] : [])
-  ];
-  const sshPort = port ? ['-p', String(port)] : [];
-  onStage('copy');
-  // A directory only the login user can write: root unpacks what it holds.
-  const made = await run('ssh', [...options, ...sshPort, host, 'mktemp -d /tmp/cfpb-deploy.XXXXXXXX'], SSH_TIMEOUT_MS);
-  if (made.code !== 0) throw commandError(`Connecting to the hub failed${sshHint(made, key)}`, made);
-  const remote = made.stdout.trim().split('\n').pop() ?? '';
-  if (!/^\/tmp\/cfpb-deploy\.\w+$/.test(remote)) throw new Error(`Unexpected temporary directory on the hub: ${remote}`);
-  const copy = await run('scp', [...options, ...(port ? ['-P', String(port)] : []), tarball, `${host}:${remote}/masterfiles.tgz`], SSH_TIMEOUT_MS);
-  if (copy.code !== 0) {
-    await run('ssh', [...options, ...sshPort, host, `rm -rf ${remote}`], SSH_TIMEOUT_MS);
-    throw commandError(`Copying to the hub failed${sshHint(copy, key)}`, copy);
+/** Makes a built policy set the hub's masterfiles with `cf-remote deploy`, as is. */
+async function deployOverSsh(path: string, host: string, port: number | null, key: string | null, onStage: (stage: string) => void): Promise<string> {
+  const { deployed, log } = await deployPolicySet({ host: port ? `${host}:${port}` : host, key, path }, onStage);
+  if (!deployed) {
+    const last = log.trim().split('\n').filter(Boolean).pop();
+    throw Object.assign(new Error(`cf-remote deploy to ${host} failed${last ? `: ${last}` : ''}`), { details: log.trim() });
   }
-  const asRoot = `if [ "$(id -u)" = 0 ]; then sh -s -- ${remote}; else sudo -n sh -s -- ${remote}; fi`;
-  const deploy = await run('ssh', [...options, ...sshPort, host, asRoot], SSH_TIMEOUT_MS, REMOTE_DEPLOY, onStage);
-  const log = `${deploy.stdout}${deploy.stderr}`
-    .split('\n')
-    .filter(line => !STAGE_LINE.test(line.trim()))
-    .join('\n')
-    .trim();
-  if (deploy.code !== 0) {
-    const hint = /sudo: a (terminal|password) is required/.test(deploy.stderr)
-      ? ' (the login needs passwordless sudo, or log in as root)'
-      : /, distro package in /.test(deploy.stdout)
-        ? ' (CFEngine here is a distro package, often older than the policy needs: cf-remote install --edition community)'
-        : '';
-    throw Object.assign(commandError(`Deploying on ${host} failed${hint}`, deploy), { details: log });
-  }
-  return log;
+  return log.trim();
 }
 
 // A build's or deploy's step as it starts, to the window that asked ('deploy:progress').
@@ -259,20 +195,14 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
             throw new Error('The private key file isn’t there');
           }
         }
-        if (typeof host !== 'string' || !SSH_HOST.test(host.trim())) throw new Error('Not a host: user@host, host, or an ~/.ssh/config name');
+        if (typeof host !== 'string' || !SSH_HOST.test(host.trim())) throw new Error('Not a host: user@host or host');
         if (port !== null && port !== undefined && !(Number.isInteger(port) && (port as number) > 0 && (port as number) < 65536))
           throw new Error('Invalid port');
         // Always the current saved project: build and check it first.
         const onStage = progress(event);
         const build = await buildPolicySet(root, onStage);
         if (!build.tarball || !build.lint.ok || build.promises.ok === false) return { build, deployed: false, log: '' };
-        const log = await deployOverSsh(
-          build.tarball,
-          host.trim(),
-          (port as number | null | undefined) ?? null,
-          (key as string | null | undefined) ?? null,
-          onStage
-        );
+        const log = await deployOverSsh(root, host.trim(), (port as number | null | undefined) ?? null, (key as string | null | undefined) ?? null, onStage);
         return { build, deployed: true, log };
       })
     )

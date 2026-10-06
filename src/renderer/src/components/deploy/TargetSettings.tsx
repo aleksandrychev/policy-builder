@@ -67,7 +67,7 @@ export function SshSettings({ onSaved, path }: { onSaved: () => void; path: stri
         <TextField
           label="Hub"
           size="small"
-          placeholder="root@hub.example.com, or an ~/.ssh/config name"
+          placeholder="root@hub.example.com"
           value={host}
           onChange={event => setHost(event.target.value)}
           sx={{ flex: 1 }}
@@ -101,9 +101,8 @@ export function SshSettings({ onSaved, path }: { onSaved: () => void; path: stri
         )}
       </Stack>
       <Typography sx={{ fontSize: 12, color: 'text.muted' }}>
-        Deploying copies the built policy set with your own ssh / scp (never a prompt: a key with a passphrase must be in your agent), validates it on the hub,
-        makes it /var/cfengine/masterfiles and runs the agent there. The login needs root or passwordless sudo. A hub that deploys from git replaces it on its
-        next update.
+        Deploying runs cf-remote deploy: it copies the built policy set over SSH, makes it /var/cfengine/masterfiles and runs the agent there. Without a user it
+        tries the usual ones (ubuntu, centos, root…); the login needs root or passwordless sudo. A hub that deploys from git replaces it on its next update.
       </Typography>
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
         {saved && (

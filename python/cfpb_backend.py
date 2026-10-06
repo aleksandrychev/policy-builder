@@ -359,6 +359,47 @@ def build_command() -> int:
     return 0
 
 
+def deploy_command() -> int:
+    """Deployment: `cf-remote deploy` as is, run in the built cfbs project (it ships out/masterfiles.tgz)."""
+    try:
+        request = json.loads(sys.stdin.read() or "{}")
+    except json.JSONDecodeError:
+        request = None
+    path = request.get("path") if isinstance(request, dict) else None
+    if not isinstance(path, str) or not os.path.isabs(path) or not isinstance(request.get("host"), str):
+        print(
+            'Expected {"path": <absolute project folder>, "host": "user@host[:port]", "key": <path> | null}',
+            file=sys.stderr,
+        )
+        return 2
+    key = request.get("key")
+    if key:
+        os.environ["CF_REMOTE_SSH_KEY"] = key  # cf-remote's only way to take a key
+    print("::stage deploy", file=sys.stderr, flush=True)
+    tee = _Tee(sys.stderr)
+    saved_cwd = os.getcwd()
+    # cf-remote prints its progress to stdout, which is our result channel.
+    sys.stdout.flush()
+    saved_fd = os.dup(1)
+    os.dup2(2, 1)
+    try:
+        os.chdir(path)
+        with contextlib.redirect_stdout(tee):
+            from cf_remote import commands
+
+            errors = commands.deploy([request["host"]], None)
+    except BaseException as error:  # cf-remote exits through SystemExit too
+        errors = 1
+        tee.chunks.append(f"{type(error).__name__}: {error}\n")
+    finally:
+        os.chdir(saved_cwd)
+        sys.stderr.flush()
+        os.dup2(saved_fd, 1)
+        os.close(saved_fd)
+    print(json.dumps({"deployed": not errors, "log": "".join(tee.chunks)}))
+    return 0
+
+
 def testenv_command(action: str) -> int:
     """Test environments (cfpb_testenv): `doctor`, `images`, `package`, `platforms`, `search`, `status` answer with one JSON
     object; the rest stream events, one JSON object per line, ending with a `done` or `error` event."""
@@ -428,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("compile", help="generate policy from the builder's project data")
     commands.add_parser("masterfiles", help="the masterfiles build entry for a version")
     commands.add_parser("build", help="build a saved project's policy set and check it")
+    commands.add_parser("deploy", help="deploy a built policy set to a hub with cf-remote")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
     testenv.add_argument(
         "action",
@@ -459,6 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         "compile": compile_command,
         "masterfiles": masterfiles_command,
         "build": build_command,
+        "deploy": deploy_command,
     }
     return commands.get(args.command, format_command)()
 

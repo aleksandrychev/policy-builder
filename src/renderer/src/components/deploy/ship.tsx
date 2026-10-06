@@ -24,7 +24,7 @@ const STEP_TEXT: Record<ShipStep, string> = {
   commit: 'Commit the changes',
   push: 'Push to origin',
   hub: 'Run the hub’s agent: it pulls, builds with cfbs, validates and deploys',
-  ssh: 'Save, build and check, copy to the hub over SSH, validate and install it there'
+  ssh: 'Save, build and check, then cf-remote deploy it to the hub'
 };
 
 interface PlanInput {
