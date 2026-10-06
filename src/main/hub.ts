@@ -67,10 +67,12 @@ function probe(url: URL): Promise<HubProbe> {
       }
     );
     socket.on('timeout', () => socket.destroy(new Error(`No answer from ${url.host}`)));
-    socket.on('error', error => reject(new Error(`Can’t reach ${url.host}: ${error.message}`)));
+    socket.on('error', error => reject(new Error(`Can’t reach ${url.host}: ${reasonOf(error)}`)));
   });
 }
 
+// A host with IPv4 and IPv6 addresses fails with an AggregateError and an empty message.
+const reasonOf = (error: Error & { code?: string; errors?: Error[] }) => error.message || error.errors?.[0]?.message || error.code || 'connection failed';
 
 type Hub = { fingerprint?: string; password: string; pem?: string; url: string; username: string };
 
@@ -124,7 +126,7 @@ function call<T>(hub: Hub, method: string, path: string, body?: unknown, timeout
       }
     );
     req.on('timeout', () => req.destroy(new Error(`The hub didn’t answer within ${Math.round(timeout / 1000)} s`)));
-    req.on('error', error => reject(error));
+    req.on('error', error => reject(error.message ? error : new Error(reasonOf(error))));
     req.end(payload);
   });
 }
