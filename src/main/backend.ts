@@ -35,7 +35,7 @@ type SidecarResult = {
  * Packaged: the PyInstaller bundle in the app's resources. Development: that
  * bundle if built, else the uv virtualenv (`npm run backend:sync` suffices).
  */
-function resolveCommand(): { command: string; commandArgs: string[] } {
+export function resolveCommand(): { command: string; commandArgs: string[] } {
   if (app.isPackaged) {
     return { command: join(process.resourcesPath, 'backend', executableName), commandArgs: [] };
   }
@@ -166,7 +166,7 @@ export async function testEnvQuery(action: 'doctor' | 'images' | 'package' | 'pl
 
 // Maps a failed sidecar outcome to an Error: the last stderr line as the
 // message (the sidecar's summary), the whole stderr as `details`.
-function sidecarError({ code, signal, stderr }: SidecarResult, timeoutMs: number): Error & { details: string } {
+export function sidecarError({ code, signal, stderr }: SidecarResult, timeoutMs: number): Error & { details: string } {
   const details = stderr.trim();
   const lastLine = details
     .split(/\r?\n/)

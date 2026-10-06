@@ -39,7 +39,7 @@ async function readHubs(): Promise<StoredHub[]> {
 const writeHubs = (hubs: StoredHub[]) => fs.writeFile(storePath(), JSON.stringify(hubs, null, 2), { mode: 0o600 });
 const publicHub = ({ url, username, fingerprint }: StoredHub): SavedHub => ({ url, username, fingerprint });
 
-function checkedUrl(value: unknown): URL {
+export function checkedUrl(value: unknown): URL {
   if (typeof value !== 'string' || value.length > 500) throw new Error('Not a hub URL');
   const url = new URL(value.trim().includes('://') ? value.trim() : `https://${value.trim()}`);
   if (url.protocol !== 'https:') throw new Error('The hub must be reached over https');
@@ -77,7 +77,7 @@ const reasonOf = (error: Error & { code?: string; errors?: Error[] }) => error.m
 type Hub = { fingerprint?: string; password: string; pem?: string; url: string; username: string };
 
 // One API call: JSON in and out, basic auth, the pinned certificate when there is one.
-function call<T>(hub: Hub, method: string, path: string, body?: unknown, timeout = TIMEOUT_MS): Promise<{ data: T; status: number }> {
+export function call<T>(hub: Hub, method: string, path: string, body?: unknown, timeout = TIMEOUT_MS): Promise<{ data: T; status: number }> {
   const url = new URL(path, hub.url);
   const payload = body === undefined ? undefined : JSON.stringify(body);
   return new Promise((resolve, reject) => {
@@ -132,7 +132,7 @@ function call<T>(hub: Hub, method: string, path: string, body?: unknown, timeout
 }
 
 // A host key in a URL path as the hub matches it: raw (it finds no host for an encoded "SHA%3D…").
-function hostkeyPath(hostkey: string): string {
+export function hostkeyPath(hostkey: string): string {
   if (!/^(SHA|MD5)=[0-9a-f]+$/i.test(hostkey)) throw new Error(`Unexpected hub host key: ${hostkey}`);
   return hostkey;
 }

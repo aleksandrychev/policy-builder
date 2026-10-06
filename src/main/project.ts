@@ -112,12 +112,12 @@ function checkedString(value: unknown, what: string, maxLength: number): string 
   return value.trim();
 }
 
-function checkedAbsolutePath(value: unknown, what: string): string {
+export function checkedAbsolutePath(value: unknown, what: string): string {
   if (typeof value !== 'string' || value.length > MAX_PATH_LENGTH || !isAbsolute(value) || value.includes('\0')) throw new InvalidRequest(`Invalid ${what}`);
   return normalize(value);
 }
 
-function checkedFolderName(value: unknown): string {
+export function checkedFolderName(value: unknown): string {
   if (typeof value !== 'string' || !FOLDER_NAME.test(value)) throw new InvalidRequest('Invalid project folder name');
   return value;
 }
@@ -126,10 +126,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 // A policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
 const POLICY_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.cf$/;
-const isPolicyPath = (path: unknown): path is string => typeof path === 'string' && POLICY_PATH.test(path) && !path.startsWith('./out/');
+export const isPolicyPath = (path: unknown): path is string => typeof path === 'string' && POLICY_PATH.test(path) && !path.startsWith('./out/');
 // Anything a save generates: a policy file, or a template next to one.
 const GENERATED_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.(cf|mustache)$/;
-const isGeneratedPath = (path: unknown): path is string => typeof path === 'string' && GENERATED_PATH.test(path) && !path.startsWith('./out/');
+export const isGeneratedPath = (path: unknown): path is string => typeof path === 'string' && GENERATED_PATH.test(path) && !path.startsWith('./out/');
 
 // What the previous save generated (older projects list only their policy files).
 function generatedPaths(project: unknown): string[] {
@@ -155,7 +155,7 @@ const builderModules = (project: unknown) => {
   return modules;
 };
 
-function checkedContent(value: unknown): ProjectContent {
+export function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
   if (!isRecord(content) || !isRecord(content.project) || !Array.isArray(content.modules) || !isRecord(content.provided)) {
     throw new InvalidRequest('Invalid project content');
@@ -185,7 +185,7 @@ function checkedContent(value: unknown): ProjectContent {
 const MODULE_NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const PROJECT_TYPES: ProjectType[] = ['module', 'policy-set'];
 
-function checkedStorage(value: unknown): ProjectStorage {
+export function checkedStorage(value: unknown): ProjectStorage {
   const storage = value as Partial<ProjectStorage> | null;
   const masterfiles = storage?.masterfiles ?? null;
   if (!isRecord(storage) || !PROJECT_TYPES.includes(storage.type as ProjectType)) throw new InvalidRequest('Invalid project type');
@@ -257,7 +257,7 @@ async function checkTarget(parent: string, folderName: string): Promise<TargetCh
 }
 
 // Highest `major.minor.*` masterfiles release in the build index, e.g. "3.27" → "3.27.1".
-function highestRelease(versions: string[], minor: string): string | undefined {
+export function highestRelease(versions: string[], minor: string): string | undefined {
   const parts = (version: string) => version.split(/[.-]/).map(Number);
   return versions
     .filter(version => version.startsWith(`${minor}.`) && /^\d+\.\d+\.\d+(-\d+)?$/.test(version))
@@ -393,14 +393,14 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
 }
 
 // The project's test environments (the Test Results & Logs tab); no file when there are none.
-async function writeTestEnvironments(projectPath: string, environments: object[] | undefined): Promise<void> {
+export async function writeTestEnvironments(projectPath: string, environments: object[] | undefined): Promise<void> {
   const path = join(projectPath, TEST_ENVIRONMENTS_FILE);
   if (!environments?.length) return fs.rm(path, { force: true });
   await fs.mkdir(dirname(path), { recursive: true });
   await writeFileAtomic(path, `${JSON.stringify({ environments }, null, 2)}\n`);
 }
 
-async function readTestEnvironments(folder: string): Promise<unknown[] | null> {
+export async function readTestEnvironments(folder: string): Promise<unknown[] | null> {
   const parsed: unknown = await fs
     .readFile(join(folder, TEST_ENVIRONMENTS_FILE), 'utf-8')
     .then(text => JSON.parse(text))

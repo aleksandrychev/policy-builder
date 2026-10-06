@@ -72,7 +72,7 @@ async function identity(path: string): Promise<string[]> {
   return args;
 }
 
-async function status(path: string): Promise<GitStatus> {
+export async function status(path: string): Promise<GitStatus> {
   const top = await git(path, ['rev-parse', '--show-toplevel']);
   const real = await fs.realpath(path);
   const repo = top.code === 0 && normalize(top.stdout.trim()) === real;
