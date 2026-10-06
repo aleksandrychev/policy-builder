@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import socket
 import sys
@@ -431,6 +432,17 @@ def _has_image(engine, image: str, arch: str) -> bool:
         return False
 
 
+def install_command(found: dict, install: str) -> str:
+    """Downloads a package (from `package`), checks it against the release data's SHA-256, installs it."""
+    sha256 = str(found.get("sha256") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise RunnerError(f"No checksum for {found['filename']} in CFEngine's release data")
+    path = f"/tmp/{found['filename']}"
+    file, check = shlex.quote(path), shlex.quote(f"{sha256}  {path}")
+    download = f"curl -fsSL -o {file} {shlex.quote(found['url'])}"
+    return f"{download} && echo {check} | sha256sum -c - && {install.format(file=file)} && rm {file}"
+
+
 def ensure_image(
     engine,
     platform: str,
@@ -476,9 +488,7 @@ def ensure_image(
     try:
         prerequisites, install = INSTALL[spec["family"]]
         _check(run_in(engine, builder, prerequisites, None, "setup"), "Installing prerequisites")
-        file = f"/tmp/{found['filename']}"
-        command = f"curl -fsSL -o {file} {found['url']} && {install.format(file=file)} && rm {file}"
-        _check(run_in(engine, builder, command, None, "setup"), "Installing CFEngine")
+        _check(run_in(engine, builder, install_command(found, install), None, "setup"), "Installing CFEngine")
         # The image keeps the builder's labels: blank the owner, or its containers would be swept.
         changes = ['ENTRYPOINT [""]', 'CMD ["sleep", "infinity"]', "USER root", f"LABEL {LABEL_OWNER}="]
         builder.commit(repository=repository, tag=tag, changes=changes)

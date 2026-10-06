@@ -274,6 +274,25 @@ def test_the_masterfiles_lock_is_held_for_the_block(tmp_path: Path):
         fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
+def test_the_package_is_checked_against_its_checksum_before_it_installs():
+    found = {"url": "https://cfengine.com/p/cfengine.deb", "filename": "cfengine.deb", "sha256": "AB" * 32}
+    command = cfpb_testenv.install_command(found, "apt-get install -y {file}")
+    assert command == (
+        "curl -fsSL -o /tmp/cfengine.deb https://cfengine.com/p/cfengine.deb"
+        f" && echo '{'ab' * 32}  /tmp/cfengine.deb' | sha256sum -c -"
+        " && apt-get install -y /tmp/cfengine.deb && rm /tmp/cfengine.deb"
+    )
+
+
+def test_a_package_without_a_checksum_or_with_odd_names_is_never_run_as_is():
+    with pytest.raises(RunnerError, match="No checksum"):
+        cfpb_testenv.install_command({"url": "https://x/p.deb", "filename": "p.deb", "sha256": None}, "{file}")
+    found = {"url": "https://x/p.deb;touch /pwned", "filename": "p $(id).deb", "sha256": "0" * 64}
+    command = cfpb_testenv.install_command(found, "dnf install -y {file}")
+    assert "'https://x/p.deb;touch /pwned'" in command
+    assert "dnf install -y '/tmp/p $(id).deb'" in command
+
+
 class _Running:
     def __init__(self, container_id: str):
         self.id = self.name = container_id
