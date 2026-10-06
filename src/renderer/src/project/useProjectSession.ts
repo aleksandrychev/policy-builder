@@ -21,6 +21,12 @@ const snapshotOf = (state: RootState): ProjectData => ({
   testEnvironments: state.testEnvironments
 });
 
+/** Whether the project changed since `saved`; which file is open doesn't count. */
+export const isEdited = (state: RootState, saved: ProjectData) =>
+  UNDOABLE_KEYS.some(key =>
+    key === 'files' ? state.files.files !== saved.files.files || state.files.folders !== saved.files.folders : state[key] !== saved[key]
+  );
+
 const errorMessage = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 const folderNameOf = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 
@@ -34,7 +40,7 @@ export function useProjectSession() {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const [baseline, setBaseline] = useState<ProjectData | null>(null);
-  const dirty = useAppSelector(state => baseline !== null && UNDOABLE_KEYS.some(key => state[key] !== baseline[key]));
+  const dirty = useAppSelector(state => baseline !== null && isEdited(state, baseline));
   const [projectDialog, setProjectDialog] = useState<'new' | 'saveAs' | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
