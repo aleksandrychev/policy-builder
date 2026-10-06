@@ -492,7 +492,7 @@ async function readCfbsJson(folder: string): Promise<Record<string, unknown>> {
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new InvalidRequest('cfbs.json is not a JSON object.');
   const json = parsed as Record<string, unknown>;
-  if (json.type !== undefined && json.type !== 'policy-set')
+  if (json.type !== undefined && json.type !== 'policy-set' && json.type !== 'module')
     throw new InvalidRequest(`This cfbs.json is a cfbs ${String(json.type)}, not a policy set project.`);
   if (json.type === undefined && typeof json.name !== 'string' && !Array.isArray(json.build)) throw new InvalidRequest('This doesn’t look like a cfbs.json.');
   return json;
@@ -518,6 +518,8 @@ async function openProject(event: IpcMainInvokeEvent, request: { path?: unknown 
   const path = await projectFolderOf(resolve(picked));
   const cfbs = await readCfbsJson(path);
   const builder = await readBuilderProject(path, cfbs);
+  // A module opens only if the builder made it: saving rewrites what it provides.
+  if (cfbs.type === 'module' && !builder) throw new InvalidRequest('This cfbs.json is a cfbs module that wasn’t made with the Policy Builder.');
   const testEnvironments = await readTestEnvironments(path);
   knownProjects.add(path);
   await rememberRecent(path, typeof cfbs.name === 'string' && cfbs.name.trim() ? cfbs.name.trim() : basename(path));
