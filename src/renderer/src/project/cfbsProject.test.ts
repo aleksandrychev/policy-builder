@@ -175,6 +175,15 @@ describe('loadCfbsProject', () => {
     expect(data).toMatchObject({ canvas: [], edges: [], groups: [], derivedNodes: {} });
   });
 
+  it('names that file so it doesn’t replace one of the project’s own', () => {
+    const build = [
+      { name: './plain.cf', steps: ['copy ./plain.cf services/cfbs/plain.cf'] },
+      { name: 'local', steps: ['copy ./plain_2.cf services/cfbs/plain_2.cf'] }
+    ];
+    const { data } = loadCfbsProject({ name: 'Plain', type: 'policy-set', build }, null, 'plain');
+    expect(data.files.files[0]).toMatchObject({ name: 'Plain', bundle: 'plain_3' });
+  });
+
   it('loads a module project: its type, module name and display name', () => {
     const { state } = buildProject();
     const content = toCfbsProject(state, IDENTITY);

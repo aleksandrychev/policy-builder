@@ -30,13 +30,14 @@ const filesSlice = createSlice({
     // Replaces the whole file list: called once, when a project is created,
     // so a previous project's files can't leak into the new one.
     projectFilesInitialized: {
-      reducer(_state, action: PayloadAction<{ id: string; name: string }>) {
+      reducer(_state, action: PayloadAction<{ id: string; name: string; taken: string[] }>) {
         const name = sanitizeFileSystemName(action.payload.name) || DEFAULT_NAME;
-        const file: PolicyFile = { id: action.payload.id, name, bundle: deriveBundle(name), parentId: null };
+        const file: PolicyFile = { id: action.payload.id, name, bundle: deriveBundle(name, action.payload.taken), parentId: null };
         return { files: [file], folders: [], currentFileId: file.id };
       },
-      prepare(name: string) {
-        return { payload: { id: crypto.randomUUID(), name } };
+      // `taken`: names the file's bundle (and so its ./<bundle>.cf) must not have.
+      prepare(name: string, taken: string[] = []) {
+        return { payload: { id: crypto.randomUUID(), name, taken } };
       }
     },
     fileAdded: {

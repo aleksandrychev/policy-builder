@@ -393,6 +393,16 @@ export function environmentsFrom(value: unknown): TestEnvironment[] {
     });
 }
 
+// The project's own top-level policy files (./<name>.cf build entries or copy sources): ours must not overwrite one.
+const ownPolicyFiles = (build: unknown[]) =>
+  build
+    .filter(isObject)
+    .flatMap(entry => [
+      entry.name,
+      ...(Array.isArray(entry.steps) ? entry.steps : []).map(step => (typeof step === 'string' ? step.split(/\s+/)[1] : undefined))
+    ])
+    .flatMap(path => (typeof path === 'string' && /^\.\/[^/]+\.cf$/i.test(path) ? [path.slice(2, -3).toLowerCase()] : []));
+
 export function loadCfbsProject(json: unknown, builder: unknown, folderName: string, testEnvironments: unknown = null): LoadedProject {
   if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
   const type: ProjectType = json.type === 'module' ? 'module' : 'policy-set';
@@ -406,7 +416,7 @@ export function loadCfbsProject(json: unknown, builder: unknown, folderName: str
   const environments = environmentsFrom(testEnvironments);
   const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
   if (data && data.files.files.length > 0) return { ...identity, data: { ...data, testEnvironments: environments }, masterfiles };
-  const files = filesReducer(undefined, projectFilesInitialized(name));
+  const files = filesReducer(undefined, projectFilesInitialized(name, ownPolicyFiles(Array.isArray(json.build) ? json.build : [])));
   return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [], testEnvironments: environments }, masterfiles };
 }
 
