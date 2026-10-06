@@ -1,23 +1,14 @@
-import { type ElectronApplication, type Page, _electron as electron, expect, test } from '@playwright/test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+
+import { SAVE_TIMEOUT_MS, expect, openFromMenu, test } from './fixtures';
 
 // Opening projects from disk. Fixtures are written directly, and opened the way the File > Open
 // Recent menu does it, so no native dialog is involved. Saving runs the Python sidecar's compiler.
-const appEntry = resolve(__dirname, '../out/main/index.js');
-
-let app: ElectronApplication;
-let window: Page;
-let scratchDir: string;
-const consoleErrors: string[] = [];
-
-const SAVE_TIMEOUT_MS = 20_000;
-
 const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf-8'));
 
 // A project folder: its cfbs.json and, for a builder project, .policy-builder/project.json.
-function writeProject(folder: string, cfbs: object, builder?: object): string {
+function writeProject(scratchDir: string, folder: string, cfbs: object, builder?: object): string {
   const path = join(scratchDir, folder);
   mkdirSync(path);
   writeFileSync(join(path, 'cfbs.json'), JSON.stringify(cfbs, null, 2));
@@ -72,45 +63,18 @@ const builderData = {
   current_file_id: 'file-1'
 };
 
-const openFromMenu = (path: string) =>
-  app.evaluate(({ BrowserWindow }, target) => BrowserWindow.getAllWindows()[0].webContents.send('menu:open-recent', target), path);
-
-test.beforeEach(async () => {
-  scratchDir = mkdtempSync(join(tmpdir(), 'cfpb-e2e-open-'));
-  const userDataDir = join(scratchDir, 'user-data');
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key !== 'ELECTRON_RUN_AS_NODE' && value !== undefined)) as Record<
-    string,
-    string
-  >;
-  app = await electron.launch({ args: [appEntry, `--user-data-dir=${userDataDir}`], env });
-  window = await app.firstWindow();
-  window.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
-  });
-  window.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
-  // The renderer listens for menu actions once it has rendered.
+// The renderer listens for menu actions once it has rendered.
+test.beforeEach(async ({ window }) => {
   await expect(window.getByText(/^Try Demo:/)).toBeVisible();
 });
 
-// eslint-disable-next-line no-empty-pattern -- Playwright requires the fixtures arg to be destructured
-test.afterEach(async ({}, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus && window) {
-    const path = testInfo.outputPath('failure.png');
-    await window.screenshot({ path });
-    await testInfo.attach('screenshot', { path, contentType: 'image/png' });
-  }
-  await app?.evaluate(({ app: electronApp }) => electronApp.exit(0)).catch(() => {});
-  await app?.close();
-  rmSync(scratchDir, { recursive: true, force: true });
-});
-
-test('opens a builder project with its blocks and arrows, clean, and saves it back', async () => {
-  const path = writeProject('web', builderProject, builderData);
+test('opens a builder project with its blocks and arrows, clean, and saves it back', async ({ app, window, scratchDir, consoleErrors }) => {
+  const path = writeProject(scratchDir, 'web', builderProject, builderData);
   const statusBar = window.locator('footer');
   const unsaved = window.getByLabel('Unsaved changes');
 
   await test.step('opening loads the blocks and arrows, not dirty', async () => {
-    await openFromMenu(path);
+    await openFromMenu(app, path);
     await expect(statusBar.getByText('Project: Web Hardening')).toBeVisible();
     await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
     await expect(window.locator('.react-flow').getByText('Say goodbye', { exact: true })).toBeVisible();
@@ -140,12 +104,12 @@ test('opens a builder project with its blocks and arrows, clean, and saves it ba
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 
-test('opens a plain cfbs project with one empty file, keeping its build entries on save', async () => {
+test('opens a plain cfbs project with one empty file, keeping its build entries on save', async ({ app, window, scratchDir, consoleErrors }) => {
   const fake = { name: 'some-module', version: '1.0.0', added_by: 'cfbs add', steps: ['copy a.cf services/a.cf'] };
-  const path = writeProject('plain', { name: 'Plain Project', type: 'policy-set', description: '', build: [fake] });
+  const path = writeProject(scratchDir, 'plain', { name: 'Plain Project', type: 'policy-set', description: '', build: [fake] });
   const statusBar = window.locator('footer');
 
-  await openFromMenu(join(path, 'cfbs.json'));
+  await openFromMenu(app, join(path, 'cfbs.json'));
   await expect(statusBar.getByText('Project: Plain Project')).toBeVisible();
   await expect(statusBar.getByText('Blocks: 0', { exact: true })).toBeVisible();
   await expect(statusBar.getByText('File: Plain Project.cf')).toBeVisible();
@@ -161,19 +125,19 @@ test('opens a plain cfbs project with one empty file, keeping its build entries 
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 
-test('a project from a newer builder does not open, and shows why', async () => {
-  const path = writeProject('newer', builderProject, { ...builderData, schema_version: 99 });
+test('a project from a newer builder does not open, and shows why', async ({ app, window, scratchDir }) => {
+  const path = writeProject(scratchDir, 'newer', builderProject, { ...builderData, schema_version: 99 });
 
-  await openFromMenu(path);
+  await openFromMenu(app, path);
   await expect(window.getByRole('alert')).toContainText('newer version of CFEngine Policy Builder');
   await expect(window.getByText(/^Try Demo:/)).toBeVisible();
 });
 
-test('opens a project whose builder data is still in cfbs.json, and moves it out on save', async () => {
-  const path = writeProject('legacy', { ...builderProject, meta: { 'policy-builder': builderData, 'other-tool': { kept: true } } });
+test('opens a project whose builder data is still in cfbs.json, and moves it out on save', async ({ app, window, scratchDir, consoleErrors }) => {
+  const path = writeProject(scratchDir, 'legacy', { ...builderProject, meta: { 'policy-builder': builderData, 'other-tool': { kept: true } } });
   const statusBar = window.locator('footer');
 
-  await openFromMenu(path);
+  await openFromMenu(app, path);
   await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
   const save = window.getByRole('button', { name: 'Save', exact: true });
   await expect(save).toBeDisabled();
@@ -188,8 +152,8 @@ test('opens a project whose builder data is still in cfbs.json, and moves it out
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 
-test('Project Settings converts a policy set to a module and back', async () => {
-  const path = writeProject('convert', builderProject, builderData);
+test('Project Settings converts a policy set to a module and back', async ({ app, window, scratchDir, consoleErrors }) => {
+  const path = writeProject(scratchDir, 'convert', builderProject, builderData);
   const statusBar = window.locator('footer');
   const settings = window.getByRole('button', { name: 'Project settings' });
   const store = async (as: 'Module' | 'Policy set') => {
@@ -199,7 +163,7 @@ test('Project Settings converts a policy set to a module and back', async () => 
     await expect(window.getByRole('dialog')).toHaveCount(0, { timeout: SAVE_TIMEOUT_MS });
   };
 
-  await openFromMenu(path);
+  await openFromMenu(app, path);
   await expect(statusBar.getByText('Blocks: 2', { exact: true })).toBeVisible();
 
   await store('Module');
