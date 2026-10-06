@@ -1,5 +1,7 @@
 # CFEngine Policy Builder
 
+[![CI](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml)
+
 Desktop application for building CFEngine policy.
 
 **Stack:** 
