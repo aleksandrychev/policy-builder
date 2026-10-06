@@ -102,12 +102,17 @@ describe('HostSettingsDialog', () => {
     });
   });
 
-  it('edits and removes ports', () => {
+  it('edits ports on blur, and removes them', () => {
     const { onChange } = setup({ host: { ports: [{ host: 8080, container: 80 }] } });
     const hostPort = screen.getByDisplayValue('8080');
+    fireEvent.change(hostPort, { target: { value: '9' } });
     fireEvent.change(hostPort, { target: { value: '90a90' } });
-    expect(onChange).toHaveBeenLastCalledWith({ ports: [{ host: 9090, container: 80 }] });
-    fireEvent.change(screen.getByDisplayValue('80'), { target: { value: '443' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(hostPort);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ports: [{ host: 9090, container: 80 }] });
+    const containerPort = screen.getByDisplayValue('80');
+    fireEvent.change(containerPort, { target: { value: '443' } });
+    fireEvent.blur(containerPort);
     expect(onChange).toHaveBeenLastCalledWith({ ports: [{ host: 8080, container: 443 }] });
     fireEvent.click(screen.getByRole('button', { name: 'Remove port' }));
     expect(onChange).toHaveBeenLastCalledWith({ ports: [] });

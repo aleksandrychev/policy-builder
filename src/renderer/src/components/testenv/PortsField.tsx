@@ -1,13 +1,13 @@
-import { useState } from 'react';
-
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import { Box, Button, IconButton, Stack, TextField, Typography } from '@mui/material';
 
+import { useDraft } from './useDraft';
+
 type Port = { container: number; host: number };
 
-// One port number: free typing (it may be empty for a moment); a valid port is saved as typed,
-// anything else goes back to the last valid one on blur.
+// One port number: free typing (it may be empty for a moment); a valid port is saved on blur,
+// anything else goes back to the last valid one.
 function PortInput({
   disabled,
   error,
@@ -21,21 +21,19 @@ function PortInput({
   title?: string;
   value: number;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  const draft = useDraft(String(value), text => {
+    const port = portValue(text);
+    if (port !== null && port !== value) onChange(port);
+  });
   return (
     <TextField
       size="small"
-      value={draft ?? String(value)}
+      value={draft.value}
       disabled={disabled}
-      error={error || (draft !== null && portValue(draft) === null)}
+      error={error || (draft.draft !== null && portValue(draft.draft) === null)}
       title={title}
-      onChange={event => {
-        const text = event.target.value.replace(/\D/g, '').slice(0, 5);
-        setDraft(text);
-        const port = portValue(text);
-        if (port !== null) onChange(port);
-      }}
-      onBlur={() => setDraft(null)}
+      onChange={event => draft.setDraft(event.target.value.replace(/\D/g, '').slice(0, 5))}
+      onBlur={draft.flush}
       slotProps={{ htmlInput: { inputMode: 'numeric' } }}
       sx={{ width: 110 }}
     />

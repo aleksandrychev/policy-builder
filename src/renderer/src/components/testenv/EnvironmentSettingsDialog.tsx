@@ -2,6 +2,7 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, St
 
 import type { TestEnvironment } from '../../store/testEnvironmentsSlice/types';
 import { EnvVarsField } from './EnvVarsField';
+import { useDraft } from './useDraft';
 
 export interface EnvironmentSettingsDialogProps {
   busy: boolean;
@@ -21,12 +22,20 @@ export interface EnvironmentSettingsDialogProps {
 export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps) {
   const { environment, busy, onChange } = props;
   const emulated = Boolean(props.engineArch) && props.engineArch !== environment.arch;
+  // Text is committed on blur: one undo step per edit.
+  const name = useDraft(environment.name, text => {
+    if (text !== environment.name) onChange({ name: text });
+  });
+  const envFile = useDraft(environment.envFile ?? '', text => {
+    const value = text.trim() || null;
+    if (value !== environment.envFile) onChange({ envFile: value });
+  });
   return (
     <Dialog open onClose={props.onClose} fullWidth maxWidth="sm">
       <DialogTitle>Test environment</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <TextField label="Name" size="small" value={environment.name} onChange={event => onChange({ name: event.target.value })} />
+          <TextField label="Name" size="small" value={name.value} onChange={event => name.setDraft(event.target.value)} onBlur={name.flush} />
           <Stack direction="row" spacing={1.5}>
             <TextField
               select
@@ -84,7 +93,7 @@ export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps)
           <TextField
             label="Secrets file (.env), optional"
             size="small"
-            value={environment.envFile ?? ''}
+            value={envFile.value}
             placeholder="./.env"
             disabled={!props.saved}
             slotProps={{ inputLabel: { shrink: true } }}
@@ -93,7 +102,8 @@ export function EnvironmentSettingsDialog(props: EnvironmentSettingsDialogProps)
                 ? 'A file in the project folder with KEY=value lines (e.g. ./.env). The hosts get them as environment variables, like the ones above; they’re read at every run and never stored in the project or git, so put secrets there. Commits from here add it to .gitignore.'
                 : 'Save the project to use one: the path is relative to its folder.'
             }
-            onChange={event => onChange({ envFile: event.target.value.trim() || null })}
+            onChange={event => envFile.setDraft(event.target.value)}
+            onBlur={envFile.flush}
           />
         </Stack>
       </DialogContent>

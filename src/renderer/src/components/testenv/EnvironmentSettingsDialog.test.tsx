@@ -46,10 +46,14 @@ function pick(name: string, option: string) {
 }
 
 describe('EnvironmentSettingsDialog', () => {
-  it('renames the environment', () => {
+  it('renames the environment once, on blur', () => {
     const { onChange } = setup();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Prod' } });
-    expect(onChange).toHaveBeenCalledWith({ name: 'Prod' });
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    fireEvent.change(name, { target: { value: 'P' } });
+    fireEvent.change(name, { target: { value: 'Prod' } });
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(name);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ name: 'Prod' });
   });
 
   it('changes the edition', () => {
@@ -128,12 +132,17 @@ describe('EnvironmentSettingsDialog', () => {
   });
 
   it('sets and clears the .env file', () => {
-    const { onChange } = setup();
+    const { onChange } = setup({ environment: { envFile: './old.env' } });
     const field = screen.getByRole('textbox', { name: 'Secrets file (.env), optional' });
     expect(screen.getByText(/A file in the project folder with KEY=value lines/)).toBeInTheDocument();
     fireEvent.change(field, { target: { value: ' ./.env ' } });
+    // Typed as is; trimmed when it's saved.
+    expect(field).toHaveValue(' ./.env ');
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.blur(field);
     expect(onChange).toHaveBeenLastCalledWith({ envFile: './.env' });
     fireEvent.change(field, { target: { value: ' ' } });
+    fireEvent.blur(field);
     expect(onChange).toHaveBeenLastCalledWith({ envFile: null });
   });
 
