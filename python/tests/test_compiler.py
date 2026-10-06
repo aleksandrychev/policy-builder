@@ -350,6 +350,28 @@ def test_unless_negates_the_whole_expression(name: str, expected: str):
     assert f'if => "{expected}"' in users
 
 
+def test_entries_that_run_commands_run_them_only_in_cf_agent():
+    command = {"variable_name": "out", "command": "/bin/hostname"}
+    variable = {"id": "v", "valueSourceId": "command-output", "params": command}
+    variable["condition"] = {"kind": "class", "className": "linux", "mode": "if"}
+    check = {
+        "id": "c",
+        "valueSourceId": "check-command-succeeds",
+        "params": {"class_name": "ok", "command": "/bin/true"},
+    }
+    blocks = [
+        {"instanceId": "v", "blockId": "define-variable", "label": "V", "params": {}, "entries": [variable]},
+        {"instanceId": "c", "blockId": "define-class", "label": "C", "params": {}, "entries": [check]},
+    ]
+    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": blocks}]}
+
+    policy = compile_project(meta)["./t.cf"]
+
+    assert 'execresult("/bin/hostname", "noshell", "stdout"),\n      if => "agent.linux";' in policy
+    assert 'expression => returnszero("/bin/true", "noshell"),\n      if => "agent";' in policy
+    assert policy.count('"agent') == 2
+
+
 def _custom_class(expression: str) -> dict:
     entry = {"id": "e", "valueSourceId": "custom", "params": {"class_name": "custom", "condition": expression}}
     block = {"instanceId": "c", "blockId": "define-class", "label": "Classes", "params": {}, "entries": [entry]}

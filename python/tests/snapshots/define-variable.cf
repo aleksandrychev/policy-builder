@@ -26,7 +26,8 @@
 ### source command-output
     # Case 6
     "command_output"
-      string => execresult("/bin/echo hello", "noshell", "stdout");
+      string => execresult("/bin/echo hello", "noshell", "stdout"),
+      if => "agent";
 
 ### source file-lines
     # Case 7

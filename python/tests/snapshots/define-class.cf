@@ -45,7 +45,8 @@
 ### source check-command-succeeds
     # Case 11
     "check_command_succeeds"
-      expression => returnszero("/bin/echo hello", "noshell");
+      expression => returnszero("/bin/echo hello", "noshell"),
+      if => "agent";
 
 ### source custom
     # Case 12

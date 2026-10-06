@@ -209,6 +209,9 @@ join, … Each decorator's `expression` wraps the incoming value, which appears 
 
 - Define Class entries live in the file's `bundle common <bundle>_vars`, so they're global names:
   every file uses them as plain `name`, and class names must be unique across the project.
+- Every component (cf-promises, cf-serverd, cf-execd…) evaluates common bundles, so an entry that
+  runs a command (`execresult()`, `returnszero()`, Define Variable's too) gets `if => "agent"`: it
+  runs in cf-agent only, and is unset elsewhere.
 - `and => { }` is *true*: a combine source needs at least one class (the compiler refuses an empty
   one).
 - A class named like a hard class (`linux`) is legal but still reads as the hard class — the editor

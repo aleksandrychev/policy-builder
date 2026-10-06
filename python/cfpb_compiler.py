@@ -575,6 +575,9 @@ class FileCompiler:
             for c in (block.get("condition"), entry.get("condition"))
             if c and c.get("className", "").strip()
         ]
+        # Every component (cf-promises, cf-serverd…) evaluates a common bundle: commands run in cf-agent only.
+        if runs_command(step):
+            conditions.insert(0, "agent")
         ctx = Context(self.vars_name, params, self.bodies, class_refs=entry.get("classRefs") or [])
         extra = []
         if entry.get("inventory", {}).get("attributeName", "").strip():
@@ -904,6 +907,15 @@ class FileCompiler:
         ctx = Context(self.vars_name, {}, set())
         attributes = "\n".join(f"  {key} => {compile_value(value, ctx)};" for key, value in body["attributes"].items())
         return f"body {body['type']} {name}({', '.join(body['parameters'])})\n{{\n{attributes}\n}}"
+
+
+COMMAND_FUNCTIONS = {"execresult", "execresult_as_data", "returnszero"}
+
+
+def runs_command(expr) -> bool:
+    if isinstance(expr, dict):
+        return expr.get("call") in COMMAND_FUNCTIONS or any(runs_command(value) for value in expr.values())
+    return isinstance(expr, list) and any(runs_command(item) for item in expr)
 
 
 def inline_computed_template(step: dict, computed: dict) -> dict:

@@ -2,18 +2,23 @@
     # Case 0
     # The stdout of "/bin/echo hello"
     # → fall back to "none" if unset or "x"
-    "via_0__in" string => execresult("/bin/echo hello", "noshell", "stdout");
+    "via_0__in"
+      string => execresult("/bin/echo hello", "noshell", "stdout"),
+      if => "agent";
 
     "via_0"
       string => "$(snap_vars.via_0__in)",
       if => and(
-        isvariable("snap_vars.via_0__in"),
-        not(strcmp("$(snap_vars.via_0__in)", "x"))
+        "agent",
+        and(
+          isvariable("snap_vars.via_0__in"),
+          not(strcmp("$(snap_vars.via_0__in)", "x"))
+        )
       );
 
     "via_0"
       string => "none",
-      if => not(isvariable("snap_vars.via_0"));
+      if => and("agent", not(isvariable("snap_vars.via_0")));
 
 ### decorator filter
     # Case 1
@@ -35,7 +40,8 @@
     "via_2"
       string => format(
         "%s", execresult("/bin/echo hello", "noshell", "stdout")
-      );
+      ),
+      if => "agent";
 
 ### decorator grep
     # Case 3
@@ -62,7 +68,8 @@
     "via_5"
       string => lastnode(
         execresult("/bin/echo hello", "noshell", "stdout"), "/"
-      );
+      ),
+      if => "agent";
 
 ### decorator length
     # Case 6
@@ -96,7 +103,8 @@
     "via_9"
       string => regex_replace(
         execresult("/bin/echo hello", "noshell", "stdout"), "h.*", "x", "x"
-      );
+      ),
+      if => "agent";
 
 ### decorator sort
     # Case 10
@@ -114,7 +122,8 @@
     "via_11"
       slist => string_split(
         execresult("/bin/echo hello", "noshell", "stdout"), "\n", "1000"
-      );
+      ),
+      if => "agent";
 
 ### decorator string-downcase
     # Case 12
@@ -123,7 +132,8 @@
     "via_12"
       string => string_downcase(
         execresult("/bin/echo hello", "noshell", "stdout")
-      );
+      ),
+      if => "agent";
 
 ### decorator string-head
     # Case 13
@@ -132,7 +142,8 @@
     "via_13"
       string => string_head(
         execresult("/bin/echo hello", "noshell", "stdout"), "9"
-      );
+      ),
+      if => "agent";
 
 ### decorator string-replace
     # Case 14
@@ -141,7 +152,8 @@
     "via_14"
       string => string_replace(
         execresult("/bin/echo hello", "noshell", "stdout"), "l", "x"
-      );
+      ),
+      if => "agent";
 
 ### decorator string-reverse
     # Case 15
@@ -150,7 +162,8 @@
     "via_15"
       string => string_reverse(
         execresult("/bin/echo hello", "noshell", "stdout")
-      );
+      ),
+      if => "agent";
 
 ### decorator string-tail
     # Case 16
@@ -159,14 +172,16 @@
     "via_16"
       string => string_tail(
         execresult("/bin/echo hello", "noshell", "stdout"), "9"
-      );
+      ),
+      if => "agent";
 
 ### decorator string-trim
     # Case 17
     # The stdout of "/bin/echo hello"
     # → trim surrounding whitespace
     "via_17"
-      string => string_trim(execresult("/bin/echo hello", "noshell", "stdout"));
+      string => string_trim(execresult("/bin/echo hello", "noshell", "stdout")),
+      if => "agent";
 
 ### decorator string-upcase
     # Case 18
@@ -175,7 +190,8 @@
     "via_18"
       string => string_upcase(
         execresult("/bin/echo hello", "noshell", "stdout")
-      );
+      ),
+      if => "agent";
 
 ### decorator unique
     # Case 19
