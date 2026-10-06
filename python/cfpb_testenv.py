@@ -642,7 +642,7 @@ def _config_hash(image: str, host: dict) -> str:
     return hashlib.sha256(json.dumps([image, host["name"], ports, PUBLISH_ADDRESS]).encode()).hexdigest()[:16]
 
 
-def _ensure_container(engine, env: dict, host: dict, image: str, environment: dict):
+def _ensure_container(engine, env: dict, host: dict, image: str):
     existing = _labelled(engine, env).get(host["id"])
     config = _config_hash(image, host)
     if existing is not None and existing.labels.get(LABEL_CONFIG) != config:
@@ -654,6 +654,7 @@ def _ensure_container(engine, env: dict, host: dict, image: str, environment: di
             existing.start()
         return existing
     emit("step", host=host["id"], step="create", message=f"Creating {container_name(env, host)}")
+    # No environment: .env values go with each command (run_in), not into `docker inspect`.
     return engine.containers.run(
         image,
         "sleep infinity",
@@ -664,7 +665,6 @@ def _ensure_container(engine, env: dict, host: dict, image: str, environment: di
         network=network_name(env),
         platform=DOCKER_PLATFORM.get(env.get("arch") or "x86_64"),
         ports={f"{int(p['container'])}/tcp": (PUBLISH_ADDRESS, int(p["host"])) for p in host.get("ports") or []},
-        environment=environment,
         labels={LABEL_ENV: env["id"], LABEL_HOST: host["id"], LABEL_CONFIG: config},
     )
 
@@ -815,7 +815,7 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
                 host["id"],
                 host.get("image") or None,
             )
-            container = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
+            container = _ensure_container(engine, env, host, image)
             containers[host["id"]] = container
             kept = host["id"] in existing and existing[host["id"]].id == container.id
             if host is hub_host and not kept:

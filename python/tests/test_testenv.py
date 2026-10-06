@@ -293,6 +293,23 @@ def test_a_package_without_a_checksum_or_with_odd_names_is_never_run_as_is():
     assert "dnf install -y '/tmp/p $(id).deb'" in command
 
 
+def test_containers_are_created_without_the_environment_variables(monkeypatch):
+    created = {}
+
+    class Containers:
+        def run(self, image, command, **options):
+            created.update(options)
+            return "container"
+
+    monkeypatch.setattr(cfpb_testenv, "_labelled", lambda engine, env: {})
+    engine = type("Engine", (), {"containers": Containers()})()
+    host = {"id": "h", "name": "web", "ports": [], "env": {"TOKEN": "secret"}}
+
+    assert cfpb_testenv._ensure_container(engine, {"id": "e", "env": {"KEY": "v"}}, host, "image") == "container"
+    assert "environment" not in created
+    assert "secret" not in json.dumps(created)
+
+
 class _Running:
     def __init__(self, container_id: str):
         self.id = self.name = container_id
@@ -320,7 +337,7 @@ def test_a_recreated_hub_makes_every_client_bootstrap_to_it_again(monkeypatch, h
         "_network": lambda engine, env: None,
         "_labelled": lambda engine, env: before,
         "ensure_image": lambda *args: "image",
-        "_ensure_container": lambda engine, env, host, image, environment: after[host["id"]],
+        "_ensure_container": lambda engine, env, host, image: after[host["id"]],
         "_deploy": lambda *args: None,
         "_ip": lambda *args: "10.0.0.2",
         "_bootstrapped": lambda engine, container: container.id in bootstrapped,
