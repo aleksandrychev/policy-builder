@@ -371,7 +371,14 @@ def deploy_command() -> int:
     except json.JSONDecodeError:
         request = None
     path = request.get("path") if isinstance(request, dict) else None
-    if not isinstance(path, str) or not os.path.isabs(path) or not isinstance(request.get("host"), str):
+    host = request.get("host") if isinstance(request, dict) else None
+    # ssh would read a part starting with "-" (user or host) as an option.
+    if (
+        not isinstance(path, str)
+        or not os.path.isabs(path)
+        or not isinstance(host, str)
+        or any(part.startswith("-") for part in host.split("@"))
+    ):
         print(
             'Expected {"path": <absolute project folder>, "host": "user@host[:port]", "key": <path> | null}',
             file=sys.stderr,

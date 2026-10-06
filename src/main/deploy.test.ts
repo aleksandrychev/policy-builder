@@ -197,6 +197,8 @@ describe('IPC handlers', () => {
       ' ',
       '-oProxyCommand=touch /tmp/x',
       'root@-oProxyCommand=x',
+      '-Fx@example.com',
+      '.x@hub',
       'hub;reboot',
       'hub name',
       '@hub',

@@ -16,7 +16,7 @@ import { isKnownProject, testEnvironmentSecretFiles } from './project';
 const GIT_TIMEOUT_MS = 30_000;
 // Copying the policy set and two agent runs on the hub.
 // `host` or `user@host` that cf-remote can reach (no ~/.ssh/config aliases); never an option.
-const SSH_HOST = /^(?:[\w.-]+@)?[\w][\w.-]*$/;
+const SSH_HOST = /^(?:\w[\w.-]*@)?\w[\w.-]*$/;
 const PUSH_TIMEOUT_MS = 120_000;
 const FETCH_TIMEOUT_MS = 15_000;
 // http(s), ssh, git, file URLs, scp-like `user@host:path`, or a local path.

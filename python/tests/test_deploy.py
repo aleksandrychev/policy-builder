@@ -54,6 +54,8 @@ def _no_key(monkeypatch: pytest.MonkeyPatch):
         '{"path": "relative/project", "host": "root@hub"}',
         '{"path": "/abs/project"}',
         '{"path": "/abs/project", "host": 42}',
+        '{"path": "/abs/project", "host": "-Fx@hub"}',
+        '{"path": "/abs/project", "host": "root@-oProxyCommand=x"}',
     ],
 )
 def test_deploy_rejects_invalid_input_in_one_line(stdin: str, monkeypatch: pytest.MonkeyPatch):
