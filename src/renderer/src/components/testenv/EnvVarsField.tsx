@@ -1,6 +1,6 @@
-import { useState } from 'react';
-
 import { TextField } from '@mui/material';
+
+import { useDraft } from './useDraft';
 
 const format = (env: Record<string, string>) =>
   Object.entries(env)
@@ -18,7 +18,7 @@ export function parseEnvVars(text: string): Record<string, string> {
   return env;
 }
 
-/** Environment variables as `KEY=value` lines, saved when the field loses focus. */
+/** Environment variables as `KEY=value` lines, saved when the field loses focus or goes away. */
 export function EnvVarsField({
   disabled,
   env,
@@ -30,7 +30,7 @@ export function EnvVarsField({
   label: string;
   onChange: (env: Record<string, string>) => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  const draft = useDraft(format(env), text => onChange(parseEnvVars(text)));
   return (
     <TextField
       label={label}
@@ -40,12 +40,9 @@ export function EnvVarsField({
       fullWidth
       disabled={disabled}
       placeholder="KEY=value, one per line"
-      value={draft ?? format(env)}
-      onChange={event => setDraft(event.target.value)}
-      onBlur={() => {
-        if (draft !== null) onChange(parseEnvVars(draft));
-        setDraft(null);
-      }}
+      value={draft.value}
+      onChange={event => draft.setDraft(event.target.value)}
+      onBlur={draft.flush}
       slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 12 } } }}
     />
   );

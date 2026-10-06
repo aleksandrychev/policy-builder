@@ -26,7 +26,7 @@ interface Options {
 
 function setup({ environment, busy = false, canDestroy = true, saved = true, engineArch }: Options = {}) {
   const callbacks = { onChange: vi.fn(), onClose: vi.fn(), onDestroy: vi.fn(), onEnvChange: vi.fn() };
-  renderWithProviders(
+  const { unmount } = renderWithProviders(
     <EnvironmentSettingsDialog
       environment={{ ...ENVIRONMENT, ...environment }}
       busy={busy}
@@ -36,7 +36,7 @@ function setup({ environment, busy = false, canDestroy = true, saved = true, eng
       {...callbacks}
     />
   );
-  return callbacks;
+  return { ...callbacks, unmount };
 }
 
 const select = (name: string) => screen.getByRole('combobox', { name });
@@ -118,6 +118,13 @@ describe('EnvironmentSettingsDialog', () => {
     expect(onEnvChange).not.toHaveBeenCalled();
     fireEvent.blur(field);
     expect(onEnvChange).toHaveBeenCalledWith({ APP_ENV: 'prod', TOKEN: 'a=b' });
+  });
+
+  it('saves environment variables when the dialog goes away without a blur (Escape)', () => {
+    const { onEnvChange, unmount } = setup();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Environment variables (all hosts)' }), { target: { value: 'APP_ENV=prod' } });
+    unmount();
+    expect(onEnvChange).toHaveBeenCalledExactlyOnceWith({ APP_ENV: 'prod' });
   });
 
   it('sets and clears the .env file', () => {
