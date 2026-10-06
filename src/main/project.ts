@@ -615,17 +615,24 @@ export function registerProjectHandlers(isTrustedFrame: (frame: WebFrameMain | n
 
   ipcMain.handle(
     'project:save',
-    trusted(async (_event, request: { modules?: unknown; path?: unknown; project?: unknown; provided?: unknown; storage?: unknown }) => {
-      try {
-        const path = checkedAbsolutePath(request?.path, 'project path');
-        if (!knownProjects.has(path)) throw new InvalidRequest('Not a project opened in this session');
-        const content = checkedContent({ project: request.project, modules: request.modules, provided: request.provided });
-        const { masterfiles } = await writeProjectContent(path, content, checkedStorage(request.storage));
-        return { ok: true as const, masterfiles };
-      } catch (error) {
-        return failure(error);
+    trusted(
+      async (_event, request: { modules?: unknown; path?: unknown; project?: unknown; provided?: unknown; storage?: unknown; testEnvironments?: unknown }) => {
+        try {
+          const path = checkedAbsolutePath(request?.path, 'project path');
+          if (!knownProjects.has(path)) throw new InvalidRequest('Not a project opened in this session');
+          const content = checkedContent({
+            project: request.project,
+            modules: request.modules,
+            provided: request.provided,
+            testEnvironments: request.testEnvironments
+          });
+          const { masterfiles } = await writeProjectContent(path, content, checkedStorage(request.storage));
+          return { ok: true as const, masterfiles };
+        } catch (error) {
+          return failure(error);
+        }
       }
-    })
+    )
   );
 
   ipcMain.handle(
