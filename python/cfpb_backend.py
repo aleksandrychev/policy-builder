@@ -98,6 +98,7 @@ def _parse_init_options(text: str) -> dict:
         and isinstance(content.get("project"), dict)
         and isinstance(content.get("modules"), list)
         and isinstance(content.get("provided", {}), dict)
+        and isinstance(content.get("testEnvironments", []), list)
     ):
         raise InvalidInput('"content" must be {"project": {...}, "modules": [...], "provided": {...}}')
     if options["type"] == "module":
@@ -189,6 +190,10 @@ def _update_cfbs_json(directory: str, options: dict) -> dict:
         os.makedirs(os.path.join(directory, BUILDER_DIR), exist_ok=True)
         with open(os.path.join(directory, BUILDER_DIR, "project.json"), "w", encoding="utf-8") as file:
             file.write(json.dumps(project, indent=2) + "\n")
+        environments = content.get("testEnvironments")
+        if environments:
+            with open(os.path.join(directory, BUILDER_DIR, "test-environments.json"), "w", encoding="utf-8") as file:
+                file.write(json.dumps({"environments": environments}, indent=2, ensure_ascii=False) + "\n")
         if module:
             config["provides"][config["name"]] = _with_templates(content["provided"], config["name"], files)
         else:

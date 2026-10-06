@@ -24,8 +24,9 @@ cfbs's `cfbs <cfbs@hostname>` identity if git has none). The result's
 `masterfiles` is the build entry cfbs wrote, or `null`. All cfbs output goes to
 stderr; the last stderr line is a one-line summary for the UI. Any failure
 removes what init created. With `content` (the builder's modules and its
-`project` data), it also writes the modules into `cfbs.json`, the data into
-`.policy-builder/project.json` and the compiled files, before the commit. With
+`project` data, optionally `testEnvironments`), it also writes the modules into
+`cfbs.json`, the data into `.policy-builder/project.json` (and
+`test-environments.json`) and the compiled files, before the commit. With
 `"type": "module"` there's no `cfbs init` and no masterfiles: `cfbs.json` is a
 module project (`"type": "module"`, named after the module) whose `provides`
 holds the project as one module.

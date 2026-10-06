@@ -551,7 +551,6 @@ async function createProject(request: CreateProjectRequest) {
     name,
     type
   });
-  await writeTestEnvironments(result.path, content.testEnvironments);
   knownProjects.add(result.path);
   await writeSettings({ lastProjectParent: parent }).catch(error => console.error(`[project] settings not saved: ${error}`));
   await rememberRecent(result.path, name);
