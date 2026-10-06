@@ -169,6 +169,14 @@ function run(command: string, args: string[], timeout: number, input?: string, o
   });
 }
 
+// Why ssh/scp couldn't get in, when it's one of the usual reasons.
+const sshHint = (result: Git, key: string | null) =>
+  /REMOTE HOST IDENTIFICATION HAS CHANGED/.test(result.stderr)
+    ? ' (the host key changed since you last connected: if that is expected, ssh-keygen -R the host)'
+    : key && /passphrase|Permission denied \(publickey/.test(result.stderr)
+      ? ' (a key with a passphrase must be in your ssh agent: ssh-add)'
+      : '';
+
 /** Copies a built policy set to a hub over SSH and makes it the hub's masterfiles. */
 async function deployOverSsh(tarball: string, host: string, port: number | null, key: string | null, onStage: (stage: string) => void): Promise<string> {
   // A chosen key is the only one tried (not every key the agent holds). A new host's key is
@@ -182,19 +190,20 @@ async function deployOverSsh(tarball: string, host: string, port: number | null,
     'StrictHostKeyChecking=accept-new',
     ...(key ? ['-i', key, '-o', 'IdentitiesOnly=yes'] : [])
   ];
-  const remote = `/tmp/cfpb-masterfiles-${Date.now()}.tgz`;
+  const sshPort = port ? ['-p', String(port)] : [];
   onStage('copy');
-  const copy = await run('scp', [...options, ...(port ? ['-P', String(port)] : []), tarball, `${host}:${remote}`], SSH_TIMEOUT_MS);
+  // A directory only the login user can write: root unpacks what it holds.
+  const made = await run('ssh', [...options, ...sshPort, host, 'mktemp -d /tmp/cfpb-deploy.XXXXXXXX'], SSH_TIMEOUT_MS);
+  if (made.code !== 0) throw commandError(`Connecting to the hub failed${sshHint(made, key)}`, made);
+  const remote = made.stdout.trim().split('\n').pop() ?? '';
+  if (!/^\/tmp\/cfpb-deploy\.\w+$/.test(remote)) throw new Error(`Unexpected temporary directory on the hub: ${remote}`);
+  const copy = await run('scp', [...options, ...(port ? ['-P', String(port)] : []), tarball, `${host}:${remote}/masterfiles.tgz`], SSH_TIMEOUT_MS);
   if (copy.code !== 0) {
-    const locked = /REMOTE HOST IDENTIFICATION HAS CHANGED/.test(copy.stderr)
-      ? ' (the host key changed since you last connected: if that is expected, ssh-keygen -R the host)'
-      : key && /passphrase|Permission denied \(publickey/.test(copy.stderr)
-        ? ' (a key with a passphrase must be in your ssh agent: ssh-add)'
-        : '';
-    throw commandError(`Copying to the hub failed${locked}`, copy);
+    await run('ssh', [...options, ...sshPort, host, `rm -rf ${remote}`], SSH_TIMEOUT_MS);
+    throw commandError(`Copying to the hub failed${sshHint(copy, key)}`, copy);
   }
   const asRoot = `if [ "$(id -u)" = 0 ]; then sh -s -- ${remote}; else sudo -n sh -s -- ${remote}; fi`;
-  const deploy = await run('ssh', [...options, ...(port ? ['-p', String(port)] : []), host, asRoot], SSH_TIMEOUT_MS, REMOTE_DEPLOY, onStage);
+  const deploy = await run('ssh', [...options, ...sshPort, host, asRoot], SSH_TIMEOUT_MS, REMOTE_DEPLOY, onStage);
   const log = `${deploy.stdout}${deploy.stderr}`
     .split('\n')
     .filter(line => !STAGE_LINE.test(line.trim()))

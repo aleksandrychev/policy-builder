@@ -1,6 +1,7 @@
 # Runs on the hub, as root, fed to `sh -s` by deployOverSsh() in deploy.ts.
 # What cf-remote deploy does, plus cf-promises before the swap, so a bad policy
-# never replaces a working one. $1 is the uploaded tarball of masterfiles/.
+# never replaces a working one. $1 is the login user's private temporary
+# directory, holding masterfiles.tgz (the built masterfiles/).
 # "::stage <id>" lines on stdout report progress.
 set -e
 work=$(mktemp -d)
@@ -31,7 +32,7 @@ case "$master" in
 esac
 echo "CFEngine: $("$bin/cf-agent" -V | head -n 1), $kind in $bin; masterfiles: $master"
 
-tar -xzf "$1" -C "$work" --no-same-owner
+tar -xzf "$1/masterfiles.tgz" -C "$work" --no-same-owner
 
 echo "::stage validate"
 "$bin/cf-promises" -f "$work/masterfiles/promises.cf"
