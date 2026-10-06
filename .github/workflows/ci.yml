@@ -53,8 +53,25 @@ jobs:
       - run: npm ci
       - run: npm run test
 
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # The main process runs the real Python sidecar.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
+      - run: npm run test:integration
+
   e2e:
-    name: E2E smoke test
+    name: E2E tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
