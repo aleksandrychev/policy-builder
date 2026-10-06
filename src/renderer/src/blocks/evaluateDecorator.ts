@@ -1,4 +1,5 @@
 import type { Decorator } from './decorators';
+import { optionValue } from './types';
 
 export type DecoratorValue = string | string[];
 
@@ -162,15 +163,27 @@ function applyFilter(list: string[], params: Record<string, string>): string[] {
 
 const substitute = (template: string, params: Record<string, string>) => template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => params[name] ?? '');
 
+// As the compiler reads them (params_with_defaults): empty means the default, unless "" is an option.
+function withDefaults(decorator: Decorator, params: Record<string, string>): Record<string, string> {
+  const resolved = { ...params };
+  for (const { default: fallback, name, options } of decorator.parameters) {
+    const emptyOption = options?.some(option => optionValue(option) === '');
+    if (params[name] === undefined || (params[name] === '' && !emptyOption)) resolved[name] = fallback === undefined ? '' : String(fallback);
+  }
+  return resolved;
+}
+
 // A `fallback` decorator: its value when the input is undefined or equals the trigger.
-export function applyFallback(decorator: Decorator, params: Record<string, string>, input: DecoratorValue | undefined): DecoratorValue | undefined {
+export function applyFallback(decorator: Decorator, given: Record<string, string>, input: DecoratorValue | undefined): DecoratorValue | undefined {
   if (!decorator.fallback) return undefined;
+  const params = withDefaults(decorator, given);
   const fallback = substitute(decorator.fallback.value, params);
   if (input === undefined) return fallback;
   return asString(input) === substitute(decorator.fallback.trigger, params) ? fallback : input;
 }
 
-export function evaluateDecorator(decorator: Decorator, params: Record<string, string>, input: DecoratorValue): DecoratorValue {
+export function evaluateDecorator(decorator: Decorator, given: Record<string, string>, input: DecoratorValue): DecoratorValue {
+  const params = withDefaults(decorator, given);
   switch (decorator.id) {
     case 'regex-replace':
       return applyRegexReplace(asString(input), params.pattern ?? '', params.replacement ?? '', params.options ?? '');
