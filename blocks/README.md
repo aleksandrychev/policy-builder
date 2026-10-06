@@ -248,6 +248,9 @@ list iterates, as with `allow_list`:
     "$(install_packages_package_name)" policy => "present";
 ```
 
+A Mustache template computed from data has no file to write: the promise renders the variable
+instead (`edit_template_string`, `template_method => "inline_mustache"`), against `datastate()`.
+
 ## Conditions and inventory
 
 A block instance, and each entry, can carry one **condition** (`if` or `unless` a class — see

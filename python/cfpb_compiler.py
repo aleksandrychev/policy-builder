@@ -749,7 +749,7 @@ class FileCompiler:
         steps = descriptor.get("steps", [])
         if len(steps) != 1:
             raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
-        step = steps[0]
+        step = inline_computed_template(steps[0], computed)
         to_root = "../" * self.file["path"][2:].count("/")
         ctx = Context(
             self.vars_name,
@@ -780,7 +780,9 @@ class FileCompiler:
         ctx.params = promiser_params
         attributes = attributes_of(step, ctx)
         variables += ctx.locals
-        template_data = self.template_data(step, declared, params, prefix)
+        # A computed template is only known at run time: it renders against datastate().
+        template_bound = any(p.get("mustache") and p["name"] in computed for p in declared)
+        template_data = None if template_bound else self.template_data(step, declared, params, prefix)
         if template_data:
             variables += template_data
             attributes.append(f"template_data => @({prefix}template_data)")
@@ -874,6 +876,19 @@ class FileCompiler:
         ctx = Context(self.vars_name, {}, set())
         attributes = "\n".join(f"  {key} => {compile_value(value, ctx)};" for key, value in body["attributes"].items())
         return f"body {body['type']} {name}({', '.join(body['parameters'])})\n{{\n{attributes}\n}}"
+
+
+def inline_computed_template(step: dict, computed: dict) -> dict:
+    """A template file whose text is computed from data can't be written out: the step renders
+    the variable instead, as an inline_mustache edit_template_string."""
+    attributes = {}
+    for key, value in step.get("attributes", {}).items():
+        if isinstance(value, dict) and value.get("template_file") in computed:
+            attributes["edit_template_string"] = f"{{{{{value['template_file']}}}}}"
+            attributes["template_method"] = "inline_mustache"
+        elif key != "template_method" or "template_method" not in attributes:
+            attributes[key] = value
+    return {**step, "attributes": attributes}
 
 
 def condition_attributes(conditions: list[str]) -> list[str]:

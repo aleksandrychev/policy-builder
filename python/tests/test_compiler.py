@@ -174,6 +174,22 @@ def test_a_template_reading_anything_else_keeps_datastate():
     assert "template_data" not in render
 
 
+def test_a_template_computed_from_data_renders_inline():
+    meta = _demo()
+    block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "render-template")
+    block["paramBindings"] = {
+        "template_content": {"valueSourceId": "file-content", "params": {"path": "/srv/nginx.conf.mustache"}}
+    }
+
+    files = compile_project(meta)
+    render = _block(files[WEBSERVER], "Render nginx config")
+
+    assert TEMPLATE not in files
+    assert 'edit_template_string => "$(render_nginx_config_template_content)",' in render
+    assert 'template_method => "inline_mustache",' in render
+    assert "template_data" not in render
+
+
 def test_template_copies_keep_clear_of_parameters_computed_from_data():
     meta = _demo()
     block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "render-template")
