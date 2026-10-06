@@ -4,10 +4,8 @@ import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { contentKey } from './useCompiledPolicy';
 
 /**
- * What the test environments are doing right now, per environment: the action
- * running, its streamed log, host states, run results and the hub's Mission
- * Portal details. Kept outside React (and Redux: none of it is project data),
- * so it survives switching tabs; the sidecar's events arrive here once.
+ * What each test environment is doing right now (action, log, hosts, results). Kept outside
+ * React and Redux (it isn't project data), so it survives switching tabs.
  */
 
 type Api = NonNullable<Window['api']>;

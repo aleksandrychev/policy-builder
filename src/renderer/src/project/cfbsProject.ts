@@ -14,12 +14,8 @@ import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { moduleNameFor } from './moduleName';
 
 /**
- * The builder's state on disk: a normal cfbs project that mirrors the file
- * tree — each top-level policy file is a local file module, each top-level
- * folder one local directory module (what `cfbs add` writes for them) — and
- * all of the builder's own data, folders and every file's canvas, in
- * `.policy-builder/project.json`, so cfbs.json stays plain cfbs. Each save
- * also writes the generated .cf files (main process, via the sidecar).
+ * The builder's state on disk: a plain cfbs project (one local module per top-level file or folder),
+ * and the builder's own data in `.policy-builder/project.json`.
  */
 
 // 2: groups compile into bundles of their own (`groups`), arrows may end on them.

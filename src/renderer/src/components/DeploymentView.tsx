@@ -167,9 +167,8 @@ function RunPanel(props: { activity: Activity; gitFailure: Failure | null; gitSt
 }
 
 /**
- * The Deployment tab: pre-flight checks (saved, valid, tested, committed, pushed), then the ways
- * to deploy as tabs named with their status, each with its one action — a git repository, a hub over SSH, or an
- * Enterprise hub — with the run's progress and outcome docked at the bottom.
+ * The Deployment tab: pre-flight checks, then one tab per way to deploy (git, a hub over SSH,
+ * an Enterprise hub), with the run's progress and outcome docked at the bottom.
  */
 export function DeploymentView({
   compiled,

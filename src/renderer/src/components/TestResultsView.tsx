@@ -55,10 +55,8 @@ function problemOf(environment: TestEnvironment, support: PlatformSupport | null
 }
 
 /**
- * The Test Results & Logs tab: a test environment of Docker hosts running the
- * generated policy (current edits, not the saved files). Start creates and
- * bootstraps the hosts; Deploy & run rebuilds, deploys to the hub and runs the
- * agent everywhere until it converges.
+ * The Test Results & Logs tab: Docker hosts running the current edits' policy. Deploy & run sets
+ * up any missing host, deploys to the hub and runs the agent everywhere until it converges.
  */
 export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string, id: string) => void }) {
   const dispatch = useAppDispatch();
