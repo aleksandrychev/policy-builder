@@ -28,7 +28,7 @@ vi.mock('electron', async importOriginal => {
     },
     net: { fetch: async () => new Response('file') },
     protocol: { registerSchemesAsPrivileged: () => {}, handle: (scheme: string, handler: never) => void state.protocols.set(scheme, handler) },
-    session: { defaultSession: { setPermissionRequestHandler: () => {} } }
+    session: { defaultSession: { setPermissionCheckHandler: () => {}, setPermissionRequestHandler: () => {} } }
   };
 });
 

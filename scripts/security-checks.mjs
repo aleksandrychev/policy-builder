@@ -47,7 +47,12 @@ const CHECKS = [
   ['2. No Node.js integration', () => nowhere(/nodeIntegration(InWorker|InSubFrames)?\s*:\s*true/)],
   ['3. Context isolation', () => nowhere(/contextIsolation\s*:\s*false/) ?? missing(mainIndex, /contextIsolation:\s*true/, 'contextIsolation: true')],
   ['4. Process sandboxing', () => nowhere(/sandbox\s*:\s*false|--no-sandbox|enableSandbox/) ?? missing(mainIndex, /sandbox:\s*true/, 'sandbox: true')],
-  ['5. Permission requests handled', () => missing(mainIndex, /setPermissionRequestHandler\(/, 'setPermissionRequestHandler')],
+  [
+    '5. Permission requests handled',
+    () =>
+      missing(mainIndex, /setPermissionRequestHandler\(/, 'setPermissionRequestHandler') ??
+      missing(mainIndex, /setPermissionCheckHandler\(/, 'setPermissionCheckHandler')
+  ],
   ['6. webSecurity not disabled', () => nowhere(/webSecurity\s*:\s*false|disable-web-security/)],
   [
     '7. Content Security Policy',

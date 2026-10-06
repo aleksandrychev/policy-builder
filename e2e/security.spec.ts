@@ -65,6 +65,11 @@ test('the page has a strict Content Security Policy', async ({ window: page }) =
 });
 
 test('web permissions are denied', async ({ window: page }) => {
+  // Checked (no request) as well as requested; writing to the clipboard (Copy) is the one granted.
+  const state = (name: string) =>
+    page.evaluate(permission => navigator.permissions.query({ name: permission as PermissionName }).then(result => result.state), name);
+  expect([await state('geolocation'), await state('notifications'), await state('clipboard-write')]).toEqual(['denied', 'denied', 'granted']);
+  expect(await page.evaluate(() => Notification.permission)).toBe('denied');
   expect(await page.evaluate(() => Notification.requestPermission())).toBe('denied');
   expect(
     await page.evaluate(() =>
