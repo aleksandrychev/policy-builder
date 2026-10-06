@@ -63,8 +63,9 @@ export async function launch(userDataDir: string): Promise<ElectronApplication> 
     string,
     string
   >;
-  // Off screen unless CFPB_E2E_SHOW=1, so a local run doesn't take over the desktop.
-  if (process.env.CFPB_E2E_SHOW !== '1') env.CFPB_E2E_HIDDEN = '1';
+  // Off screen locally, so a run doesn't take over the desktop (CFPB_E2E_SHOW=1 shows it). Not in CI:
+  // xvfb is a virtual screen already, and there a hidden window paints no frames, which stalls clicks.
+  if (process.env.CFPB_E2E_SHOW !== '1' && !process.env.CI) env.CFPB_E2E_HIDDEN = '1';
   return electron.launch({ args: [appEntry, `--user-data-dir=${userDataDir}`], env });
 }
 
