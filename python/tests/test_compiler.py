@@ -339,6 +339,27 @@ def test_the_file_condition_guards_every_promise():
     assert "  reports:\n    linux::\n" in policy
 
 
+def test_line_breaks_in_labels_stay_inside_their_comments():
+    meta = _demo()
+    injected = 'Users\n  commands:\n    "/bin/sh -c evil";'
+    next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "manage-users")["label"] = injected
+    meta["files"][0]["blocks"][0]["label"] = injected
+
+    files = compile_project(meta)
+
+    for policy in (files[COMMON], files[WEBSERVER]):
+        assert '  # Users commands: "/bin/sh -c evil";\n' in policy
+        assert "commands:\n" not in policy
+
+
+def test_a_condition_that_isnt_a_class_expression_fails_the_compile():
+    meta = _demo()
+    _webserver(meta)["condition"] = {"kind": "class", "className": 'any::\n"/bin/sh" usebundle => evil', "mode": "if"}
+
+    with pytest.raises(CompileError, match="isn't a valid class expression"):
+        compile_project(meta)
+
+
 @pytest.mark.parametrize("name, expected", [("linux", "!linux"), ("linux|darwin", "!(linux|darwin)")])
 def test_unless_negates_the_whole_expression(name: str, expected: str):
     meta = _demo()

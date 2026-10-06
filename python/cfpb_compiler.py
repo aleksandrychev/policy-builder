@@ -108,6 +108,9 @@ def negated(expression: str) -> str:
 
 def class_expression(condition: dict) -> str:
     name = condition["className"].strip()
+    # A file's condition is a `name::` guard: anything else in it would be policy.
+    if not valid_class_expression(name):
+        raise CompileError(f"{name!r} isn't a valid class expression")
     return negated(name) if condition.get("mode") == "unless" else name
 
 
@@ -362,6 +365,11 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     return PLACEHOLDER.sub(shown, pattern)
 
 
+def one_line(text: str) -> str:
+    """Text for a `# …` comment: a line break would end it, and the rest would be policy."""
+    return " ".join(text.split())
+
+
 def canonical(name: str) -> str:
     return re.sub(r"\W", "_", name)
 
@@ -543,7 +551,7 @@ class FileCompiler:
             for entry in block.get("entries") or []:
                 kind, lines = self.entry_promises(block, descriptor, entry)
                 if first[kind]:
-                    label = block.get("label") or descriptor["name"]
+                    label = one_line(block.get("label") or descriptor["name"])
                     lines = [f"# {label}", *lines]
                     chunks[kind].append((block["instanceId"], label))
                     first[kind] = False
@@ -589,7 +597,7 @@ class FileCompiler:
             try:
                 attributes = attributes_of(step, ctx)
             except Skip as skip:
-                return kind, [f"# Skipped {name}: {skip}."]
+                return kind, [f"# Skipped {one_line(name)}: {skip}."]
             return kind, promise(
                 quote(ctx.substitute(step["promiser"])), [*attributes, *condition_attributes(conditions)]
             )
@@ -695,7 +703,7 @@ class FileCompiler:
 
     def block_lines(self, block: dict, names: dict[str, str], edges: list[dict], owner: str, guarded: list[str]):
         name = names[block["instanceId"]]
-        label = block.get("label") or self.descriptor(block)["name"]
+        label = one_line(block.get("label") or self.descriptor(block)["name"])
         # Locals are prefixed with the block's own name: blocks share a bundle.
         parts = self.block_parts(block, name, prefix=f"{name[len(self.bundle) + 1:]}_", owner=owner)
         if isinstance(parts, str):
@@ -727,8 +735,8 @@ class FileCompiler:
                     quote(group.get("name") or "group"),
                     [f"usebundle => {names[group['id']]}", *self.gating(node, names, edges)],
                 )
-                self.chunks.append((group["id"], f"Group: {group.get('name') or 'group'}"))
-                body += [f"  # Group: {group.get('name') or 'group'}", "  methods:", *guarded]
+                self.chunks.append((group["id"], f"Group: {one_line(group.get('name') or 'group')}"))
+                body += [f"  # Group: {one_line(group.get('name') or 'group')}", "  methods:", *guarded]
                 body += [*[f"      {line}" for line in lines], ""]
         return f"bundle agent {self.bundle}\n{{\n" + "\n".join(body).rstrip() + "\n}"
 
@@ -737,7 +745,7 @@ class FileCompiler:
         name = names[group["id"]]
         members = [b for b in blocks if b.get("groupId") == group["id"]]
         edges = self.scoped_edges({b["instanceId"] for b in members})
-        comment = f'# Group "{group.get("name") or "group"}", run as one step of {self.bundle}.'
+        comment = f'# Group "{one_line(group.get("name") or "group")}", run as one step of {self.bundle}.'
         self.chunks.append((group["id"], comment[2:]))
         body = [line for block in members for line in self.block_lines(block, names, edges, name, [])]
         return f"{comment}\nbundle agent {name}\n{{\n" + "\n".join(body).rstrip() + "\n}"
@@ -765,7 +773,7 @@ class FileCompiler:
         descriptor = self.descriptor(block)
         declared = descriptor.get("parameters", [])
         params = params_with_defaults(declared, block.get("params") or {})
-        label = block.get("label") or descriptor["name"]
+        label = one_line(block.get("label") or descriptor["name"])
         bound = set(block.get("paramBindings") or {})
         computed, missing_data = self.computed_parameters(block, owner, prefix)
         missing = [*missing_required([p for p in declared if p["name"] not in bound], params), *missing_data]
