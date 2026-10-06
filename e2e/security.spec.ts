@@ -44,7 +44,9 @@ test('the page is served from app://, not file://', async ({ window: page }) => 
   // Nothing outside the built renderer is reachable through the scheme, encoded ".." included.
   const status = (path: string) => page.evaluate(url => fetch(url).then(response => response.status), `app://bundle/${path}`);
   expect(await status('index.html')).toBe(200);
-  expect(await status('%2e%2e/main/index.js')).toBe(404);
+  // One segment to the URL parser (a bare %2e%2e would be resolved before the request);
+  // decoded after normalising, it would be ../main/index.js, which exists.
+  expect(await status('%2e%2e%2fmain%2findex.js')).toBe(404);
   expect(await status('..%2fmain%2findex.js')).toBe(404);
 });
 
