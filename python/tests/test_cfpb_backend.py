@@ -307,6 +307,32 @@ def test_init_cleans_up_after_an_unexpected_error(tmp_path: Path, monkeypatch: p
     assert not project.exists()
 
 
+def _exit_after_writing(error: BaseException):
+    def init(directory: str, masterfiles: str):
+        Path(directory, "cfbs.json").write_text("{}")
+        raise error
+
+    return init
+
+
+def test_init_cleans_up_when_cfbs_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    project = tmp_path / "project"
+    monkeypatch.setattr("cfpb_backend._run_cfbs_init", _exit_after_writing(SystemExit(1)))
+    code, _, stderr = _init(_options(project), monkeypatch)
+
+    assert code == 1
+    assert stderr.strip().splitlines()[-1] == "Init failed: SystemExit: 1"
+    assert not project.exists()
+
+
+def test_init_cleans_up_when_terminated_and_still_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    project = tmp_path / "project"
+    monkeypatch.setattr("cfpb_backend._run_cfbs_init", _exit_after_writing(cfpb_backend.Terminated(143)))
+    with pytest.raises(cfpb_backend.Terminated):
+        _init(_options(project), monkeypatch)
+    assert not project.exists()
+
+
 def test_init_reports_a_cfbs_download_failure_as_a_network_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     def offline(*_args, **_kwargs):
         raise __import__("cfbs.utils").utils.CFBSNetworkError("Failed to get JSON from 'https://example'")

@@ -51,6 +51,10 @@ class InitFailed(Exception):
     """Init went wrong after we started touching the disk: exit 1, cleaned up."""
 
 
+class Terminated(SystemExit):
+    """SIGTERM, as an exit that cleanup can tell apart from a library's own sys.exit."""
+
+
 def format_command() -> int:
     try:
         format_policy_fin_fout(sys.stdin, sys.stdout, LINE_LENGTH, False)
@@ -284,8 +288,10 @@ def init_command() -> int:
         config = _update_cfbs_json(directory, options)
         if options["git"]:
             _git_commit_all(directory)
-    except Exception as error:
+    except BaseException as error:  # cfbs may sys.exit; SIGTERM unwinds as Terminated
         _clean_up(directory, created)
+        if isinstance(error, (Terminated, KeyboardInterrupt)):
+            raise
         message = str(error) if isinstance(error, InitFailed) else f"Init failed: {type(error).__name__}: {error}"
         print(message, file=sys.stderr)
         return 1
@@ -471,7 +477,7 @@ def testenv_command(action: str) -> int:
 
 def _terminated(signum, _frame) -> None:
     """Cancel, quit and timeouts SIGTERM us: unwind, so `finally` blocks remove what we started."""
-    sys.exit(128 + signum)
+    raise Terminated(128 + signum)
 
 
 def main(argv: list[str] | None = None) -> int:
