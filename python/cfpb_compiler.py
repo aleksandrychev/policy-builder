@@ -308,8 +308,14 @@ def computed_array(param: str, ctx: Context) -> str:
 def list_value(items: list[str], ctx: Context) -> str:
     if not ctx.as_argument:
         return "{ " + ", ".join(items) + " }"
-    # A literal list as a function argument goes in as inline JSON.
-    return "'" + json.dumps([json.loads(item) if item.startswith('"') else item for item in items]) + "'"
+    # A literal list as a function argument goes in as inline JSON, in a single-quoted string.
+    text = json.dumps([unquote(item) if item.startswith('"') else item for item in items], ensure_ascii=False)
+    return "'" + re.sub(r"\\(?=[\\\"']|$)", r"\\\\", text).replace("'", "\\'") + "'"
+
+
+def unquote(string: str) -> str:
+    """quote()'s inverse: the text of a CFEngine string."""
+    return re.sub(r"\\([\\\"'])", r"\1", string[1:-1])
 
 
 def attributes_of(step: dict, ctx: Context) -> list[str]:

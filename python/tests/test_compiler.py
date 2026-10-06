@@ -269,6 +269,19 @@ def test_a_parameter_computed_from_data_is_a_local_variable_named_after_its_bloc
     assert '"$(install_web_server_package_package_name)"' in install
 
 
+def test_a_literal_list_in_a_chain_is_inline_json_that_reads_back_as_written():
+    items = ["it's", "C:\\", "\\d+", 'say "hi"']
+    entry = {"id": "l", "valueSourceId": "list", "params": {"variable_name": "l", "items": "\n".join(items)}}
+    entry["decorators"] = [{"id": "d", "decoratorId": "sort", "params": {}}]
+    block = {"instanceId": "v", "blockId": "define-variable", "label": "V", "params": {}, "entries": [entry]}
+    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+
+    policy = compile_project(meta)["./t.cf"]
+
+    # Checked with cf-agent: sorts to C:\, \d+, it's, say "hi".
+    assert r"""'["it\'s", "C:\\\\", "\\\d+", "say \\"hi\\""]'""" in policy
+
+
 def test_a_list_parameter_iterates_only_with_several_values():
     policy = compile_project(DEMO)[WEBSERVER]
 
