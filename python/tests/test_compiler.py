@@ -277,6 +277,35 @@ def test_unless_negates_the_whole_expression(name: str, expected: str):
     assert f'if => "{expected}"' in users
 
 
+def _custom_class(expression: str) -> dict:
+    entry = {"id": "e", "valueSourceId": "custom", "params": {"class_name": "custom", "condition": expression}}
+    block = {"instanceId": "c", "blockId": "define-class", "label": "Classes", "params": {}, "entries": [entry]}
+    return {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+
+
+@pytest.mark.parametrize(
+    "expression, compiled",
+    [
+        ("linux.!(debian|redhat)", '"linux.!(debian|redhat)"'),
+        ("role_$(sys.uqhost)", '"role_$(sys.uqhost)"'),
+        ('not(fileexists("/x"))', 'not(fileexists("/x"))'),
+        ('and(linux, isvariable("sys.fqhost"))', 'and(linux, isvariable("sys.fqhost"))'),
+    ],
+)
+def test_a_custom_class_expression_is_written_as_is(expression: str, compiled: str):
+    assert f'"custom" expression => {compiled};' in compile_project(_custom_class(expression))["./t.cf"]
+
+
+@pytest.mark.parametrize(
+    "expression", ['not(fileexists("/x")', 'fileexists("/etc/hosts").linux', "linux |", "linux debian", "(linux"]
+)
+def test_a_malformed_custom_class_expression_is_skipped_with_a_note(expression: str):
+    policy = compile_project(_custom_class(expression))["./t.cf"]
+
+    assert "# Skipped custom: not a valid class expression or function call." in policy
+    assert "expression =>" not in policy
+
+
 def test_unknown_block_types_fail_the_compile():
     meta = _demo()
     _webserver(meta)["blocks"][0]["blockId"] = "no-such-block"

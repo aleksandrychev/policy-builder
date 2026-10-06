@@ -37,6 +37,10 @@ class CompileError(Exception):
     """The canvas can't be compiled (as opposed to one block being skipped)."""
 
 
+class Skip(Exception):
+    """One block (or entry) can't be compiled as filled in: it's skipped with this note."""
+
+
 def blocks_dir() -> Path:
     # PyInstaller unpacks data files under sys._MEIPASS; in development it's the repo's blocks/.
     bundled = getattr(sys, "_MEIPASS", None)
@@ -111,6 +115,66 @@ def combined(expressions: list[str]) -> str:
     return ".".join(parts)
 
 
+VARIABLE_REF = r"[$@](?:\([\w.:\[\]]*\)|\{[\w.:\[\]]*\})"
+CLASS_TOKEN = re.compile(rf"\|\||[|.&!()]|(?:[\w:]|{VARIABLE_REF})+")
+CALL_TOKEN = re.compile(rf"""\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|{VARIABLE_REF}|[\w.:+-]+|[(),])""")
+
+
+def valid_class_expression(text: str) -> bool:
+    """Class names joined by . & | ||, negated with !, grouped in ( ); no spaces."""
+    depth, operand = 0, False  # operand: the last token ends an operand
+    for match in re.finditer(rf"{CLASS_TOKEN.pattern}|.", text, re.S):
+        token = match.group()
+        if token in ("!", "("):
+            if operand:
+                return False
+            depth += token == "("
+        elif token == ")":
+            if not operand or not depth:
+                return False
+            depth -= 1
+        elif token in ("|", "||", ".", "&"):
+            if not operand:
+                return False
+            operand = False
+            continue
+        elif CLASS_TOKEN.fullmatch(token) and not operand:
+            operand = True
+            continue
+        else:
+            return False
+        operand = token == ")"
+    return operand and depth == 0
+
+
+def valid_function_call(text: str) -> bool:
+    """One call, `name(arg, …)`: arguments are calls, strings, variables or bare words."""
+    tokens, at = [], 0
+    while at < len(text.rstrip()):
+        match = CALL_TOKEN.match(text, at)
+        if not match:
+            return False
+        tokens.append(match.group(1))
+        at = match.end()
+
+    def call(i: int) -> int | None:
+        if i + 1 >= len(tokens) or not re.fullmatch(r"[A-Za-z_]\w*", tokens[i]) or tokens[i + 1] != "(":
+            return None
+        i += 2
+        if i < len(tokens) and tokens[i] == ")":
+            return i + 1
+        while i < len(tokens):
+            i = call(i) or (i + 1 if tokens[i] not in ("(", ")", ",") else None)
+            if i is None or i >= len(tokens) or tokens[i] not in (",", ")"):
+                return None
+            if tokens[i] == ")":
+                return i + 1
+            i += 1
+        return None
+
+    return call(0) == len(tokens)
+
+
 @dataclass
 class Context:
     """What an expression compiles against: one block's (or entry's) parameters."""
@@ -159,8 +223,13 @@ def compile_value(expr, ctx: Context) -> str:
         refs = [("!" if ref.get("negate") else "") + ref["name"] for ref in ctx.class_refs if ref.get("name")]
         return "{ " + ", ".join(quote(ref) for ref in refs) + " }"
     if "class_expression" in expr:
-        text = ctx.substitute(expr["class_expression"])
-        return text if FUNCTION_CALL.match(text) else quote(text)
+        text = ctx.substitute(expr["class_expression"]).strip()
+        if FUNCTION_CALL.match(text):
+            if valid_function_call(text):
+                return text
+        elif valid_class_expression(text):
+            return quote(text)
+        raise Skip("not a valid class expression or function call")
     if "bundle" in expr:
         name = ctx.substitute(expr["bundle"])
         args = expr.get("args")
@@ -490,8 +559,12 @@ class FileCompiler:
             )
 
         if kind != "vars":
+            try:
+                attributes = attributes_of(step, ctx)
+            except Skip as skip:
+                return kind, [f"# Skipped {name}: {skip}."]
             return kind, promise(
-                quote(ctx.substitute(step["promiser"])), [*attributes_of(step, ctx), *condition_attributes(conditions)]
+                quote(ctx.substitute(step["promiser"])), [*attributes, *condition_attributes(conditions)]
             )
 
         [(value_type, value)] = step["attributes"].items()
