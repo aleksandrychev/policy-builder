@@ -46,9 +46,9 @@ function layoutSettingsPath(): string {
   return join(app.getPath('userData'), 'layout-settings.json');
 }
 
-// electron-vite exposes the dev renderer URL via this env var; in a packaged
-// app it is absent and we load the built HTML from disk instead.
-const rendererDevUrl = process.env['ELECTRON_RENDERER_URL'];
+// electron-vite exposes the dev renderer URL via this env var; a packaged app never
+// reads it (it would trust whatever page it names) and loads the built renderer.
+const rendererDevUrl = app.isPackaged ? undefined : process.env['ELECTRON_RENDERER_URL'];
 
 // Only ever hand http(s) links to the OS: shell.openExternal with any other
 // scheme (file:, smb:, custom protocols…) can execute programs.
