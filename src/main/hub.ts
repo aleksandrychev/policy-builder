@@ -71,6 +71,7 @@ function probe(url: URL): Promise<HubProbe> {
   });
 }
 
+
 type Hub = { fingerprint?: string; password: string; pem?: string; url: string; username: string };
 
 // One API call: JSON in and out, basic auth, the pinned certificate when there is one.
@@ -290,6 +291,7 @@ export function registerHubHandlers(isTrustedFrame: (frame: WebFrameMain | null)
         const stage = (name: string) => !event.sender.isDestroyed() && event.sender.send('deploy:progress', name);
         const hub = await hubFor(url);
         let before = await state(hub);
+        const enabledDeploys = !before.deploysEnabled;
         let output = '';
         const runAgent = async () => {
           const { data } = await call<{ exit_code?: number; output?: string }>(
@@ -302,7 +304,7 @@ export function registerHubHandlers(isTrustedFrame: (frame: WebFrameMain | null)
           output += data?.output ?? '';
           return data;
         };
-        if (!before.deploysEnabled) {
+        if (enabledDeploys) {
           stage('enable');
           await call(hub, 'POST', `/api/cmdb/v2/${hostkeyPath(before.info.hostkey)}`, {
             type: 'class',
@@ -324,7 +326,7 @@ export function registerHubHandlers(isTrustedFrame: (frame: WebFrameMain | null)
             ? 'yes'
             : 'unknown';
         const after = await state(hub);
-        return { state: after, output, deployed, enabledDeploys: !before.deploysEnabled || undefined };
+        return { state: after, output, deployed, enabledDeploys: enabledDeploys || undefined };
       })
     )
   );
