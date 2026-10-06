@@ -85,10 +85,12 @@ test('web permissions are denied', async ({ window: page }) => {
 
 test('the page can neither navigate away nor open windows', async ({ app, window: page }) => {
   const url = page.url();
+  // Chromium refuses a file: page from app:, and says so on the console: then the attempt is over.
+  const refused = page.waitForEvent('console', message => message.text().includes('Not allowed to load local resource: file:///etc/hosts'));
   await page.evaluate(() => {
     window.location.href = 'file:///etc/hosts';
   });
-  await page.waitForTimeout(500);
+  await refused;
   expect(page.url()).toBe(url);
   expect(await page.evaluate(() => window.open('file:///etc/hosts') === null)).toBe(true);
   expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
