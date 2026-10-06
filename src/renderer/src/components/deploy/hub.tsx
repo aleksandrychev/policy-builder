@@ -14,7 +14,8 @@ export const sameRepo = (a: string, b: string) => {
       .replace(/^[a-z+]+:\/\//, '')
       .replace(/^[^@/]+@/, '')
       .replace(':', '/')
-      .replace(/\.git\/?$/, '')
+      .replace(/\/+$/, '')
+      .replace(/\.git$/, '')
       .toLowerCase();
   return Boolean(a && b) && norm(a) === norm(b);
 };
