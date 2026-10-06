@@ -40,7 +40,7 @@ export const test = base.extend<Fixtures>({
     await app.close();
   },
   window: async ({ app, consoleErrors }, provide, testInfo) => {
-    const window = await app.firstWindow();
+    const window = await shownWindow(app);
     window.on('console', message => {
       if (message.type() === 'error') consoleErrors.push(message.text());
     });
@@ -63,10 +63,33 @@ export async function launch(userDataDir: string): Promise<ElectronApplication> 
     string,
     string
   >;
-  // Off screen locally, so a run doesn't take over the desktop (CFPB_E2E_SHOW=1 shows it). Not in CI:
-  // xvfb is a virtual screen already, and there a hidden window paints no frames, which stalls clicks.
-  if (process.env.CFPB_E2E_SHOW !== '1' && !process.env.CI) env.CFPB_E2E_HIDDEN = '1';
+  if (HIDDEN_RUN) env.CFPB_E2E_HIDDEN = '1';
+  env.CFPB_E2E = '1';
   return electron.launch({ args: [appEntry, `--user-data-dir=${userDataDir}`], env });
+}
+
+// Off screen locally, so a run doesn't take over the desktop (CFPB_E2E_SHOW=1 shows it). Not in CI:
+// xvfb is a virtual screen already, and there a hidden window paints no frames, which stalls clicks.
+const HIDDEN_RUN = process.env.CFPB_E2E_SHOW !== '1' && !process.env.CI;
+const SHOW_WAIT_MS = 5_000;
+
+/**
+ * The app's window, shown. Under xvfb a never-shown window gets about one animation frame a second,
+ * or none, so Playwright's "stable" check hangs; the app shows it on its first paint, which a
+ * cold launch can delay. If it isn't shown after a few seconds, show it (and say so in the log).
+ */
+export async function shownWindow(app: ElectronApplication): Promise<Page> {
+  const window = await app.firstWindow();
+  if (HIDDEN_RUN) return window;
+  const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible() ?? false);
+  const deadline = Date.now() + SHOW_WAIT_MS;
+  while (!(await visible()) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 100));
+  if (!(await visible())) {
+    console.log(`e2e: the window was still hidden after ${SHOW_WAIT_MS / 1000} s; showing it`);
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.show());
+  }
+  expect(await visible(), 'the app window is shown').toBe(true);
+  return window;
 }
 
 // Opens a project folder (or its cfbs.json) the way File > Open Recent does, with no native dialog.

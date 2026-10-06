@@ -145,6 +145,8 @@ async function refreshMenu(): Promise<void> {
 // don't steal focus. Playwright drives the page all the same.
 const HIDDEN = !app.isPackaged && process.env.CFPB_E2E_HIDDEN === '1';
 if (HIDDEN) app.dock?.hide();
+// Under test the page always renders frames, even before the window counts as visible.
+const TESTING = HIDDEN || (!app.isPackaged && process.env.CFPB_E2E === '1');
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -160,8 +162,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
       contextIsolation: true,
-      // A hidden window would otherwise have its timers throttled.
-      backgroundThrottling: !HIDDEN
+      // A hidden or not-yet-visible window would otherwise have its frames and timers throttled.
+      backgroundThrottling: !TESTING
     }
   });
 

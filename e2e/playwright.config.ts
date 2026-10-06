@@ -5,6 +5,8 @@ import { defineConfig } from '@playwright/test';
 // captures its own screenshot on failure.
 export default defineConfig({
   testDir: '.',
+  // One warm-up launch before the tests (see global-setup.ts).
+  globalSetup: './global-setup.ts',
   outputDir: '../test-results/e2e',
   timeout: 60_000,
   expect: { timeout: 10_000 },
