@@ -2,7 +2,7 @@ name: Coverage
 
 # Measures test coverage and uploads it to Codecov, one flag per language (badges in README.md).
 # Codecov's GitHub app authenticates the upload through OIDC: no token, so it runs in the
-# org's own repository only (forks get no OIDC token for it).
+# org's own repository only, for pushes and same-repository pull requests (forks get no OIDC token).
 on:
   push:
     branches: [main]
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   typescript:
     name: TypeScript
-    if: github.repository_owner == 'cfengine'
+    if: github.repository_owner == 'cfengine' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -38,7 +38,7 @@ jobs:
 
   python:
     name: Python
-    if: github.repository_owner == 'cfengine'
+    if: github.repository_owner == 'cfengine' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
