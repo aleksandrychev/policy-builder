@@ -13,6 +13,7 @@ import re
 import shutil
 import socket
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -698,9 +699,15 @@ def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
         raise RunnerError(f"Unsupported masterfiles version: {masterfiles}")
     if not os.path.isfile(os.path.join(base, "cfbs.json")):
         emit("step", step="build", message=f"Downloading masterfiles {masterfiles}")
-        shutil.rmtree(base, ignore_errors=True)
-        os.makedirs(base)
-        cfpb_backend._run_cfbs_init(base, masterfiles)
+        # cfbs writes cfbs.json before downloading: move it into place only once complete.
+        os.makedirs(os.path.dirname(base), exist_ok=True)
+        scratch = tempfile.mkdtemp(prefix=".init-", dir=os.path.dirname(base))
+        try:
+            cfpb_backend._run_cfbs_init(scratch, masterfiles)
+            shutil.rmtree(base, ignore_errors=True)
+            os.replace(scratch, base)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
     work = os.path.join(cache_dir, "build")
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(base, work)

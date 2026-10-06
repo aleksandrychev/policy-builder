@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+import cfpb_backend
 import cfpb_testenv
 from cfpb_testenv import RunnerError, docker_host, find_package
 
@@ -211,6 +212,40 @@ def test_build_policy_never_deletes_outside_the_cache(tmp_path: Path):
     with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
         cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path / "cache"))
     assert (victim / "keep").read_text() == "mine"
+
+
+def _init_writing_cfbs_json(fail: bool):
+    def init(directory: str, masterfiles: str):
+        Path(directory, "cfbs.json").write_text("{}")
+        if fail:
+            raise cfpb_backend.InitFailed(f"Couldn't download masterfiles {masterfiles}")
+
+    return init
+
+
+class _Built(Exception):
+    """Stops build_policy once the masterfiles are in place."""
+
+
+def _stop_building(*_args):
+    raise _Built()
+
+
+def test_a_failed_masterfiles_download_leaves_no_cache_behind(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cfpb_backend, "_run_cfbs_init", _init_writing_cfbs_json(fail=True))
+    with pytest.raises(cfpb_backend.InitFailed):
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path))
+    assert os.listdir(tmp_path / "masterfiles") == []
+
+
+def test_a_masterfiles_download_moves_into_place_once_complete(tmp_path: Path, monkeypatch):
+    (tmp_path / "masterfiles" / "3.27.1").mkdir(parents=True)  # a broken one: no cfbs.json
+    monkeypatch.setattr(cfpb_backend, "_run_cfbs_init", _init_writing_cfbs_json(fail=False))
+    monkeypatch.setattr(cfpb_backend, "_update_cfbs_json", _stop_building)
+    with pytest.raises(_Built):
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path))
+    assert os.listdir(tmp_path / "masterfiles") == ["3.27.1"]
+    assert os.listdir(tmp_path / "masterfiles" / "3.27.1") == ["cfbs.json"]
 
 
 class _Container:
