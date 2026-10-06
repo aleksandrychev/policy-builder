@@ -82,6 +82,7 @@ async function repoPath(value: unknown): Promise<string> {
 // Keeps cfbs's build output and the test environments' secrets (.env) files out of git.
 async function ensureGitignore(path: string, secrets: string[]) {
   const file = join(path, '.gitignore');
+  if ((await fs.lstat(file).catch(() => null))?.isSymbolicLink()) throw new Error('.gitignore is a symbolic link: the app won’t write through it.');
   const text = await fs.readFile(file, 'utf-8').catch(() => '');
   const lines = text.split('\n').map(line => line.trim());
   const missing = [

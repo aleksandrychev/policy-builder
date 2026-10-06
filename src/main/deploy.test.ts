@@ -310,6 +310,15 @@ describe('IPC handlers', () => {
     }
   });
 
+  it('doesn’t write through a .gitignore that is a symlink', async () => {
+    const target = join(temp, 'zshrc');
+    await fs.writeFile(target, 'export A=1\n');
+    await fs.symlink(target, join(project, '.gitignore'));
+    await fs.writeFile(join(project, 'cfbs.json'), '{}');
+    expect(await invoke('git:commit', project, 'First')).toMatchObject({ ok: false, message: expect.stringContaining('.gitignore is a symbolic link') });
+    expect(await fs.readFile(target, 'utf-8')).toBe('export A=1\n');
+  });
+
   it('leaves a project alone whose git config names other commands', async () => {
     git(project, 'config', 'filter.Evil.clean', 'touch /tmp/x');
     expect(await invoke('git:status', project)).toMatchObject({ ok: false, message: expect.stringContaining('(filter.Evil.clean)') });

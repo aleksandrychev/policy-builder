@@ -123,6 +123,10 @@ export function checkedFolderName(value: unknown): string {
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+// A secrets file's path is also a .gitignore line: no newlines or other control characters.
+const isEnvFilePath = (value: unknown): value is string => typeof value === 'string' && !/\p{Cc}/u.test(value);
+const hasValidEnvFile = (environment: Record<string, unknown>) =>
+  environment.envFile === undefined || environment.envFile === null || isEnvFilePath(environment.envFile);
 
 // A policy file's path in the project: slugged folders, a .cf, never in cfbs's out/.
 const POLICY_PATH = /^\.\/([a-z][a-z0-9_-]*\/)*[a-z][a-z0-9_]*\.cf$/;
@@ -174,7 +178,8 @@ export function checkedContent(value: unknown): ProjectContent {
     names.every(name => typeof name === 'string' && modules.has(name)) &&
     content.modules.every(module => isRecord(module) && Array.isArray(module.steps));
   if (!ok) throw new InvalidRequest('Invalid policy module');
-  if (content.testEnvironments !== undefined && !(Array.isArray(content.testEnvironments) && content.testEnvironments.every(isRecord))) {
+  const environments = content.testEnvironments;
+  if (environments !== undefined && !(Array.isArray(environments) && environments.every(isRecord) && environments.every(hasValidEnvFile))) {
     throw new InvalidRequest('Invalid test environments');
   }
   if (JSON.stringify(content).length > MAX_CONTENT_BYTES) throw new InvalidRequest('Project is too large');
@@ -423,7 +428,7 @@ export async function readTestEnvironments(folder: string): Promise<unknown[] | 
 /** The test environments' secrets (.env) files, relative to the project ("./.env" → ".env"); none outside it. */
 export async function testEnvironmentSecretFiles(folder: string): Promise<string[]> {
   const files = ((await readTestEnvironments(folder)) ?? []).flatMap(environment =>
-    isRecord(environment) && typeof environment.envFile === 'string' && environment.envFile.trim() ? [normalize(environment.envFile.trim())] : []
+    isRecord(environment) && isEnvFilePath(environment.envFile) && environment.envFile.trim() ? [normalize(environment.envFile.trim())] : []
   );
   return [...new Set(files.filter(file => !isAbsolute(file) && file !== '.' && !file.startsWith('..')))];
 }
