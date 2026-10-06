@@ -22,13 +22,23 @@ const FETCH_TIMEOUT_MS = 15_000;
 // http(s), ssh, git, file URLs, scp-like `user@host:path`, or a local path.
 const REMOTE_URL = /^(?:(?:https?|ssh|git|file):\/\/\S+|[\w.-]+@[\w.-]+:\S+|\/\S+)$/;
 
+// A project folder may come from someone else: its own hooks, fsmonitor and ext:: remotes never run.
+const NO_PROJECT_COMMANDS = [
+  'core.fsmonitor=false',
+  `core.hooksPath=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`,
+  'protocol.ext.allow=never'
+].flatMap(setting => ['-c', setting]);
+// Repository settings that run a command and can't be overridden like those (the project names them).
+const RUNS_COMMAND =
+  /^(?:filter\..+\.(?:clean|smudge|process)|merge\..+\.driver|credential\.(?:.+\.)?helper|gpg\.(?:.+\.)?program|gpg\.ssh\.defaultkeycommand|core\.(?:askpass|gitproxy|alternaterefscommand)|remote\..+\.(?:uploadpack|receivepack))$/i;
+
 type Git = { code: number; stderr: string; stdout: string };
 
 function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promise<Git> {
   return new Promise((resolve, reject) => {
     // No prompts: a push without stored credentials fails at once instead of hanging.
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' };
-    execFile('git', args, { cwd, env, timeout, maxBuffer: 20_000_000 }, (error, stdout, stderr) => {
+    execFile('git', [...NO_PROJECT_COMMANDS, ...args], { cwd, env, timeout, maxBuffer: 20_000_000 }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === 'ENOENT') return reject(new Error('Git isn’t installed (or not on PATH).'));
       resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout, stderr });
     });
@@ -45,6 +55,18 @@ function projectPath(value: unknown): string {
   if (typeof value !== 'string' || !isAbsolute(value) || value.includes('\0')) throw new Error('Invalid project path');
   const path = normalize(value);
   if (!isKnownProject(path)) throw new Error('Not a project opened in this session');
+  return path;
+}
+
+// A project whose repository config would make git run one of its commands is left alone.
+async function repoPath(value: unknown): Promise<string> {
+  const path = projectPath(value);
+  const config = await git(path, ['config', '--list', '--show-scope', '--name-only']);
+  const runs = config.stdout
+    .split('\n')
+    .map(line => line.split('\t'))
+    .find(([scope, name]) => (scope === 'local' || scope === 'worktree') && RUNS_COMMAND.test(name ?? ''));
+  if (runs) throw new Error(`This project’s git config runs a command (${runs[1]}), so the app won’t run git in it. Remove that setting from .git/config.`);
   return path;
 }
 
@@ -228,13 +250,13 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
   );
   ipcMain.handle(
     'git:status',
-    trusted((_event, path: unknown) => attempt(async () => ({ status: await status(projectPath(path)) })))
+    trusted((_event, path: unknown) => attempt(async () => ({ status: await status(await repoPath(path)) })))
   );
   ipcMain.handle(
     'git:init',
     trusted((_event, path: unknown) =>
       attempt(async () => {
-        const root = projectPath(path);
+        const root = await repoPath(path);
         const init = await git(root, ['init', '--quiet']);
         if (init.code !== 0) throw commandError('git init failed', init);
         await commitAll(root, 'Initialized the project');
@@ -246,7 +268,7 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     'git:commit',
     trusted((_event, path: unknown, message: unknown) =>
       attempt(async () => {
-        const root = projectPath(path);
+        const root = await repoPath(path);
         if (typeof message !== 'string' || !message.trim() || message.length > 10_000) throw new Error('A commit needs a message');
         await commitAll(root, message.trim());
         return { status: await status(root) };
@@ -257,7 +279,7 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     'git:set-remote',
     trusted((_event, path: unknown, url: unknown) =>
       attempt(async () => {
-        const root = projectPath(path);
+        const root = await repoPath(path);
         if (typeof url !== 'string' || url.length > 2000 || !REMOTE_URL.test(url.trim())) throw new Error('Not a git remote URL');
         const known = (await git(root, ['remote', 'get-url', 'origin'])).code === 0;
         const set = await git(root, ['remote', known ? 'set-url' : 'add', 'origin', url.trim()]);
@@ -271,7 +293,7 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     'git:sync',
     trusted((_event, path: unknown, mode: unknown) =>
       attempt(async () => {
-        const root = projectPath(path);
+        const root = await repoPath(path);
         if (mode !== 'rebase' && mode !== 'force') throw new Error('Unknown sync');
         if (mode === 'rebase') {
           if ((await git(root, ['status', '--porcelain'])).stdout.trim()) throw new Error('Commit your changes first: there are uncommitted files.');
@@ -302,7 +324,7 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     'git:push',
     trusted((_event, path: unknown) =>
       attempt(async () => {
-        const root = projectPath(path);
+        const root = await repoPath(path);
         const push = await git(root, ['push', '--set-upstream', 'origin', 'HEAD'], PUSH_TIMEOUT_MS);
         if (push.code !== 0) throw commandError('git push failed', push);
         return { status: await status(root) };

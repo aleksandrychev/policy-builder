@@ -279,6 +279,26 @@ describe('IPC handlers', () => {
     expect(await invoke('git:sync', project, 'merge')).toMatchObject({ ok: false, message: 'Unknown sync' });
   });
 
+  it('runs none of the project’s own hooks or fsmonitor', async () => {
+    const ran = join(temp, 'ran');
+    const script = join(temp, 'touch.sh');
+    await fs.writeFile(script, `#!/bin/sh\necho "$0" >> '${ran}'\n`, { mode: 0o755 });
+    git(project, 'config', 'core.fsmonitor', script);
+    await fs.copyFile(script, join(project, '.git', 'hooks', 'pre-commit'));
+    await fs.chmod(join(project, '.git', 'hooks', 'pre-commit'), 0o755);
+    await fs.writeFile(join(project, 'cfbs.json'), '{}');
+    expect(await invoke('git:status', project)).toMatchObject({ ok: true });
+    expect(await invoke('git:commit', project, 'First')).toMatchObject({ ok: true });
+    expect(git(project, 'log', '--format=%s')).toBe('First');
+    await expect(fs.readFile(ran, 'utf-8')).rejects.toThrow();
+  });
+
+  it('leaves a project alone whose git config names other commands', async () => {
+    git(project, 'config', 'filter.Evil.clean', 'touch /tmp/x');
+    expect(await invoke('git:status', project)).toMatchObject({ ok: false, message: expect.stringContaining('(filter.Evil.clean)') });
+    expect(await invoke('git:commit', project, 'First')).toMatchObject({ ok: false, message: expect.stringContaining('(filter.Evil.clean)') });
+  });
+
   it('reveals only files of the project', () => {
     expect(() => invoke('deploy:reveal', project, join(temp, 'elsewhere'))).toThrow('Not a file of this project');
     expect(() => invoke('deploy:reveal', project, join(project, '..', 'x'))).toThrow('Not a file of this project');
