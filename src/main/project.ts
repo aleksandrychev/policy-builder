@@ -1,7 +1,7 @@
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron';
 import type { IpcMainInvokeEvent, OpenDialogOptions, WebFrameMain } from 'electron';
 import { constants, promises as fs } from 'fs';
-import { basename, dirname, isAbsolute, join, normalize, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'path';
 
 import type {
   CreateProjectRequest,
@@ -41,6 +41,21 @@ const knownProjects = new Set<string>();
 
 /** Whether `path` is a project folder this session created or opened (deployment acts only on those). */
 export const isKnownProject = (path: string) => knownProjects.has(path);
+
+const isInside = (path: string, root: string) => {
+  const inside = relative(root, path);
+  return inside !== '' && inside !== '..' && !inside.startsWith(`..${sep}`) && !isAbsolute(inside);
+};
+
+/** Whether `file` is inside a known project folder, also once symlinks are followed (it may not exist yet). */
+export async function isInKnownProject(file: string): Promise<boolean> {
+  const path = normalize(file);
+  const real = await fs.realpath(path).catch(() => null);
+  for (const project of knownProjects) {
+    if (isInside(path, project) && (real === null || isInside(real, await fs.realpath(project).catch(() => project)))) return true;
+  }
+  return false;
+}
 
 let versionsRequest: Promise<MasterfilesVersions> | null = null;
 

@@ -2,6 +2,7 @@ import { type IpcMainInvokeEvent, type WebFrameMain, app, ipcMain } from 'electr
 import { isAbsolute, join } from 'path';
 
 import { type SidecarStream, startSidecarStream, testEnvQuery } from './backend';
+import { isInKnownProject } from './project';
 
 /**
  * Test environments (the Test Results & Logs tab): Docker hosts managed by the
@@ -19,7 +20,7 @@ const runs = new Map<string, SidecarStream>();
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // What the sidecar gets: the renderer's request, checked, plus where builds and masterfiles are cached.
-function sidecarRequest(action: string, request: unknown): Record<string, unknown> {
+async function sidecarRequest(action: string, request: unknown): Promise<Record<string, unknown>> {
   if (!isRecord(request)) throw new Error('The request must be an object');
   if (action === 'pull') {
     if (typeof request.image !== 'string' || !BASE_IMAGES.has(request.image)) throw new Error('Not a supported base image');
@@ -34,6 +35,8 @@ function sidecarRequest(action: string, request: unknown): Record<string, unknow
   if (request.envFile !== undefined && request.envFile !== null && (typeof request.envFile !== 'string' || !isAbsolute(request.envFile))) {
     throw new Error('envFile must be an absolute path');
   }
+  // It comes from the project's settings: a shared project mustn't hand the hosts files from elsewhere.
+  if (typeof request.envFile === 'string' && !(await isInKnownProject(request.envFile))) throw new Error('The .env file must be in the project folder');
   return { ...request, cacheDir: join(app.getPath('userData'), 'testenv') };
 }
 
@@ -70,13 +73,13 @@ export function registerTestEnvHandlers(isTrustedFrame: (frame: WebFrameMain | n
   );
   ipcMain.handle(
     'testenv:status',
-    trusted((_event, request: unknown) => testEnvQuery('status', sidecarRequest('status', request)))
+    trusted(async (_event, request: unknown) => testEnvQuery('status', await sidecarRequest('status', request)))
   );
   ipcMain.handle(
     'testenv:start',
-    trusted((event, action: unknown, request: unknown) => {
+    trusted(async (event, action: unknown, request: unknown) => {
       if (typeof action !== 'string' || !STREAMING.has(action)) throw new Error('Unknown test environment action');
-      const payload = sidecarRequest(action, request);
+      const payload = await sidecarRequest(action, request);
       const runId = crypto.randomUUID();
       const sender = event.sender;
       const send = (payload: Record<string, unknown>) => {
