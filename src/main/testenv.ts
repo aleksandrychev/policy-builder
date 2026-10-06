@@ -15,6 +15,9 @@ const BASE_IMAGES = new Set(['ubuntu:22.04', 'ubuntu:24.04', 'debian:12']);
 const STREAMING = new Set(['pull', 'inspect', 'up', 'run', 'test', 'exec', 'start', 'stop', 'destroy', 'reset']);
 // [registry[:port]/]name[:tag][@digest], as the sidecar checks it.
 const IMAGE_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}$/;
+// The actions that build the project's policy set, against these masterfiles.
+const BUILDING = new Set(['up', 'run', 'test', 'reset']);
+const MASTERFILES = /^(\d+\.\d+\.\d+(-\d+)?|master)$/;
 const runs = new Map<string, SidecarStream>();
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -37,7 +40,11 @@ async function sidecarRequest(action: string, request: unknown): Promise<Record<
   }
   // It comes from the project's settings: a shared project mustn't hand the hosts files from elsewhere.
   if (typeof request.envFile === 'string' && !(await isInKnownProject(request.envFile))) throw new Error('The .env file must be in the project folder');
-  return { ...request, cacheDir: join(app.getPath('userData'), 'testenv') };
+  // The version names a folder in the cache: only builds need it.
+  const { masterfiles, ...rest } = request;
+  if (!BUILDING.has(action)) return { ...rest, cacheDir: join(app.getPath('userData'), 'testenv') };
+  if (typeof masterfiles !== 'string' || !MASTERFILES.test(masterfiles)) throw new Error('Invalid masterfiles version');
+  return { ...rest, masterfiles, cacheDir: join(app.getPath('userData'), 'testenv') };
 }
 
 export function registerTestEnvHandlers(isTrustedFrame: (frame: WebFrameMain | null) => boolean): void {

@@ -78,6 +78,18 @@ describe('testenv:start', () => {
     expect(started()[0].input.envFile).toBe('/projects/web/.env');
   });
 
+  it.each(['/Users/me/Documents', '../../..', '3.27', 'no', undefined])('builds only against a masterfiles release, not %j', async masterfiles => {
+    await expect(invoke('testenv:start', 'up', { environment, masterfiles })).rejects.toThrow('Invalid masterfiles version');
+    expect(stream).not.toHaveBeenCalled();
+  });
+
+  it('passes the masterfiles version to builds only', async () => {
+    await invoke('testenv:start', 'test', { environment, masterfiles: '3.27.1-2' });
+    await invoke('testenv:start', 'reset', { environment, masterfiles: 'master' });
+    await invoke('testenv:start', 'stop', { environment, masterfiles: '/Users/me/Documents' });
+    expect(started().map(({ input }) => input.masterfiles)).toEqual(['3.27.1-2', 'master', undefined]);
+  });
+
   it('cancels a run, and every run still going when the app quits', async () => {
     const first = await invoke('testenv:start', 'stop', { environment });
     await invoke('testenv:start', 'start', { environment });

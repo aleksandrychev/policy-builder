@@ -638,6 +638,10 @@ def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
     _check(tagged, "Validating the policy on the hub")
 
 
+# What build_policy takes: an exact release or master (it names a cache folder).
+MASTERFILES = re.compile(r"^(\d+\.\d+\.\d+(-\d+)?|master)$")
+
+
 def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
     """Builds the project as a policy set (cfbs) in a scratch copy; returns its out/masterfiles.
     One pristine `cfbs init` per masterfiles version is kept, so a rebuild needs no network."""
@@ -646,7 +650,12 @@ def build_policy(content: dict, masterfiles: str, cache_dir: str) -> str:
 
     import cfpb_backend
 
+    if not isinstance(masterfiles, str) or not MASTERFILES.fullmatch(masterfiles):
+        raise RunnerError(f"Unsupported masterfiles version: {masterfiles}")
     base = os.path.join(cache_dir, "masterfiles", masterfiles)
+    # It names a folder that gets deleted: it must stay in the cache.
+    if os.path.dirname(os.path.realpath(base)) != os.path.realpath(os.path.join(cache_dir, "masterfiles")):
+        raise RunnerError(f"Unsupported masterfiles version: {masterfiles}")
     if not os.path.isfile(os.path.join(base, "cfbs.json")):
         emit("step", step="build", message=f"Downloading masterfiles {masterfiles}")
         shutil.rmtree(base, ignore_errors=True)

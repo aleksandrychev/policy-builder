@@ -335,13 +335,14 @@ export interface LoadedProject {
   type: ProjectType;
 }
 
-// The masterfiles build entry's release, "master" for a branch/URL one, null without.
+// The masterfiles build entry's release, "master" for a branch/URL one, null without (or for
+// anything else: the version names a cache folder for test runs).
 function masterfilesOf(build: unknown[]): string | null {
   const entry = build.find(item => isObject(item) && typeof item.name === 'string' && /(^|\/)masterfiles$/.test(item.name)) as
     Record<string, unknown> | undefined;
   if (!entry) return null;
-  if (typeof entry.version === 'string' && /^\d+\.\d+\.\d+(-\d+)?$/.test(entry.version)) return entry.version;
-  return typeof entry.url === 'string' || typeof entry.branch === 'string' ? 'master' : typeof entry.version === 'string' ? entry.version : null;
+  if (typeof entry.version === 'string' && /^(\d+\.\d+\.\d+(-\d+)?|master)$/.test(entry.version)) return entry.version;
+  return typeof entry.url === 'string' || typeof entry.branch === 'string' ? 'master' : null;
 }
 
 /**

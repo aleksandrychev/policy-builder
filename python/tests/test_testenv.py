@@ -186,3 +186,24 @@ def test_a_registry_port_is_not_a_tag():
     assert cfpb_testenv.split_reference("registry.corp:5000/base/rhel9") == ("registry.corp:5000/base/rhel9", "latest")
     assert cfpb_testenv.split_reference("registry.corp:5000/base/rhel9:1.2") == ("registry.corp:5000/base/rhel9", "1.2")
     assert cfpb_testenv.split_reference("rockylinux:9") == ("rockylinux", "9")
+
+
+@pytest.mark.parametrize("version", ["/victim", "../../victim", "3.27.1\n", "3.27", "", None])
+def test_build_policy_refuses_a_masterfiles_version_that_is_not_a_release(tmp_path: Path, version):
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep").write_text("mine")
+    with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
+        cfpb_testenv.build_policy({}, str(victim) if version == "/victim" else version, str(tmp_path / "cache"))
+    assert (victim / "keep").read_text() == "mine"
+
+
+def test_build_policy_never_deletes_outside_the_cache(tmp_path: Path):
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "keep").write_text("mine")
+    (tmp_path / "cache" / "masterfiles").mkdir(parents=True)
+    (tmp_path / "cache" / "masterfiles" / "3.27.1").symlink_to(victim)
+    with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
+        cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path / "cache"))
+    assert (victim / "keep").read_text() == "mine"

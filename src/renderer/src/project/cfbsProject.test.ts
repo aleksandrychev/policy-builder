@@ -219,6 +219,10 @@ describe('loadCfbsProject', () => {
     expect(loaded).toMatchObject({ name: 'my-policy', description: '', masterfiles: null });
   });
 
+  it.each(['/Users/me/Documents', '../../..', '3.27', 'main'])('takes no masterfiles version from a project’s %j', version => {
+    expect(loadCfbsProject({ build: [{ name: 'masterfiles', version }] }, null, 'x').masterfiles).toBeNull();
+  });
+
   it('refuses a project made by a newer builder', () => {
     expect(() => loadCfbsProject({ name: 'x', build: [] }, { schema_version: SCHEMA_VERSION + 1 }, 'x')).toThrow(/newer version of CFEngine Policy Builder/);
   });
