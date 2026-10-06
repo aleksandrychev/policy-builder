@@ -791,8 +791,9 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
     with built_policy(request, masterfiles_dir) as masterfiles_dir:
         dotenv = read_dotenv(request.get("envFile"))
         _network(engine, env)
-        containers = {}
-        for host in sorted(hosts, key=lambda h: h is not hub_host):
+        existing, containers, stale = _labelled(engine, env), {}, set()
+        order = sorted(hosts, key=lambda h: h is not hub_host)
+        for host in order:
             emit("host", host=host["id"], state="provisioning")
             image = ensure_image(
                 engine,
@@ -804,11 +805,20 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
                 host["id"],
                 host.get("image") or None,
             )
-            containers[host["id"]] = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
+            container = _ensure_container(engine, env, host, image, host_env(env, host, dotenv))
+            containers[host["id"]] = container
+            kept = host["id"] in existing and existing[host["id"]].id == container.id
+            if host is hub_host and not kept:
+                # A new hub has new keys: every client that knew the old one bootstraps again (the
+                # hub comes first, so the loop goes on over those it adds).
+                stale = {h["id"] for h in every if h is not hub_host and h["id"] in existing}
+                order += [h for h in every if h["id"] in stale and h not in order]
+            elif host["id"] in stale and kept:
+                _forget_hub(engine, container, host["id"])
         hub = containers[hub_host["id"]]
         _deploy(engine, hub, masterfiles_dir, hub_host["id"])
         hub_ip = _ip(engine, hub, env)
-        for host in sorted(hosts, key=lambda h: h is not hub_host):
+        for host in order:
             container = containers[host["id"]]
             if not _bootstrapped(engine, container):
                 emit("step", host=host["id"], step="bootstrap", message=f"Bootstrapping to {hub_ip}")
@@ -824,6 +834,12 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
             _setup_code(engine, hub, hub_host)
         if finish:
             emit("done")
+
+
+def _forget_hub(engine, container, host_id: str) -> None:
+    """Drops what a client knows of its hub, so it bootstraps again."""
+    emit("step", host=host_id, step="bootstrap", message="Forgetting the old hub")
+    run_in(engine, container, "rm -f /var/cfengine/policy_server.dat /var/cfengine/ppkeys/root-*.pub", host_id, "setup")
 
 
 def _setup_code(engine, hub, hub_host: dict) -> None:
@@ -989,7 +1005,7 @@ def test(request: dict) -> None:
 
 def reset(request: dict) -> None:
     """Recreate: removes `hosts`' containers, then sets them up fresh and runs the policy on them.
-    A new hub has new keys, so the other clients forget the old one and bootstrap again."""
+    A new hub has new keys, so the other clients bootstrap again (see `up`) and run too."""
     env, engine = request["environment"], client()
     only = set(request.get("hosts") or [])
     if not only:
@@ -1003,17 +1019,7 @@ def reset(request: dict) -> None:
     hosts = env.get("hosts") or []
     hub_host = next((h for h in hosts if h["id"] == env.get("hub")), hosts[0] if hosts else None)
     if hub_host and hub_host["id"] in only:
-        for host in hosts:
-            container = containers.get(host["id"])
-            if host is hub_host or host["id"] in only or container is None:
-                continue
-            # A stopped client would come back trusting the old hub: start it and re-bootstrap it too.
-            if container.status != "running":
-                container.start()
-            emit("step", host=host["id"], step="bootstrap", message="Forgetting the old hub")
-            forget = "rm -f /var/cfengine/policy_server.dat /var/cfengine/ppkeys/root-*.pub"
-            run_in(engine, container, forget, host["id"], "setup")
-            only.add(host["id"])
+        only |= {host["id"] for host in hosts if host["id"] in containers}
     test({**request, "hosts": sorted(only)})
 
 

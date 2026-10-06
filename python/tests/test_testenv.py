@@ -274,6 +274,56 @@ def test_the_masterfiles_lock_is_held_for_the_block(tmp_path: Path):
         fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
+class _Running:
+    def __init__(self, container_id: str):
+        self.id = self.name = container_id
+
+
+@pytest.mark.parametrize("hub_recreated", [True, False])
+def test_a_recreated_hub_makes_every_client_bootstrap_to_it_again(monkeypatch, hub_recreated: bool):
+    hosts = [{"id": h, "name": h, "platform": "ubuntu-24"} for h in ("hub", "a", "b")]
+    before = {h: _Running(h) for h in ("hub", "a", "b")}
+    after = {**before, "hub": _Running("new-hub") if hub_recreated else before["hub"]}
+    bootstrapped = {"hub", "a", "b"} - ({"new-hub"} if hub_recreated else set())
+    commands = []
+
+    def run_in(engine, container, command, host, stream, environment=None, keep=None):
+        commands.append((host, command.split()[0].rsplit("/", 1)[-1]))
+        if command.startswith("rm -f /var/cfengine/policy_server.dat"):
+            bootstrapped.discard(container.id)
+        if "--bootstrap" in command:
+            bootstrapped.add(container.id)
+        return 0
+
+    for name, fake in {
+        "client": lambda: None,
+        "sweep_orphans": lambda engine: None,
+        "_network": lambda engine, env: None,
+        "_labelled": lambda engine, env: before,
+        "ensure_image": lambda *args: "image",
+        "_ensure_container": lambda engine, env, host, image, environment: after[host["id"]],
+        "_deploy": lambda *args: None,
+        "_ip": lambda *args: "10.0.0.2",
+        "_bootstrapped": lambda engine, container: container.id in bootstrapped,
+        "run_in": run_in,
+    }.items():
+        monkeypatch.setattr(cfpb_testenv, name, fake)
+
+    # Starting only "a": "b" also knew the old hub.
+    cfpb_testenv.up({"environment": {"id": "e", "hub": "hub", "hosts": hosts}, "hosts": ["a"]}, masterfiles_dir="built")
+
+    if hub_recreated:
+        assert commands == [
+            ("a", "rm"),
+            ("b", "rm"),
+            ("hub", "cf-agent"),
+            ("a", "cf-agent"),
+            ("b", "cf-agent"),
+        ]
+    else:
+        assert commands == []
+
+
 class _Container:
     def __init__(self, owner: str):
         self.labels, self.removed = {cfpb_testenv.LABEL_OWNER: owner}, False
