@@ -1,20 +1,11 @@
 ### example
   # Case 0
-  vars:
-    "case_0_tpl_fqhost" string => "$(sys.fqhost)";
-
-    "case_0_template_data"
-      data => mergedata(
-        '{ "vars": { "sys": { "fqhost": case_0_tpl_fqhost } } }'
-      );
-
   files:
     "/etc/app.conf"
       create => "true",
       edit_template => "$(this.promise_dirname)/templates/snap_case_0.mustache",
       template_method => "mustache",
-      perms => mog("644", "root", "root"),
-      template_data => @(case_0_template_data);
+      perms => mog("644", "root", "root");
 
 ### file ./templates/snap_case_0.mustache
 host = {{{vars.sys.fqhost}}}

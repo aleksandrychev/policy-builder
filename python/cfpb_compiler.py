@@ -821,7 +821,8 @@ class FileCompiler:
             return None
         template = next((params[p["name"]] for p in declared if p.get("mustache")), None)
         refs = template_refs(template) if template is not None else None
-        if refs is None:
+        # Only the project's own variables, whose types are known; anything else reads datastate().
+        if refs is None or any(f"{bundle}.{name}" not in self.types for bundle, name in refs.variables):
             return None
         names = [name for _bundle, name in refs.variables]
         # `tpl_`: apart from the block's other locals, which are named after its parameters.
@@ -832,13 +833,15 @@ class FileCompiler:
         lines, bundles = [], {}
         for (bundle, name), copy in local.items():
             qualified = f"{bundle}.{name}"
-            kind = self.types.get(qualified, "string")
+            kind = self.types[qualified]
+            # Unset (its condition is false): no copy, so it's left out, as in datastate().
+            defined = f"if => isvariable({quote(qualified)})"
             if kind == "slist":
-                lines += promise(quote(copy), [f"slist => {{ @({qualified}) }}"])
+                lines += promise(quote(copy), [f"slist => {{ @({qualified}) }}", defined])
             elif kind == "data":
-                lines += promise(quote(copy), [f"data => mergedata({quote(qualified)})"])
+                lines += promise(quote(copy), [f"data => mergedata({quote(qualified)})", defined])
             else:
-                lines += promise(quote(copy), [f"string => {quote(f'$({qualified})')}"])
+                lines += promise(quote(copy), [f"string => {quote(f'$({qualified})')}", defined])
             bundles.setdefault(bundle, []).append(f'"{name}": {copy}')
         parts = []
         if bundles:
@@ -854,7 +857,17 @@ class FileCompiler:
             data = f"mergedata({', '.join(parts)})"
         else:
             data = parts[0]
-        return [*lines, *promise(f'"{prefix}template_data"', [f"data => {data}"])]
+        name = f'"{prefix}template_data"'
+        if not refs.variables:
+            return [*lines, *promise(name, [f"data => {data}"])]
+        # With any of them unset, datastate() (inline JSON naming an unset variable is no data at all).
+        isset = [f"isvariable({quote(f'{bundle}.{variable}')})" for bundle, variable in refs.variables]
+        fallback = f"unless => isvariable({quote(f'{prefix}template_data')})"
+        return [
+            *lines,
+            *promise(name, [f"data => {data}", *if_all(isset)]),
+            *promise(name, ["data => datastate()", fallback]),
+        ]
 
     def builder_body(self, name: str) -> str:
         body = self.library.bodies[name]
