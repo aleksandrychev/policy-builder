@@ -34,10 +34,19 @@ const RUNS_COMMAND =
 
 type Git = { code: number; stderr: string; stdout: string };
 
-function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promise<Git> {
+// No prompts: a push without stored credentials fails at once instead of hanging.
+const NO_PROMPT_SSH = 'ssh -o BatchMode=yes';
+
+// The user's own core.sshCommand (global or system), never the project's; the env var outranks both.
+async function sshCommand(): Promise<string> {
+  const [scope, command] = (await git(homedir(), ['config', '--show-scope', '--get', 'core.sshCommand'])).stdout.trim().split('\t');
+  return (scope === 'global' || scope === 'system') && command ? command : NO_PROMPT_SSH;
+}
+
+async function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promise<Git> {
+  const ssh = args[0] === 'fetch' || args[0] === 'push' ? await sshCommand() : NO_PROMPT_SSH;
   return new Promise((resolve, reject) => {
-    // No prompts: a push without stored credentials fails at once instead of hanging.
-    const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' };
+    const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: ssh };
     execFile('git', [...NO_PROJECT_COMMANDS, ...args], { cwd, env, timeout, maxBuffer: 20_000_000 }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === 'ENOENT') return reject(new Error('Git isn’t installed (or not on PATH).'));
       resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout, stderr });

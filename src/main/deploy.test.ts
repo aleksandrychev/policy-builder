@@ -293,6 +293,23 @@ describe('IPC handlers', () => {
     await expect(fs.readFile(ran, 'utf-8')).rejects.toThrow();
   });
 
+  it('reaches remotes with the user’s own core.sshCommand, not the project’s', async () => {
+    const ran = join(temp, 'ran');
+    for (const who of ['user', 'project']) await fs.writeFile(join(temp, `${who}.sh`), `#!/bin/sh\necho ${who} >> '${ran}'\nexit 1\n`, { mode: 0o755 });
+    await fs.writeFile(join(temp, 'gitconfig'), `[core]\n\tsshCommand = ${join(temp, 'user.sh')}\n`);
+    vi.stubEnv('GIT_CONFIG_GLOBAL', join(temp, 'gitconfig'));
+    vi.stubEnv('GIT_ALLOW_PROTOCOL', 'file:ssh');
+    try {
+      git(project, 'config', 'core.sshCommand', join(temp, 'project.sh'));
+      git(project, 'remote', 'add', 'origin', 'ssh://hub.invalid/policy.git');
+      expect(await invoke('git:status', project)).toMatchObject({ ok: true });
+      expect(new Set((await fs.readFile(ran, 'utf-8')).split('\n').filter(Boolean))).toEqual(new Set(['user']));
+    } finally {
+      vi.stubEnv('GIT_CONFIG_GLOBAL', '/dev/null');
+      vi.stubEnv('GIT_ALLOW_PROTOCOL', 'file');
+    }
+  });
+
   it('leaves a project alone whose git config names other commands', async () => {
     git(project, 'config', 'filter.Evil.clean', 'touch /tmp/x');
     expect(await invoke('git:status', project)).toMatchObject({ ok: false, message: expect.stringContaining('(filter.Evil.clean)') });
