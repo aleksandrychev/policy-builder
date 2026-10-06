@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import sys
 import urllib.request
 from pathlib import Path
@@ -119,6 +120,44 @@ def client():
     if host is None:
         raise RunnerError("Docker isn't installed (no Docker Engine socket found)")
     return docker.DockerClient(base_url=host, timeout=30)
+
+
+# Throwaway containers (image builds, checks) say which sidecar process they belong to.
+LABEL_OWNER = "cfpb.owner"
+
+
+def owner_labels() -> dict[str, str]:
+    return {LABEL_OWNER: f"{socket.gethostname()}:{os.getpid()}"}
+
+
+def _alive(pid: int) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT: still running
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def sweep_orphans(engine) -> None:
+    """Removes the throwaway containers of sidecar runs that were killed before they could."""
+    for container in engine.containers.list(all=True, filters={"label": LABEL_OWNER}):
+        host, _, pid = container.labels.get(LABEL_OWNER, "").rpartition(":")
+        ours = host == socket.gethostname() and LABEL_ENV not in container.labels
+        if ours and pid.isdigit() and not _alive(int(pid)):
+            container.remove(force=True)
 
 
 def _docker_installed() -> bool:
@@ -428,7 +467,7 @@ def ensure_image(
         user="root",
         detach=True,
         init=True,
-        labels={"cfpb.build": "1"},
+        labels={"cfpb.build": "1", **owner_labels()},
         platform=DOCKER_PLATFORM[arch],
     )
     try:
@@ -437,9 +476,9 @@ def ensure_image(
         file = f"/tmp/{found['filename']}"
         command = f"curl -fsSL -o {file} {found['url']} && {install.format(file=file)} && rm {file}"
         _check(run_in(engine, builder, command, None, "setup"), "Installing CFEngine")
-        builder.commit(
-            repository=repository, tag=tag, changes=['ENTRYPOINT [""]', 'CMD ["sleep", "infinity"]', "USER root"]
-        )
+        # The image keeps the builder's labels: blank the owner, or its containers would be swept.
+        changes = ['ENTRYPOINT [""]', 'CMD ["sleep", "infinity"]', "USER root", f"LABEL {LABEL_OWNER}="]
+        builder.commit(repository=repository, tag=tag, changes=changes)
     finally:
         builder.remove(force=True)
     return f"{repository}:{tag}"
@@ -497,6 +536,7 @@ def inspect(request: dict) -> None:
         entrypoint=["cat"],
         user="root",
         remove=True,
+        labels=owner_labels(),
         platform=DOCKER_PLATFORM[arch],
     )
     fields = parse_os_release(output.decode("utf-8", "replace"))
@@ -686,6 +726,7 @@ def up(request: dict, finish: bool = True) -> str:
     the policy to the hub and bootstrap everyone to it. Returns the built masterfiles. With
     `hosts`, only those (and the hub they bootstrap to) are set up."""
     env, engine = request["environment"], client()
+    sweep_orphans(engine)
     every = env.get("hosts") or []
     hub_host = next((h for h in every if h["id"] == env.get("hub")), every[0] if every else None)
     if hub_host is None:

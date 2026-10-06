@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -207,3 +211,34 @@ def test_build_policy_never_deletes_outside_the_cache(tmp_path: Path):
     with pytest.raises(RunnerError, match="Unsupported masterfiles version"):
         cfpb_testenv.build_policy({}, "3.27.1", str(tmp_path / "cache"))
     assert (victim / "keep").read_text() == "mine"
+
+
+class _Container:
+    def __init__(self, owner: str):
+        self.labels, self.removed = {cfpb_testenv.LABEL_OWNER: owner}, False
+
+    def remove(self, force: bool):
+        self.removed = force
+
+
+def test_sweep_removes_only_the_throwaway_containers_of_dead_sidecars():
+    finished = subprocess.Popen([sys.executable, "-c", ""])
+    finished.wait()
+    host = socket.gethostname()
+    dead, alive = _Container(f"{host}:{finished.pid}"), _Container(f"{host}:{os.getpid()}")
+    elsewhere = _Container(f"other-machine:{finished.pid}")
+    # A test host, whose image a builder made, keeps that builder's label.
+    host_container = _Container(f"{host}:{finished.pid}")
+    host_container.labels[cfpb_testenv.LABEL_ENV] = "env"
+    queries = []
+
+    class Containers:
+        def list(self, all, filters):
+            queries.append(filters)
+            return [dead, alive, elsewhere, host_container]
+
+    cfpb_testenv.sweep_orphans(type("Engine", (), {"containers": Containers()})())
+
+    assert queries == [{"label": cfpb_testenv.LABEL_OWNER}]
+    assert (dead.removed, alive.removed, elsewhere.removed, host_container.removed) == (True, False, False, False)
+    assert cfpb_testenv.owner_labels() == {cfpb_testenv.LABEL_OWNER: f"{host}:{os.getpid()}"}

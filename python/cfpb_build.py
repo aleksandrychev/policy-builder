@@ -129,7 +129,8 @@ def _validate_in_docker(directory: str, masterfiles: str) -> dict:
             "problems": [],
             "message": "Start a test host once (Test Results & Logs) to check with cf-promises.",
         }
-    container = engine.containers.run(images[0], "sleep infinity", detach=True)
+    cfpb_testenv.sweep_orphans(engine)
+    container = engine.containers.run(images[0], "sleep infinity", detach=True, labels=cfpb_testenv.owner_labels())
     try:
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w") as archive:

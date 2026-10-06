@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -468,7 +469,13 @@ def testenv_command(action: str) -> int:
     return 1
 
 
+def _terminated(signum, _frame) -> None:
+    """Cancel, quit and timeouts SIGTERM us: unwind, so `finally` blocks remove what we started."""
+    sys.exit(128 + signum)
+
+
 def main(argv: list[str] | None = None) -> int:
+    signal.signal(signal.SIGTERM, _terminated)
     # Windows would otherwise decode stdio with the ANSI code page.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):

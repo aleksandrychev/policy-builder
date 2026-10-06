@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { type ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { app } from 'electron';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -29,7 +29,37 @@ type SidecarResult = {
   signal: NodeJS.Signals | null;
   stderr: string;
   stdout: string;
+  timedOut?: boolean;
 };
+
+// Every sidecar still running, so quitting the app stops them (and what they started).
+const running = new Set<ChildProcessWithoutNullStreams>();
+let quitHooked = false;
+
+// Its own process group (POSIX), so stopping it also stops the ssh, git and cf-promises it runs.
+function spawnSidecar(command: string, args: string[]): ChildProcessWithoutNullStreams {
+  const child = spawn(command, args, { windowsHide: true, detached: !isWindows });
+  running.add(child);
+  child.on('close', () => running.delete(child));
+  if (!quitHooked) {
+    quitHooked = true;
+    app.on('will-quit', () => running.forEach(stop));
+  }
+  return child;
+}
+
+// SIGTERM lets the sidecar clean up (its containers) before it exits.
+function stop(child: ChildProcessWithoutNullStreams): void {
+  if (isWindows || !child.pid) {
+    child.kill();
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    child.kill('SIGTERM'); // the group is gone already
+  }
+}
 
 /**
  * Packaged: the PyInstaller bundle in the app's resources. Development: that
@@ -60,11 +90,15 @@ function runSidecar(args: string[], input: string, timeoutMs: number, onStderrLi
   }
 
   return new Promise<SidecarResult>((resolve, reject) => {
-    // `timeout` SIGTERMs a hung child, surfacing as 'close' with that signal.
     // No guard flag: settling an already-settled promise is a no-op.
-    const child = spawn(command, [...commandArgs, ...args], { windowsHide: true, timeout: timeoutMs });
+    const child = spawnSidecar(command, [...commandArgs, ...args]);
     let stdout = '';
     let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop(child);
+    }, timeoutMs);
 
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
@@ -82,13 +116,19 @@ function runSidecar(args: string[], input: string, timeoutMs: number, onStderrLi
 
     // A failed spawn (no execute permission, wrong architecture) arrives as an
     // event rather than a throw, so it has to become a rejection.
-    child.on('error', error => reject(error));
+    child.on('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
 
     // Without a listener, EPIPE from a child that died before draining stdin
     // would crash the main process. 'close' still settles with the real cause.
     child.stdin.on('error', () => {});
 
-    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal, stdout, stderr, timedOut });
+    });
 
     child.stdin.end(input, 'utf8');
   });
@@ -110,7 +150,7 @@ export function startSidecarStream(args: string[], input: string, onEvent: (even
   if (!existsSync(command)) {
     return { cancel: () => {}, done: Promise.resolve({ ok: false, message: `Python backend not found at ${command}` }) };
   }
-  const child = spawn(command, [...commandArgs, ...args], { windowsHide: true });
+  const child = spawnSidecar(command, [...commandArgs, ...args]);
   let buffered = '';
   let stderr = '';
   let cancelled = false;
@@ -146,7 +186,7 @@ export function startSidecarStream(args: string[], input: string, onEvent: (even
   return {
     cancel: () => {
       cancelled = true;
-      child.kill('SIGTERM');
+      stop(child);
     },
     done
   };
@@ -166,15 +206,15 @@ export async function testEnvQuery(action: 'doctor' | 'images' | 'package' | 'pl
 
 // Maps a failed sidecar outcome to an Error: the last stderr line as the
 // message (the sidecar's summary), the whole stderr as `details`.
-export function sidecarError({ code, signal, stderr }: SidecarResult, timeoutMs: number): Error & { details: string } {
+export function sidecarError({ code, signal, stderr, timedOut }: SidecarResult, timeoutMs: number): Error & { details: string } {
   const details = stderr.trim();
   const lastLine = details
     .split(/\r?\n/)
     .filter(line => line.trim())
     .pop();
   let message: string;
-  // SIGTERM only ever comes from the spawn timeout
-  if (signal === 'SIGTERM') message = `Process timed out after ${timeoutMs}ms`;
+  // The sidecar exits on our SIGTERM (143) rather than dying of it.
+  if (timedOut || signal === 'SIGTERM') message = `Process timed out after ${timeoutMs}ms`;
   else message = lastLine ?? (signal ? `Process was killed by ${signal}` : `Process failed (exit ${code})`);
   return Object.assign(new Error(message), { details });
 }

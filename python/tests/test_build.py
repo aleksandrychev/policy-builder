@@ -211,13 +211,17 @@ class _FakeEngine:
         self.tags, self.exit_code, self.output = tags, exit_code, output
         self.images = self
         self.containers = self
-        self.started, self.archives, self.removed = [], [], False
+        self.started, self.archives, self.removed, self.labels, self.swept = [], [], False, None, False
 
-    def list(self):
+    def list(self, all=False, filters=None):
+        if filters:  # the orphan sweep's container query
+            self.swept = True
+            return []
         return [type("Image", (), {"tags": self.tags})()]
 
-    def run(self, image, command, detach):
+    def run(self, image, command, detach, labels=None):
         self.started.append(image)
+        self.labels = labels
         return self
 
     def put_archive(self, path, data):
@@ -256,6 +260,9 @@ def test_validate_in_docker_maps_container_paths_and_removes_the_container(
     assert engine.started == ["cfpb-cache/ubuntu-24:3.27.1"]
     assert engine.archives == ["/tmp"]
     assert engine.removed is True
+    # Labelled, so a later run removes it if this one is killed first; and that sweep ran.
+    assert engine.labels == cfpb_testenv.owner_labels()
+    assert engine.swept is True
 
 
 # --- ensure_gitignore ---

@@ -408,3 +408,27 @@ def test_masterfiles_refuses_a_bad_version(monkeypatch: pytest.MonkeyPatch):
     code, _stdout, _stderr = _run(["masterfiles"], json.dumps({"version": "3.27.x"}), monkeypatch)
 
     assert code == 2
+
+
+# What main runs in place of a command: something slow with cleanup to do.
+SLOW_COMMAND = """
+import sys, time, cfpb_backend
+def slow():
+    try:
+        print("started", flush=True)
+        time.sleep(30)
+    finally:
+        print("cleaned up", flush=True)
+cfpb_backend.format_command = slow
+sys.exit(cfpb_backend.main(["format"]))
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no SIGTERM to catch")
+def test_sigterm_runs_the_cleanup_before_exiting():
+    process = subprocess.Popen([sys.executable, "-c", SLOW_COMMAND], stdout=subprocess.PIPE, text=True)
+    assert process.stdout.readline() == "started\n"
+    process.terminate()
+    stdout, _ = process.communicate(timeout=10)
+    assert stdout == "cleaned up\n"
+    assert process.returncode == 143

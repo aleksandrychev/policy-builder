@@ -1,20 +1,25 @@
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
+import { PassThrough } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatPolicy, resolveCommand, sidecarError, startSidecarStream } from './backend';
 
-const electron = vi.hoisted(() => ({ packaged: false }));
+const electron = vi.hoisted(() => ({ packaged: false, quit: [] as (() => void)[] }));
 
 vi.mock('electron', () => ({
   app: {
     get isPackaged() {
       return electron.packaged;
-    }
+    },
+    on: (event: string, listener: () => void) => event === 'will-quit' && electron.quit.push(listener)
   }
 }));
 
 vi.mock('fs', async importOriginal => ({ ...(await importOriginal<typeof import('fs')>()), existsSync: vi.fn() }));
+vi.mock('child_process', async importOriginal => ({ ...(await importOriginal<typeof import('child_process')>()), spawn: vi.fn() }));
 
 const result = (stderr: string, code: number | null = 1, signal: NodeJS.Signals | null = null) => ({ code, signal, stderr, stdout: '' });
 
@@ -72,5 +77,52 @@ describe('resolveCommand', () => {
   it('explains a missing backend instead of spawning', async () => {
     await expect(formatPolicy('bundle agent main {}')).rejects.toThrow(/^Python backend not found at .*python\/\.venv\/bin\/python/);
     expect(await startSidecarStream(['testenv', 'pull'], '{}', () => {}).done).toMatchObject({ ok: false });
+  });
+});
+
+describe('stopping a sidecar', () => {
+  const pid = 4242;
+  let child: EventEmitter & { kill: ReturnType<typeof vi.fn>; pid: number; stderr: PassThrough; stdin: PassThrough; stdout: PassThrough };
+  let kill: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    electron.packaged = false;
+    vi.mocked(existsSync).mockReturnValue(true);
+    child = Object.assign(new EventEmitter(), { pid, kill: vi.fn(), stdout: new PassThrough(), stderr: new PassThrough(), stdin: new PassThrough() });
+    vi.mocked(spawn)
+      .mockReset()
+      .mockReturnValue(child as never);
+    kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    kill.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it.skipIf(process.platform === 'win32')('cancels a stream by stopping its whole process group', async () => {
+    const stream = startSidecarStream(['testenv', 'up'], '{}', () => {});
+    expect(vi.mocked(spawn).mock.calls[0][2]).toMatchObject({ detached: true });
+    stream.cancel();
+    expect(kill).toHaveBeenCalledWith(-pid, 'SIGTERM');
+    child.emit('close', 143, null);
+    expect(await stream.done).toEqual({ ok: false, message: 'Cancelled' });
+  });
+
+  it.skipIf(process.platform === 'win32')('times a one-shot run out, though the sidecar exits on its own', async () => {
+    vi.useFakeTimers();
+    const formatted = formatPolicy('bundle agent main {}');
+    vi.advanceTimersByTime(30_000);
+    expect(kill).toHaveBeenCalledWith(-pid, 'SIGTERM');
+    child.emit('close', 143, null);
+    await expect(formatted).rejects.toThrow('Process timed out after 30000ms');
+  });
+
+  it.skipIf(process.platform === 'win32')('stops one-shot runs when the app quits', async () => {
+    const formatted = formatPolicy('bundle agent main {}');
+    electron.quit.forEach(listener => listener());
+    expect(kill).toHaveBeenCalledWith(-pid, 'SIGTERM');
+    child.emit('close', 143, null);
+    await expect(formatted).rejects.toThrow();
   });
 });
