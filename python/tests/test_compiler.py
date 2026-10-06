@@ -438,6 +438,8 @@ def test_unknown_block_types_fail_the_compile():
         ("C:\\", r'"C:\\"'),
         # Checked with cf-agent: reads back as a\\b.
         (r"a\\b", r'"a\\\b"'),
+        # \' is an escape too: reads back as it\'s.
+        (r"it\'s", r'''"it\\'s"'''),
     ],
 )
 def test_strings_escape_only_what_cfengine_would_misread(text: str, expected: str):

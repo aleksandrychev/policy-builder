@@ -72,9 +72,9 @@ class Library:
 
 
 def quote(text: str) -> str:
-    """A CFEngine string. Only \\\\ and \\" are escapes, so a backslash needs
-    doubling only before a backslash, a quote, or the closing quote."""
-    return '"' + re.sub(r'\\(?=[\\"]|$)', r"\\\\", text).replace('"', '\\"') + '"'
+    """A CFEngine string. Only \\\\, \\" and \\' are escapes, so a backslash needs
+    doubling only before a backslash, either quote, or the closing quote."""
+    return '"' + re.sub(r"\\(?=[\\\"']|$)", r"\\\\", text).replace('"', '\\"') + '"'
 
 
 # `key value` or `key=value` (or a bare key); keys hold no spaces, `=` or brackets.

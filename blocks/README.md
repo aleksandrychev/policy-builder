@@ -152,9 +152,10 @@ Every promiser and attribute value is an **expression**:
 | `{"if_set": "param", "value": ...}` | The attribute, or nothing when the parameter is empty (`report_to_file => ""` is a hard error) |
 | `{"template_file": "param"}` | The parameter's text as its own file, `./templates/<block bundle>.mustache`, used as written (no escaping, no `$(…)` expansion); compiles to its path relative to the policy file, `"$(this.promise_dirname)/templates/…"` (`../` per folder the file is nested in) |
 
-**Escaping.** CFEngine strings have exactly two escapes, `\\` and `\"`: every other backslash stays
-literal, so regexes like `\d+` need no special handling, and a real newline can sit inside a string.
-So only `"` and a backslash before a backslash, a quote or the string's end are escaped (`\d+` stays
+**Escaping.** CFEngine strings have exactly three escapes, `\\`, `\"` and `\'` (in both kinds of
+quotes): every other backslash stays literal, so regexes like `\d+` need no special handling, and a
+real newline can sit inside a string. So only `"` and a backslash before a backslash, either quote
+or the string's end are escaped (`\d+` stays
 `"\d+"`, `C:\` becomes `"C:\\"`) and nothing else. `$(…)` is
 left alone on purpose — it's how a value references a variable — so a literal `$(` is written
 `$(const.dollar)(`. A promiser is always a template; the compiler quotes it.
