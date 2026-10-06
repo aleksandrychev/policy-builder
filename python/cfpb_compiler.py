@@ -79,6 +79,8 @@ def quote(text: str) -> str:
 
 # `key value` or `key=value` (or a bare key); keys hold no spaces, `=` or brackets.
 KEY_VALUE = re.compile(r"^([^\s=\[\]]+)(?:\s*[=\s]\s*(.*?))?\s*$")
+# The same for CFEngine's data_regextract(), on one unstripped line; a `#` line isn't one.
+ARRAY_LINE = r"^\s*(?<key>[^\s=\[\]#][^\s=\[\]]*)\s*[=\s]?\s*(?<value>.*?)\s*$"
 
 
 def lines_of(value: str) -> list[str]:
@@ -196,6 +198,8 @@ class Context:
     prefix: str = ""
     owner: str = ""
     locals: list[str] = field(default_factory=list)
+    # Parameters computed from data -> their CFEngine type.
+    computed: dict[str, str] = field(default_factory=dict)
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -264,6 +268,8 @@ def compile_value(expr, ctx: Context) -> str:
     if "array_param" in expr:
         # One `key value` / `key=value` line per entry, as a local array; the qualified name is passed.
         local = f"{ctx.prefix}{expr['array_param']}"
+        if expr["array_param"] in ctx.computed:
+            return computed_array(expr["array_param"], ctx)
         for line in lines_of(ctx.params.get(expr["array_param"], "")):
             match = KEY_VALUE.match(line)
             if match and not line.startswith("#"):
@@ -276,6 +282,24 @@ def compile_value(expr, ctx: Context) -> str:
         ctx.files[name] = ctx.params.get(expr["template_file"], "")
         return quote(f"$(this.promise_dirname)/{ctx.to_root}{TEMPLATES_DIR[2:]}{name}")
     raise CompileError(f"Unknown expression: {json.dumps(expr)}")
+
+
+def computed_array(param: str, ctx: Context) -> str:
+    """array_param computed from data: its lines are only known at run time, so they're split
+    into `<local>__array` there, as KEY_VALUE (and the # comment check) would."""
+    local = f"{ctx.prefix}{param}"
+    if ctx.computed[param] not in ("slist", "data"):
+        rows = f'mergedata(string_split({quote(f"$({local})")}, "\\n", "100000"))'
+    else:
+        rows = f"mergedata({quote(f'{ctx.owner}.{local}')})"
+    index, match = f"$({local}__i)", f"{local}__kv_$({local}__i)"
+    ctx.locals += [
+        f'"{local}__rows" data => {rows};',
+        f'"{local}__i" slist => getindices("{local}__rows");',
+        f'"{match}" data => data_regextract({quote(ARRAY_LINE)}, "$({local}__rows[{index}])");',
+        f'"{local}__array[$({match}[key])]" string => "$({match}[value])";',
+    ]
+    return quote(f"{ctx.owner}.{local}__array")
 
 
 def list_value(items: list[str], ctx: Context) -> str:
@@ -760,9 +784,10 @@ class FileCompiler:
             to_root=to_root,
             prefix=prefix,
             owner=owner,
+            computed={param: kind for param, (_lines, kind) in computed.items()},
         )
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
-        variables, promiser_params = [line for lines in computed.values() for line in lines], dict(params)
+        variables, promiser_params = [line for lines, _kind in computed.values() for line in lines], dict(params)
         for param in declared:
             values = (
                 lines_of(params[param["name"]]) if param.get("allow_list") and param["name"] not in computed else []
@@ -788,10 +813,12 @@ class FileCompiler:
             attributes.append(f"template_data => @({prefix}template_data)")
         return variables, step["promise_type"], quote(promiser), attributes
 
-    def computed_parameters(self, block: dict, bundle: str, prefix: str = "") -> tuple[dict[str, list[str]], list[str]]:
+    def computed_parameters(
+        self, block: dict, bundle: str, prefix: str = ""
+    ) -> tuple[dict[str, tuple[list[str], str]], list[str]]:
         """Parameters computed from data ("Compute from data…"): a Define Variable value
         source and its decorators, as `vars:` promises named after the parameter in the
-        block's own bundle. Returns them, and the labels of any that aren't filled in."""
+        block's own bundle. Returns them with their type, and the labels of any that aren't filled in."""
         definitions = self.library.descriptors.get("define-variable", {})
         sources = {source["id"]: source for source in definitions.get("value_sources", [])}
         labels = {p["name"]: p.get("label", p["name"]) for p in self.descriptor(block).get("parameters", [])}
@@ -810,7 +837,8 @@ class FileCompiler:
             [(_kind, value)] = source["steps"][0]["attributes"].items()
             decorators = [d for d in binding.get("decorators") or [] if d.get("decoratorId") in self.library.decorators]
             ctx = Context(self.vars_name, params, self.bodies)
-            computed[param] = self.chain(f"{prefix}{param}", bundle, source, value, decorators, ctx, [], [])
+            lines = self.chain(f"{prefix}{param}", bundle, source, value, decorators, ctx, [], [])
+            computed[param] = lines, chain_type(source, decorators, self.library)
         return computed, missing
 
     def template_data(
@@ -999,8 +1027,13 @@ def variable_types(files: list[dict], library: Library) -> dict[str, str]:
                 name = (entry.get("params") or {}).get(descriptor["entries"]["name_param"], "")
                 if not source or not name or source["steps"][0]["promise_type"] != "vars":
                     continue
-                kind = source.get("value_type", "string")
-                for instance in entry.get("decorators") or []:
-                    kind = library.decorators.get(instance.get("decoratorId"), {}).get("output_type", kind)
-                types[f"{file['bundle']}_vars.{name}"] = kind
+                types[f"{file['bundle']}_vars.{name}"] = chain_type(source, entry.get("decorators") or [], library)
     return types
+
+
+def chain_type(source: dict, decorators: list[dict], library: Library) -> str:
+    """The CFEngine type a value source produces through its decorators."""
+    kind = source.get("value_type", "string")
+    for instance in decorators:
+        kind = library.decorators.get(instance.get("decoratorId"), {}).get("output_type", kind)
+    return kind

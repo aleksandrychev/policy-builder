@@ -190,6 +190,31 @@ def test_a_template_computed_from_data_renders_inline():
     assert "template_data" not in render
 
 
+@pytest.mark.parametrize(
+    "source, rows",
+    [
+        ("command-output", 'mergedata(string_split("$(set_settings)", "\\n", "100000"))'),
+        ("file-lines", 'mergedata("t.set_settings")'),
+    ],
+)
+def test_key_value_settings_computed_from_data_are_split_at_run_time(source: str, rows: str):
+    params = {"command": "/bin/cat /srv/sshd"} if source == "command-output" else {"path": "/srv/sshd"}
+    block = {
+        "instanceId": "s",
+        "blockId": "set-config-values",
+        "label": "Set",
+        "params": {"path": "/etc/ssh/sshd_config"},
+        "paramBindings": {"settings": {"valueSourceId": source, "params": params}},
+    }
+    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+
+    policy = compile_project(meta)["./t.cf"]
+
+    assert f"data => {rows};" in policy
+    assert '"set_settings__array[$(set_settings__kv_$(set_settings__i)[key])]"' in policy
+    assert '"t.set_settings__array",' in policy
+
+
 def test_template_copies_keep_clear_of_parameters_computed_from_data():
     meta = _demo()
     block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "render-template")

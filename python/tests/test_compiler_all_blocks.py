@@ -129,6 +129,9 @@ def _actions() -> list[dict]:
     by_id["report-message"]["paramBindings"] = {
         "message": {"valueSourceId": "file-content", "params": _params(sources["file-content"]["parameters"])}
     }
+    by_id["set-config-values"]["paramBindings"] = {
+        "settings": {"valueSourceId": "command-output", "params": _params(sources["command-output"]["parameters"])}
+    }
     return blocks
 
 
@@ -153,6 +156,7 @@ def test_every_block_source_and_decorator_compiles_without_a_skip():
             assert f"\n  # {descriptor['name']}\n" in policy, block_id
     assert '"install_package_package_name"\n      slist => string_split(' in policy
     assert '"report_message_message" string => readfile(' in policy
+    assert 'set_line_based(\n        "all.set_config_values_settings__array",' in policy
 
 
 @pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine 3.27+")
