@@ -7,7 +7,8 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
+type MenuAction =
+  'close-requested' | 'connect-agent' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
 
 // What the builder saves: its cfbs.json modules (`build` entries for a policy set, the one
 // `provides` entry for a module), and its own data for .policy-builder/project.json.
@@ -97,6 +98,25 @@ export interface TestProblem {
   message: string;
   // The runs of the test it came up in (a failure of the first run may not come up again).
   runs?: number[];
+}
+
+// The MCP server AI agents connect to: whether it's on, and what an agent needs to reach it.
+// What AI agents may do; reading the project is always allowed.
+export interface McpPermissions {
+  delete: boolean;
+  edit: boolean;
+  files: boolean;
+  projects: boolean;
+  testing: boolean;
+}
+
+export interface McpStatus {
+  enabled: boolean;
+  error: string | null;
+  name: string;
+  permissions: McpPermissions;
+  token: string | null;
+  url: string | null;
 }
 
 // One event of a streaming test-environment run; `exit` always comes last.
@@ -315,8 +335,17 @@ declare global {
       hubState: (url: string) => Promise<OperationResult<{ state: HubState }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
+      /** Turns the MCP server Claude Code connects to on or off. */
+      mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
+      /** What AI agents may do: tools that are off aren't offered to them. */
+      mcpSetPermissions: (permissions: McpPermissions) => Promise<McpStatus>;
+      mcpStatus: () => Promise<McpStatus>;
+      /** Answers a tool call from Claude Code (onMcpToolRequest) from the project state. */
+      mcpToolResult: (requestId: string, result: { content: string; ok: boolean }) => Promise<void>;
       /** Each step of a running Build or SSH deploy as it starts (build, lint, promises, copy, validate, install, update, policy). */
       onDeployProgress: (callback: (stage: string) => void) => () => void;
+      /** Claude Code's tool calls, answered with mcpToolResult. */
+      onMcpToolRequest: (callback: (requestId: string, name: string, input: unknown) => void) => () => void;
       /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
       onMenuAction: (callback: (action: MenuAction, path?: string) => void) => () => void;
       /** Subscribes to the events of streaming test-environment runs; call the returned function to unsubscribe. */

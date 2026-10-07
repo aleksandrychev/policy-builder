@@ -98,7 +98,7 @@ function RecentProjects({ onOpen, version }: { onOpen: (path: string) => void; v
  */
 export default function NoProjectScreen({ onNewProject, onOpenProject, onTryDemo, recentsVersion }: NoProjectScreenProps) {
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
       <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', px: 3, pb: 10 }}>
         <Box sx={{ maxWidth: 560, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <BlockNodesIcon />

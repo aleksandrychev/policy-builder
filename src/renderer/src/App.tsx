@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { Alert, Snackbar } from '@mui/material';
+import { Alert, Box, Snackbar } from '@mui/material';
 
+import { AgentActivityBar } from './components/agent/AgentActivityBar';
+import { AgentLock } from './components/agent/AgentLock';
+import { AgentLogPanel } from './components/agent/AgentLogPanel';
+import { ConnectAgentDialog } from './components/dialogs/ConnectAgentDialog';
 import { NewProjectDialog, useMasterfilesVersions } from './components/dialogs/NewProjectDialog';
 import { ProjectSettingsDialog } from './components/dialogs/ProjectSettingsDialog';
 import { UnsavedChangesDialog } from './components/dialogs/UnsavedChangesDialog';
+import { isWorking, useAgentActivity } from './mcp/activity';
+import { useMcpTools } from './mcp/useMcpTools';
 import NoProjectScreen from './pages/NoProjectScreen';
 import ProjectView from './pages/ProjectView';
 import { useProjectSession } from './project/useProjectSession';
@@ -16,6 +22,16 @@ const modalOpen = () => Boolean(document.querySelector('[role="dialog"]'));
 
 export default function App() {
   const session = useProjectSession();
+  useMcpTools(session.tools);
+  const activity = useAgentActivity();
+  const agentWorking = isWorking(activity);
+  const [logOpen, setLogOpen] = useState(false);
+  // The log opens when an agent starts working; the user may close it again.
+  const [wasWorking, setWasWorking] = useState(false);
+  if (agentWorking !== wasWorking) {
+    setWasWorking(agentWorking);
+    if (agentWorking) setLogOpen(true);
+  }
   const { project, dirty, projectDialog, unsavedPrompt } = session;
   // The native menu (main/index.ts's buildApplicationMenu) outlives renders: it always reaches the latest session.
   const sessionRef = useRef<Session>(session);
@@ -25,6 +41,7 @@ export default function App() {
   // Bumped when main reports the recent-projects list changed.
   const [recentsVersion, setRecentsVersion] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [connectAgentOpen, setConnectAgentOpen] = useState(false);
   const masterfilesVersions = useMasterfilesVersions();
 
   useEffect(
@@ -39,6 +56,7 @@ export default function App() {
         else if (action === 'open-recent' && path && !modalOpen()) current.openProject(path);
         else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
         else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
+        else if (action === 'connect-agent' && !modalOpen()) setConnectAgentOpen(true);
       }),
     []
   );
@@ -71,12 +89,34 @@ export default function App() {
   }, [dirty, project?.name]);
 
   return (
-    <>
-      {project ? (
-        <ProjectView key={project.id} dirty={dirty} onSave={session.save} onReload={session.reloadProject} onOpenSettings={() => setSettingsOpen(true)} />
-      ) : (
-        <NoProjectScreen onNewProject={session.newProject} onOpenProject={session.openProject} onTryDemo={session.startDemo} recentsVersion={recentsVersion} />
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <AgentActivityBar activity={activity} onToggleLog={() => setLogOpen(open => !open)} />
+      <Box sx={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {project ? (
+          <ProjectView
+            key={project.id}
+            locked={agentWorking}
+            dirty={dirty}
+            onSave={session.save}
+            onReload={session.reloadProject}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onConnectAgent={() => setConnectAgentOpen(true)}
+          />
+        ) : (
+          <NoProjectScreen
+            onNewProject={session.newProject}
+            onOpenProject={session.openProject}
+            onTryDemo={session.startDemo}
+            recentsVersion={recentsVersion}
+          />
+        )}
+        {/* The start screen has nothing to watch: the lock covers all of it. */}
+        {!project && agentWorking && <AgentLock />}
+      </Box>
+      {(logOpen || activity.log.length > 0 || agentWorking || activity.paused) && (
+        <AgentLogPanel activity={activity} open={logOpen} onToggle={() => setLogOpen(open => !open)} />
       )}
+      {connectAgentOpen && <ConnectAgentDialog onClose={() => setConnectAgentOpen(false)} />}
       {project && settingsOpen && (
         <ProjectSettingsDialog
           project={project}
@@ -101,6 +141,6 @@ export default function App() {
           {session.error}
         </Alert>
       </Snackbar>
-    </>
+    </Box>
   );
 }

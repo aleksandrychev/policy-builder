@@ -93,6 +93,17 @@ def test_references_name_the_defining_files_namespace():
     assert '"$(common:vars.webserver_package)"' in files[WEBSERVER]
 
 
+def test_a_files_own_variables_are_referenced_with_its_namespace():
+    # The short form only expands in a promiser: in attributes and function arguments it stays text.
+    meta = _demo()
+    report = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "report-message")
+    report["params"]["message"] = "$(vars.a) ${vars.b} $(common:vars.c) $(myvars.d)"
+
+    policy = compile_project(meta)[WEBSERVER]
+
+    assert '"$(webserver:vars.a) ${webserver:vars.b} $(common:vars.c) $(myvars.d)"' in policy
+
+
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}

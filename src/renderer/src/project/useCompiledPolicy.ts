@@ -18,7 +18,7 @@ export interface CompiledPolicyState {
 const DEBOUNCE_MS = 400;
 
 // What the compiler reads: everything but the open file and positions.
-const compiledPart = (meta: ProjectMeta) => ({ ...meta, current_file_id: null, files: meta.files.map(({ layout: _layout, ...file }) => file) });
+export const compiledPart = (meta: ProjectMeta) => ({ ...meta, current_file_id: null, files: meta.files.map(({ layout: _layout, ...file }) => file) });
 
 /** Saved project content as a key that layout-only changes and switching files leave alone. */
 export const contentKey = (content: { project: object }) => JSON.stringify({ ...content, project: compiledPart(content.project as ProjectMeta) });

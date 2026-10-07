@@ -5,6 +5,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { Box, Button, ButtonBase, IconButton, Typography, alpha, useTheme } from '@mui/material';
 
 import type { ProjectType } from '../store/projectSlice/types';
@@ -67,9 +68,13 @@ interface TopBarProps {
   dirty: boolean;
   // "runs only if linux", when the open file is gated.
   fileGate?: string;
+  // An AI agent is working: actions are off, switching views still works.
+  locked?: boolean;
   masterfiles: string | null;
   // The open file's namespace.
   namespace: string;
+  // Opens Connect an AI agent.
+  onConnectAgent: () => void;
   onOpenSettings: () => void;
   // Saving writes cfbs.json, the builder's data and the generated policy.
   onSave: () => void;
@@ -110,6 +115,8 @@ export function TopBar({
   blockCount,
   activeTab,
   onTabChange,
+  onConnectAgent,
+  locked = false,
   onOpenSettings,
   onSave,
   savedToDisk,
@@ -143,7 +150,7 @@ export function TopBar({
               </Box>
             )}
           </Typography>
-          <IconButton size="small" onClick={onOpenSettings} aria-label="Project settings" title="Project settings (⌘,)" sx={{ ml: -1 }}>
+          <IconButton size="small" onClick={onOpenSettings} disabled={locked} aria-label="Project settings" title="Project settings (⌘,)" sx={{ ml: -1 }}>
             <SettingsOutlinedIcon fontSize="small" />
           </IconButton>
           {type === 'module' && (
@@ -167,12 +174,21 @@ export function TopBar({
       <ViewSwitch active={activeTab} badges={tabBadges} onChange={onTabChange} />
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2, whiteSpace: 'nowrap' }}>
+        <Button
+          size="small"
+          startIcon={<SmartToyOutlinedIcon />}
+          onClick={onConnectAgent}
+          disabled={locked}
+          title="Let an AI agent such as Claude Code work on this project"
+        >
+          AI agent
+        </Button>
         <Typography sx={{ fontSize: 12, color: 'text.muted' }}>{blockCount} blocks</Typography>
         <Button
           variant="contained"
           color="primary"
           onClick={onSave}
-          disabled={savedToDisk && !dirty}
+          disabled={locked || (savedToDisk && !dirty)}
           title={savedToDisk ? 'Save the project and generate its policy (⌘S)' : 'Save the project to disk (⌘S)'}
           sx={{ whiteSpace: 'nowrap' }}
         >

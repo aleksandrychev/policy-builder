@@ -44,12 +44,23 @@ export function useProjectSession() {
   const dirty = useAppSelector(state => baseline !== null && isEdited(state, baseline));
   const [projectDialog, setProjectDialog] = useState<'new' | 'saveAs' | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setShownError] = useState<string | null>(null);
+  // The last failure, also for Claude Code's tools (the banner only shows it).
+  const lastError = useRef<string | null>(null);
+  const setError = (message: string | null) => {
+    lastError.current = message;
+    setShownError(message);
+  };
   const saving = useRef<Promise<boolean> | null>(null);
   // Resolves the save a "Save Project As" dialog was opened for.
   const saveAsDone = useRef<((saved: boolean) => void) | null>(null);
 
-  const markSaved = (data = snapshotOf(store.getState())) => setBaseline(data);
+  // Also kept outside React state, for tools that ask between renders.
+  const baselineRef = useRef<ProjectData | null>(null);
+  const markSaved = (data = snapshotOf(store.getState())) => {
+    baselineRef.current = data;
+    setBaseline(data);
+  };
 
   const createProject = async (values: ProjectFormValues): Promise<SubmitResult> => {
     const { name, description, type } = values;
@@ -227,6 +238,25 @@ export function useProjectSession() {
         markSaved();
       }),
     submitProjectDialog,
+    // For Claude Code's tools (MCP): the same actions, without dialogs or the unsaved-changes prompt.
+    tools: {
+      create: createProject,
+      // Read when asked: a save just made counts at once, before the next render.
+      get dirty() {
+        return baselineRef.current !== null && isEdited(store.getState(), baselineRef.current);
+      },
+      // Resolve with why they failed, or null.
+      open: async (path: string) => {
+        lastError.current = null;
+        await openProject(path);
+        return lastError.current;
+      },
+      save: async () => {
+        lastError.current = null;
+        return (await save()) ? null : (lastError.current ?? 'The project wasn’t saved');
+      },
+      saveAs: saveProjectAs
+    },
     unsavedPrompt
   };
 }

@@ -8,6 +8,7 @@ import type { RecentProject } from '../preload/api';
 import { compilePolicy, formatPolicy, warmUpSidecar } from './backend';
 import { registerDeployHandlers } from './deploy';
 import { registerHubHandlers } from './hub';
+import { registerMcpHandlers } from './mcp';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 import { registerTestEnvHandlers } from './testenv';
 
@@ -121,6 +122,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Open Recent', submenu: openRecent },
         { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
         { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', click: send('menu:project-settings') },
+        { label: 'Connect AI Agent…', click: send('menu:connect-agent') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
         { type: 'separator' },
@@ -261,6 +263,7 @@ app.whenReady().then(() => {
   registerTestEnvHandlers(isTrustedFrame);
   registerDeployHandlers(isTrustedFrame);
   registerHubHandlers(isTrustedFrame);
+  registerMcpHandlers(isTrustedFrame);
   // The File menu and the start screen both list recent projects.
   onRecentsChanged(() => {
     void refreshMenu();

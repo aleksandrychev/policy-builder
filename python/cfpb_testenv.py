@@ -879,6 +879,10 @@ BELONGS = re.compile(r"Promise belongs to bundle '([^']+)' in file '([^']+)' nea
 # Roll-ups of an error already reported on its own line.
 ROLLUP = re.compile(r"Method '[^']+' failed in some repairs|Errors encountered when actuating|Not all promises")
 INPUTS = "/var/cfengine/inputs/services/cfbs/"
+# A failed command names only its promiser (expanded): no "belongs to" line.
+COMMAND_FAILED = re.compile(r"related to promiser '(.*)' -- ")
+QUOTED_PROMISER = re.compile(r'\s+"((?:\\.|[^"\\])*)"(?:\s|$)')
+VARIABLE = re.compile(r"[$@](?:\([^)]*\)|\{[^}]*\})")
 
 
 def _where(file: str) -> str | None:
@@ -897,9 +901,26 @@ def add_problems(problems: dict[tuple, dict], found: list[dict], run: int) -> No
             problems[key] = {**problem, "runs": [run]}
 
 
-def find_problems(lines: list[str], source_map: dict, block_files: dict) -> list[dict]:
+def _promiser_at(promiser: str, policies: dict[str, str]) -> tuple[str, int] | None:
+    """Where the project's policy writes `promiser` (path, 1-based line); its variables match anything."""
+    for path, policy in policies.items():
+        if not path.endswith(".cf"):
+            continue
+        for number, line in enumerate(policy.splitlines(), 1):
+            quoted = QUOTED_PROMISER.match(line)
+            if not quoted:
+                continue
+            text = re.sub(r"\\(.)", r"\1", quoted.group(1))
+            pattern = ".*".join(re.escape(part) for part in VARIABLE.split(text))
+            if re.fullmatch(pattern, promiser, re.S):
+                return path, number
+    return None
+
+
+def find_problems(lines: list[str], source_map: dict, block_files: dict, policies: dict | None = None) -> list[dict]:
     """The errors of one agent run, each with what caused it (the info lines just before) and the
-    block it comes from (cf-agent's file and line, through the compiler's source map)."""
+    block it comes from (cf-agent's file and line, through the compiler's source map; a failed
+    command by its promiser in the project's `policies`)."""
     problems: dict[tuple, dict] = {}
     context: list[str] = []
     location: tuple[str, str, int] | None = None
@@ -918,7 +939,11 @@ def find_problems(lines: list[str], source_map: dict, block_files: dict) -> list
         message = line[len("error:") :].strip()
         if ROLLUP.search(message) and problems:
             continue
-        path = _where(location[1]) if location else None
+        command = COMMAND_FAILED.search(message) if not location and policies else None
+        found = _promiser_at(command.group(1), policies) if command else None
+        if found:
+            location = (None, found[0], found[1])
+        path = (found[0] if found else _where(location[1])) if location else None
         block = _block_at(source_map.get(path or "", {}), location[2]) if path and location else None
         key = (block or (location and location[1:]) or None, message)
         if key in problems:
@@ -980,7 +1005,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
 
     source_map: dict = {}
     project = request["content"]["project"]
-    compile_project(project, source_map=source_map)
+    policies = compile_project(project, source_map=source_map)
     block_files = {
         item: file["id"]
         for file in project.get("files", [])
@@ -1006,7 +1031,10 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
             code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment, output)
             result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
             emit("result", host=host["id"], **result)
-            found = [*find_problems(updating, source_map, block_files), *find_problems(output, source_map, block_files)]
+            found = [
+                *find_problems(updating, source_map, block_files),
+                *find_problems(output, source_map, block_files, policies),
+            ]
             add_problems(problems, found, number)
             if code != 0 or result.get("repaired", 0) == 0:
                 break
