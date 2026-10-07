@@ -8,9 +8,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControl,
   FormControlLabel,
   InputLabel,
+  List,
+  ListItem,
+  ListItemText,
   MenuItem,
   Select,
   Stack,
@@ -18,8 +22,48 @@ import {
   Typography
 } from '@mui/material';
 
-import type { McpStatus } from '../../../../preload/api';
+import type { McpPermissions, McpStatus } from '../../../../preload/api';
 import { AGENTS, agentById } from '../../mcp/agents';
+
+// What agents may do, in the order shown; reading the project is always on, deleting comes last.
+const PERMISSIONS: { help: string; key: keyof McpPermissions; label: string }[] = [
+  { key: 'edit', label: 'Edit blocks and variables', help: 'Blocks, arrows, groups, entries, transformers and conditions' },
+  { key: 'files', label: 'Files and folders', help: 'Add, rename and describe policy files and folders' },
+  { key: 'projects', label: 'Create, open and save projects', help: 'Writes the project to disk' },
+  { key: 'testing', label: 'Run tests', help: 'Set up test environments and run them in Docker' }
+];
+
+// Turning a permission on or off, as a row: what it allows, and its switch.
+function PermissionRow({
+  checked,
+  disabled,
+  help,
+  label,
+  onChange
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  help: string;
+  label: string;
+  onChange?: (checked: boolean) => void;
+}) {
+  return (
+    <ListItem
+      secondaryAction={
+        <Switch
+          edge="end"
+          size="small"
+          checked={checked}
+          disabled={disabled}
+          onChange={event => onChange?.(event.target.checked)}
+          slotProps={{ input: { 'aria-label': label } }}
+        />
+      }
+    >
+      <ListItemText primary={label} secondary={help} slotProps={{ primary: { sx: { fontSize: 13 } }, secondary: { sx: { fontSize: 12 } } }} />
+    </ListItem>
+  );
+}
 
 // The agent picked last time.
 const AGENT_KEY = 'cfpb.connectAgent';
@@ -45,6 +89,10 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
+  };
+  const setPermission = async (key: keyof McpPermissions, allowed: boolean) => {
+    if (!status) return;
+    setStatus((await window.api?.mcpSetPermissions({ ...status.permissions, [key]: allowed })) ?? status);
   };
   const pick = (id: string) => {
     localStorage.setItem(AGENT_KEY, id);
@@ -113,6 +161,25 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
             </Stack>
           )}
         </Stack>
+        {status && (
+          <Box sx={{ mt: 3 }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>What agents may do</Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.muted', mb: 1 }}>Applies to every agent at once. What’s off isn’t offered to them.</Typography>
+            <List dense disablePadding sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <PermissionRow label="Read the project" help="Always on: files, blocks, generated policy, variables, test results" checked disabled />
+              {PERMISSIONS.map(({ help, key, label }) => (
+                <PermissionRow key={key} label={label} help={help} checked={status.permissions[key]} onChange={allowed => void setPermission(key, allowed)} />
+              ))}
+              <Divider component="li" />
+              <PermissionRow
+                label="Allow deleting"
+                help="Remove blocks, arrows, entries, transformer steps, files and test environments"
+                checked={status.permissions.delete}
+                onChange={allowed => void setPermission('delete', allowed)}
+              />
+            </List>
+          </Box>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Done</Button>

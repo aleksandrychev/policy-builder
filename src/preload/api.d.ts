@@ -101,10 +101,20 @@ export interface TestProblem {
 }
 
 // The MCP server AI agents connect to: whether it's on, and what an agent needs to reach it.
+// What AI agents may do; reading the project is always allowed.
+export interface McpPermissions {
+  delete: boolean;
+  edit: boolean;
+  files: boolean;
+  projects: boolean;
+  testing: boolean;
+}
+
 export interface McpStatus {
   enabled: boolean;
   error: string | null;
   name: string;
+  permissions: McpPermissions;
   token: string | null;
   url: string | null;
 }
@@ -327,6 +337,8 @@ declare global {
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
       /** Turns the MCP server Claude Code connects to on or off. */
       mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
+      /** What AI agents may do: tools that are off aren't offered to them. */
+      mcpSetPermissions: (permissions: McpPermissions) => Promise<McpStatus>;
       mcpStatus: () => Promise<McpStatus>;
       /** Answers a tool call from Claude Code (onMcpToolRequest) from the project state. */
       mcpToolResult: (requestId: string, result: { content: string; ok: boolean }) => Promise<void>;

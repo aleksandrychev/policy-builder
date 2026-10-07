@@ -11,6 +11,7 @@ import type {
   HubState,
   ImageSearch,
   MasterfilesVersions,
+  McpPermissions,
   McpStatus,
   OpenedProject,
   OperationResult,
@@ -105,6 +106,7 @@ const api = {
   onMcpToolRequest,
   mcpStatus: (): Promise<McpStatus> => invoke('mcp:status'),
   mcpSetEnabled: (enabled: boolean): Promise<McpStatus> => invoke('mcp:set-enabled', enabled),
+  mcpSetPermissions: (permissions: McpPermissions): Promise<McpStatus> => invoke('mcp:set-permissions', permissions),
   mcpToolResult: (requestId: string, result: { content: string; ok: boolean }): Promise<void> => invoke('mcp:tool-result', requestId, result),
   /** Each step of a running Build or SSH deploy as it starts: build, lint, promises, copy, validate, install, update, policy. */
   onDeployProgress,

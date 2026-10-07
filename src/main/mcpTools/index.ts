@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { registerCanvasTools } from './canvas';
 import { registerDefinitionTools } from './definitions';
+import { type McpPermissions, gatedServer } from './permissions';
 import { registerProjectTools } from './project';
 import { type CallWindow, answerWith } from './shared';
 import { registerTestTools } from './testing';
@@ -15,7 +16,9 @@ export const MCP_INSTRUCTIONS = `This server is CFEngine Policy Builder, a deskt
 
 Change the project only through these tools: the app generates the .cf files and cfbs.json from its blocks on save, so editing those files directly is lost (or refused) on the next save. Each edit shows on the user's canvas and is one undo step there; nothing is written to disk until the user saves. Start with get_project_overview, look a block type up with get_block_type before adding or changing one, and read get_generated_policy to check the result.`;
 
-export function registerBuilderTools(server: McpServer, call: CallWindow) {
+// Only the tools the user allows (permissions.ts).
+export function registerBuilderTools(mcp: McpServer, call: CallWindow, permissions: McpPermissions) {
+  const server = gatedServer(mcp, permissions);
   const answer = answerWith(call);
   registerProjectTools(server, answer);
   registerCanvasTools(server, answer);

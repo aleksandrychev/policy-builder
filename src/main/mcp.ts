@@ -8,6 +8,7 @@ import type { AddressInfo } from 'net';
 import { join } from 'path';
 
 import { MCP_INSTRUCTIONS, registerBuilderTools } from './mcpTools/index';
+import { type McpPermissions, checkedPermissions, isToolAllowed } from './mcpTools/permissions';
 
 /**
  * Claude Code connects to the open project over MCP (.claude/ai-agent-plan.md):
@@ -30,6 +31,7 @@ const SERVER_NAME = 'cfengine-policy-builder';
 
 interface McpSettings {
   enabled: boolean;
+  permissions: McpPermissions;
   // Kept so an agent's MCP settings stay valid across restarts.
   port?: number;
   token?: string;
@@ -40,6 +42,7 @@ export interface McpStatus {
   error: string | null;
   // The server's name in an agent's MCP settings.
   name: string;
+  permissions: McpPermissions;
   // Sent as `Authorization: Bearer <token>`.
   token: string | null;
   url: string | null;
@@ -50,15 +53,16 @@ const settingsPath = () => join(app.getPath('userData'), 'mcp.json');
 async function readSettings(): Promise<McpSettings> {
   try {
     const parsed: unknown = JSON.parse(await fs.readFile(settingsPath(), 'utf-8'));
-    if (typeof parsed !== 'object' || parsed === null) return { enabled: false };
-    const { enabled, port, token } = parsed as Record<string, unknown>;
+    if (typeof parsed !== 'object' || parsed === null) return { enabled: false, permissions: checkedPermissions(null) };
+    const { enabled, permissions, port, token } = parsed as Record<string, unknown>;
     return {
       enabled: enabled === true,
+      permissions: checkedPermissions(permissions),
       ...(Number.isInteger(port) && (port as number) > 1024 && (port as number) < 65536 ? { port: port as number } : {}),
       ...(typeof token === 'string' && /^[A-Za-z0-9_-]{32,}$/.test(token) ? { token } : {})
     };
   } catch {
-    return { enabled: false };
+    return { enabled: false, permissions: checkedPermissions(null) };
   }
 }
 
@@ -67,9 +71,12 @@ const writeSettings = (settings: McpSettings) => fs.writeFile(settingsPath(), JS
 let server: Server | null = null;
 let current: { port: number; token: string } | null = null;
 let lastError: string | null = null;
+// What agents may do; read on every request, so a change applies at once.
+let permissions: McpPermissions = checkedPermissions(null);
 
 export function mcpStatus(enabled: boolean): McpStatus {
   return {
+    permissions,
     enabled,
     url: current ? `http://127.0.0.1:${current.port}/mcp` : null,
     token: current?.token ?? null,
@@ -100,6 +107,8 @@ interface PendingTool {
 const pendingTools = new Map<string, PendingTool>();
 
 export function callWindowTool(name: string, input: unknown): Promise<string> {
+  // A client may call a tool from a list it fetched before the user turned it off.
+  if (!isToolAllowed(name, permissions)) return Promise.reject(new Error(`${name} is turned off in Policy Builder (Connect an AI agent)`));
   const window = BrowserWindow.getAllWindows().find(item => !item.isDestroyed());
   if (!window) return Promise.reject(new Error('CFEngine Policy Builder has no window open'));
   const sender = window.webContents;
@@ -130,7 +139,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, port: number, t
   }
   // Stateless: a server and transport per request.
   const mcp = new McpServer({ name: SERVER_NAME, version: app.getVersion() }, { instructions: MCP_INSTRUCTIONS });
-  registerBuilderTools(mcp, callWindowTool);
+  registerBuilderTools(mcp, callWindowTool, permissions);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
     void transport.close();
@@ -169,7 +178,7 @@ async function start(): Promise<void> {
   }
   current = { port, token };
   lastError = null;
-  await writeSettings({ enabled: true, port, token });
+  await writeSettings({ enabled: true, port, token, permissions });
 }
 
 function stop(): Promise<void> {
@@ -209,6 +218,15 @@ export function registerMcpHandlers(isTrustedFrame: (frame: WebFrameMain | null)
     })
   );
   ipcMain.handle(
+    'mcp:set-permissions',
+    trusted(async (_event, value: unknown) => {
+      permissions = checkedPermissions(value);
+      const settings = await readSettings();
+      await writeSettings({ ...settings, permissions });
+      return mcpStatus(settings.enabled);
+    })
+  );
+  ipcMain.handle(
     'mcp:tool-result',
     trusted((event, requestId: unknown, result: unknown) => {
       const pending = typeof requestId === 'string' ? pendingTools.get(requestId) : undefined;
@@ -223,6 +241,7 @@ export function registerMcpHandlers(isTrustedFrame: (frame: WebFrameMain | null)
 
   // Enabled before: listening again from launch.
   void readSettings().then(settings => {
+    permissions = settings.permissions;
     if (settings.enabled) {
       start().catch(error => {
         lastError = error instanceof Error ? error.message : String(error);
