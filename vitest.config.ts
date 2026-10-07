@@ -28,7 +28,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/test/**', 'src/**/*.d.ts'],
+      // main.tsx mounts the app and preload/ is the contextBridge: both only run in Electron (e2e).
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/**/test/**', 'src/**/*.d.ts', 'src/renderer/src/main.tsx', 'src/preload/**'],
       reporter: ['text-summary', 'lcov']
     },
     projects: [
