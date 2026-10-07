@@ -125,12 +125,19 @@ def in_namespace(expression: str, local: set[str]) -> str:
     return CLASS_TOKEN.sub(qualified, expression)
 
 
+def in_own_namespace(text: str, ns: str) -> str:
+    """`$(vars.x)` as `$(<ns>:vars.x)`: in a namespace the short form only expands in a promiser,
+    not in attribute values or function arguments, where it stays literal text."""
+    return OWN_VARS.sub(lambda match: f"{match.group(1)}{ns}:vars.", text)
+
+
 def combined(expressions: list[str]) -> str:
     """Class expressions ANDed: "a.!b", parenthesised where they hold an OR."""
     parts = [f"({e})" if "|" in e and len(expressions) > 1 else e for e in expressions if e]
     return ".".join(parts)
 
 
+OWN_VARS = re.compile(r"([$@][({])vars\.")
 VARIABLE_REF = r"[$@](?:\([\w.:\[\]]*\)|\{[\w.:\[\]]*\})"
 CLASS_TOKEN = re.compile(rf"\|\||[|.&!()]|(?:[\w:]|{VARIABLE_REF})+")
 CALL_TOKEN = re.compile(rf"""\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|{VARIABLE_REF}|[\w.:+-]+|[(),])""")
@@ -505,7 +512,8 @@ class FileCompiler:
             sections.append(self.entry_bundle(sequenced, names, groups))
             sections.extend(self.group_bundle(group, sequenced, names) for group in groups.values())
         sections.extend(self.builder_body(name) for name in sorted(self.bodies))
-        policy = format_policy("\n\n".join(sections) + "\n")
+        body = in_own_namespace("\n\n".join(sections[1:]), self.ns)
+        policy = format_policy(sections[0] + "\n\n" + body + "\n")
         self.source_map = locate_chunks(policy, self.chunks)
         return policy
 
