@@ -7,7 +7,11 @@ import { DEFAULT_PERMISSIONS, type McpPermissions, checkedPermissions, isToolAll
 // The tools an agent is offered under these permissions.
 function offered(permissions: McpPermissions): string[] {
   const names: string[] = [];
-  const server = { registerTool: (name: string) => names.push(name) } as unknown as McpServer;
+  const server = {
+    registerTool: (name: string) => names.push(name),
+    registerResource: () => undefined,
+    registerPrompt: () => undefined
+  } as unknown as McpServer;
   registerBuilderTools(server, async () => '', permissions);
   return names;
 }
@@ -22,7 +26,7 @@ describe('MCP permissions', () => {
   it('offers everything by default', () => {
     const names = offered(DEFAULT_PERMISSIONS);
     expect(names).toHaveLength(new Set(names).size);
-    for (const name of ['create_project', 'add_file', 'add_block', 'remove_block', 'run_tests', 'get_project_overview', 'begin_work'])
+    for (const name of ['create_project', 'add_file', 'add_block', 'remove_block', 'run_tests', 'get_project_overview', 'get_guide', 'begin_work'])
       expect(names).toContain(name);
   });
 

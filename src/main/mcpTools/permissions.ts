@@ -21,6 +21,7 @@ export const DEFAULT_PERMISSIONS: McpPermissions = { delete: true, edit: true, f
 const GROUP_OF: Record<string, Group> = {
   // Locking and unlocking the editor: always allowed.
   begin_work: 'read',
+  get_guide: 'read',
   end_work: 'read',
   get_project_status: 'read',
   get_project_overview: 'read',
