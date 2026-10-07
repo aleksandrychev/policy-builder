@@ -20,9 +20,9 @@ Policy Builder builds CFEngine policy from blocks on a canvas. You change the pr
 3. **Plan from the block catalog**: list_block_types, then get_block_type for each type you'll use. Use its parameter names, options and required fields exactly; values are checked like the Properties form checks them.
 4. **Edit**: add_block, update_block, connect; variables and classes with add_entry; transformers; conditions. Each call is one undo step for the user.
 5. **tidy_file** after adding or connecting several blocks, so the canvas reads top to bottom in run order.
-6. **Check**: get_warnings (empty required parameters, values a parameter doesn't take), then get_generated_policy for the file you changed: read the promises you meant to write.
+6. **Check**: get_warnings (empty required parameters, values a parameter doesn't take, and notCompiled: blocks or entries the policy leaves out, with why), then get_generated_policy for the file you changed: read the promises you meant to write.
 7. **save_project** when the change is complete.
-8. **Test** when the user asks for it or a change is risky: see the testing guide.
+8. **Test** when the user asks for it, a change is risky, or you built or translated a whole policy: offer it before saying you're done. See the testing guide.
 9. **end_work** with a one-sentence summary.
 
 If a call comes back "Stopped by the user", stop at once: say where you were and ask what to do.
@@ -62,7 +62,7 @@ const variables = `# Variables, classes, references and transformers
 
 ## Namespaces and references
 - Every policy file is a CFEngine namespace (get_project_overview shows it). It's fixed when the file is created: renaming the file doesn't change it.
-- A variable lives in its file's \`vars\` bundle. Reference it as \`$(vars.name)\` in the same file and \`$(<namespace>:vars.name)\` from another file. In a Mustache template: \`{{{vars.<namespace>:vars.name}}}\` (lists: a section).
+- A variable lives in its file's \`vars\` bundle. Reference it as \`$(vars.name)\` in the same file (the generated policy writes it \`$(<namespace>:vars.name)\`, which is what CFEngine needs outside a promiser) and \`$(<namespace>:vars.name)\` from another file. In a Mustache template: \`{{{vars.<namespace>:vars.name}}}\` (lists: a section).
 - A class from Define Class: \`name\` in the same file, \`<namespace>:name\` from another file.
 - list_variables and list_classes give every definition with the exact reference forms: use them instead of building names yourself.
 
@@ -102,6 +102,7 @@ Test environments are Docker containers running real CFEngine: the policy set is
 Reading results:
 - A problem names the block it came from: fix that block, then run again.
 - The first run after a host is set up does most of the work (installing, writing files). If a run reports everything kept on a fresh host, read the log (get_test_results with logLines) for errors from that first run.
+- **not converged**: a host still repaired something in its last run, so a promise changes the host every time (a command that always runs, a file rewritten each run). complianceByRun shows it; find the block before calling the policy done.
 - Policy changed since the last run shows as \`policyChangedSince\`: run again to test the current blocks.`;
 
 const pitfalls = `# Pitfalls
