@@ -61,6 +61,9 @@ const testEnvironmentsSlice = createSlice({
       Object.assign(host, action.payload.changes);
       if (!host.image) delete host.image;
     },
+    environmentRemoved(state, action: PayloadAction<{ environmentId: string }>) {
+      return state.filter(environment => environment.id !== action.payload.environmentId);
+    },
     // The environment's variables (no hostId), or one host's own.
     envVarsChanged(state, action: PayloadAction<{ env: Record<string, string>; environmentId: string; hostId?: string }>) {
       const environment = find(state, action.payload.environmentId);
@@ -73,6 +76,16 @@ const testEnvironmentsSlice = createSlice({
   }
 });
 
-export const { environmentAdded, environmentChanged, environmentIdChanged, hubChanged, hostAdded, hostRemoved, hostRenamed, hostChanged, envVarsChanged } =
-  testEnvironmentsSlice.actions;
+export const {
+  environmentAdded,
+  environmentChanged,
+  environmentRemoved,
+  environmentIdChanged,
+  hubChanged,
+  hostAdded,
+  hostRemoved,
+  hostRenamed,
+  hostChanged,
+  envVarsChanged
+} = testEnvironmentsSlice.actions;
 export default testEnvironmentsSlice.reducer;

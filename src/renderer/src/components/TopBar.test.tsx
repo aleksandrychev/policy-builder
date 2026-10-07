@@ -15,6 +15,7 @@ function renderTopBar(overrides: Partial<Props> = {}) {
     dirty: false,
     masterfiles: null,
     onOpenSettings: vi.fn(),
+    onConnectAgent: vi.fn(),
     onSave: vi.fn(),
     onTabChange: vi.fn(),
     projectName: 'Web servers',

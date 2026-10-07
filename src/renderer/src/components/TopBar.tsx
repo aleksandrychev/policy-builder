@@ -5,6 +5,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { Box, Button, ButtonBase, IconButton, Typography, alpha, useTheme } from '@mui/material';
 
 import type { ProjectType } from '../store/projectSlice/types';
@@ -70,6 +71,8 @@ interface TopBarProps {
   masterfiles: string | null;
   // The open file's namespace.
   namespace: string;
+  // Opens Connect an AI agent.
+  onConnectAgent: () => void;
   onOpenSettings: () => void;
   // Saving writes cfbs.json, the builder's data and the generated policy.
   onSave: () => void;
@@ -110,6 +113,7 @@ export function TopBar({
   blockCount,
   activeTab,
   onTabChange,
+  onConnectAgent,
   onOpenSettings,
   onSave,
   savedToDisk,
@@ -167,6 +171,9 @@ export function TopBar({
       <ViewSwitch active={activeTab} badges={tabBadges} onChange={onTabChange} />
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2, whiteSpace: 'nowrap' }}>
+        <Button size="small" startIcon={<SmartToyOutlinedIcon />} onClick={onConnectAgent} title="Let an AI agent such as Claude Code work on this project">
+          AI agent
+        </Button>
         <Typography sx={{ fontSize: 12, color: 'text.muted' }}>{blockCount} blocks</Typography>
         <Button
           variant="contained"

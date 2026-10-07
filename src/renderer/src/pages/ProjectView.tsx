@@ -46,6 +46,7 @@ import {
   clamp,
   useLayoutSettings
 } from '../hooks/useLayoutSettings';
+import { useMcpCanvas } from '../mcp/useMcpTools';
 import { markDeploySeen, useDeployActivity } from '../project/deployRuns';
 import { markTestActivitySeen, useTestActivity } from '../project/testRuns';
 import { useCompiledPolicy } from '../project/useCompiledPolicy';
@@ -266,6 +267,8 @@ function DragPreviewCard({ badge, label }: DragPreview) {
 interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
+  // Opens Connect an AI agent (the MCP server).
+  onConnectAgent: () => void;
   onOpenSettings: () => void;
   // Opens the project from disk again (Deployment, after pulling commits into it).
   onReload: () => Promise<void>;
@@ -274,7 +277,7 @@ interface ProjectViewProps {
 }
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -729,6 +732,17 @@ export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }:
     return true;
   };
 
+  useMcpCanvas({
+    selectedInstanceId,
+    sizeOf,
+    nodeHeight: nodeId => measured[nodeId]?.height,
+    fitView: () => requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.2, maxZoom: 1, duration: 300 })),
+    openFile: fileId => {
+      dispatch(fileSelected({ fileId }));
+      setActiveTab(0);
+    }
+  });
+
   useKeyboardShortcuts({
     canvasActive: activeTab === 0,
     zoomControlsRef,
@@ -939,6 +953,7 @@ export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }:
           tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
           onSave={onSave}
           onOpenSettings={onOpenSettings}
+          onConnectAgent={onConnectAgent}
           savedToDisk={Boolean(project.path)}
           type={project.type}
         />

@@ -84,6 +84,9 @@ let subscribed = false;
 
 const runtimeOf = (environmentId: string) => runtimes.get(environmentId) ?? EMPTY;
 
+// An environment's runs as they stand, outside React (Claude Code's test tools).
+export const environmentRuntime = (environmentId: string): EnvironmentRuntime => runtimeOf(environmentId);
+
 function update(environmentId: string, change: (runtime: EnvironmentRuntime) => Partial<EnvironmentRuntime>) {
   const current = runtimeOf(environmentId);
   runtimes.set(environmentId, { ...current, ...change(current) });

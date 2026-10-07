@@ -11,6 +11,7 @@ import type {
   HubState,
   ImageSearch,
   MasterfilesVersions,
+  McpStatus,
   OpenedProject,
   OperationResult,
   ProjectContent,
@@ -42,7 +43,8 @@ interface LayoutSettings {
   rightSidebarFraction: number;
 }
 
-export type MenuAction = 'close-requested' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
+export type MenuAction =
+  'close-requested' | 'connect-agent' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:new-project': 'new-project',
@@ -51,6 +53,7 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:open-recent': 'open-recent',
   'menu:save': 'save',
   'menu:project-settings': 'project-settings',
+  'menu:connect-agent': 'connect-agent',
   'menu:try-demo': 'try-demo',
   // Not a menu item: main asking whether a window with unsaved changes may close.
   'window:close-requested': 'close-requested',
@@ -79,6 +82,13 @@ function onTestEnvEvent(callback: (runId: string, event: TestEnvEvent) => void):
   return () => ipcRenderer.removeListener('testenv:event', listener);
 }
 
+// Claude Code's tool calls (over MCP), answered from the project state with mcpToolResult.
+function onMcpToolRequest(callback: (requestId: string, name: string, input: unknown) => void): () => void {
+  const listener = (_event: unknown, requestId: string, name: string, input: unknown) => callback(requestId, name, input);
+  ipcRenderer.on('mcp:tool-request', listener);
+  return () => ipcRenderer.removeListener('mcp:tool-request', listener);
+}
+
 function onDeployProgress(callback: (stage: string) => void): () => void {
   const listener = (_event: unknown, stage: string) => callback(stage);
   ipcRenderer.on('deploy:progress', listener);
@@ -92,6 +102,10 @@ const api = {
   /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
   onMenuAction,
   onTestEnvEvent,
+  onMcpToolRequest,
+  mcpStatus: (): Promise<McpStatus> => invoke('mcp:status'),
+  mcpSetEnabled: (enabled: boolean): Promise<McpStatus> => invoke('mcp:set-enabled', enabled),
+  mcpToolResult: (requestId: string, result: { content: string; ok: boolean }): Promise<void> => invoke('mcp:tool-result', requestId, result),
   /** Each step of a running Build or SSH deploy as it starts: build, lint, promises, copy, validate, install, update, policy. */
   onDeployProgress,
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
