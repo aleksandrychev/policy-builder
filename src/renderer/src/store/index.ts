@@ -10,6 +10,7 @@ import filesReducer from './filesSlice';
 import groupsReducer from './groupsSlice';
 import { withHistory } from './history';
 import projectReducer from './projectSlice';
+import testEnvironmentsReducer from './testEnvironmentsSlice';
 
 const rootReducer = withHistory(
   combineReducers({
@@ -19,7 +20,8 @@ const rootReducer = withHistory(
     edges: edgesReducer,
     files: filesReducer,
     groups: groupsReducer,
-    project: projectReducer
+    project: projectReducer,
+    testEnvironments: testEnvironmentsReducer
   })
 );
 

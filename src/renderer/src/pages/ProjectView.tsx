@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import { Box, Button, Paper, Popover, Stack, Typography } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { Box, Button, CircularProgress, Paper, Popover, Stack, Typography } from '@mui/material';
 
 import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { ReactFlowInstance } from '@xyflow/react';
@@ -11,22 +12,30 @@ import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType, resolveBlockShape } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
-import { type ChainOwner, dataFootprint } from '../canvas/dataChains';
+import type { ChainOwner } from '../canvas/dataChains';
 import { executionOrder } from '../canvas/executionOrder';
 import { describeFileCondition } from '../canvas/fileCondition';
-import { GATE_EDGE_PREFIX, GATE_LIFT, GATE_SPACE, type Gate, deriveGates, gateKey } from '../canvas/gates';
-import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition, tidyLayout } from '../canvas/layout';
+import { GATE_EDGE_PREFIX, type Gate, deriveGates, gateKey } from '../canvas/gates';
+import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition } from '../canvas/layout';
+import { tidyPositions } from '../canvas/tidy';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
+import { DeploymentView } from '../components/DeploymentView';
 import { CANVAS_DROPPABLE_ID, type CanvasEdge, type CanvasNode, FlowCanvas, type NodeSizes, type ZoomControls } from '../components/FlowCanvas';
+import { GeneratedPolicyView } from '../components/GeneratedPolicyView';
 import { GroupPanel } from '../components/GroupPanel';
 import { PolicyFileExplorer } from '../components/PolicyFileExplorer';
+import { ProjectStatusLabel } from '../components/ProjectStatusLabel';
 import { FileSettingsPanel, PropertiesPanel } from '../components/PropertiesPanel';
 import type { NewClassDefinition } from '../components/PropertiesPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
+import { TestResultsView } from '../components/TestResultsView';
 import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
+import { ConditionSection } from '../components/properties/ConditionSection';
+import { RunsWhenSection } from '../components/properties/RunsWhenSection';
+import { buildClassNameOptions } from '../components/properties/classOptions';
 import {
   LEFT_SIDEBAR_MAX,
   LEFT_SIDEBAR_MIN,
@@ -37,6 +46,9 @@ import {
   clamp,
   useLayoutSettings
 } from '../hooks/useLayoutSettings';
+import { markDeploySeen, useDeployActivity } from '../project/deployRuns';
+import { markTestActivitySeen, useTestActivity } from '../project/testRuns';
+import { useCompiledPolicy } from '../project/useCompiledPolicy';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
   blockAdded,
@@ -86,6 +98,7 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileConditionRemoved,
+  fileDescriptionChanged,
   fileRemoved,
   fileRenamed,
   fileSelected,
@@ -95,7 +108,15 @@ import {
 } from '../store/filesSlice';
 import { collectFolderDescendants } from '../store/filesSlice/fileTree';
 import { selectCurrentFile, selectCurrentFileId, selectFiles, selectFolders } from '../store/filesSlice/selectors';
-import { groupColorChanged, groupRenamed } from '../store/groupsSlice';
+import {
+  groupColorChanged,
+  groupConditionClassNameChanged,
+  groupConditionEnabled,
+  groupConditionModeChanged,
+  groupConditionRemoved,
+  groupIncomingModeChanged,
+  groupRenamed
+} from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
 import { definedNames } from './pasteCopies';
@@ -111,7 +132,50 @@ const GROUP_KEY = navigator.platform.startsWith('Mac') ? '⌘G' : 'Ctrl+G';
 const selectionOf = (multiSelectedIds: string[], selectedInstanceId: string | null): string[] =>
   multiSelectedIds.length > 0 ? multiSelectedIds : selectedInstanceId ? [selectedInstanceId] : [];
 
-const TAB_PLACEHOLDER_TEXT = ['', 'Generated policy view coming soon.', 'Test results view coming soon.'];
+// On the Test Results tab's name: a spinner while an environment action runs, then a
+// check (or a red dot when it failed) until the tab is opened.
+function TestActivityBadge() {
+  const { outcome, running } = useTestActivity();
+  if (running) return <CircularProgress size={12} thickness={5} aria-label="Test environment busy" />;
+  if (outcome === 'ok') return <CheckCircleIcon color="success" sx={{ fontSize: 14 }} aria-label="Test environment action done" />;
+  if (outcome === 'error')
+    return <Box component="span" aria-label="Test environment action failed" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />;
+  return null;
+}
+
+// The Deployment tab name: a spinner while a Build or deploy runs, then how it ended until looked at.
+function DeployActivityBadge({ path }: { path: string | null }) {
+  const { outcome, running } = useDeployActivity(path);
+  if (running) return <CircularProgress size={12} thickness={5} aria-label="Deployment busy" />;
+  if (outcome === 'ok') return <CheckCircleIcon color="success" sx={{ fontSize: 14 }} aria-label="Deployment done" />;
+  if (outcome === 'error')
+    return <Box component="span" aria-label="Deployment failed" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />;
+  return null;
+}
+
+// The tabs besides the canvas.
+function OtherTab({
+  tab,
+  dirty,
+  onOpenTests,
+  onReload,
+  onSave,
+  onShowBlock,
+  ...policy
+}: {
+  dirty: boolean;
+  onOpenTests: () => void;
+  onReload: () => Promise<void>;
+  onSave: () => Promise<boolean>;
+  onShowBlock: (fileId: string, id: string) => void;
+  tab: number;
+} & Parameters<typeof GeneratedPolicyView>[0]) {
+  if (tab === 1) return <GeneratedPolicyView {...policy} />;
+  if (tab === 3)
+    return <DeploymentView compiled={policy.compiled} dirty={dirty} onOpenTests={onOpenTests} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
+  return <TestResultsView onShowBlock={onShowBlock} />;
+}
+
 function initialParams(descriptor: BlockDescriptor): Record<string, string> {
   const { parameters } = resolveBlockShape(descriptor, undefined);
   return Object.fromEntries(parameters.map(parameter => [parameter.name, String(parameter.default ?? '')]));
@@ -134,6 +198,7 @@ function CurrentFileSettings() {
       onRemove={() => dispatch(fileConditionRemoved({ fileId }))}
       onModeChange={mode => dispatch(fileConditionModeChanged({ fileId, mode }))}
       onClassNameChange={className => dispatch(fileConditionClassNameChanged({ fileId, className }))}
+      onDescriptionChange={description => dispatch(fileDescriptionChanged({ fileId, description }))}
     />
   );
 }
@@ -198,12 +263,18 @@ function DragPreviewCard({ badge, label }: DragPreview) {
   );
 }
 
-/**
- * The open project. `cfbs.json` persistence (schema_version, conditions,
- * disk writes) isn't wired up — see architecture-plan.md open issues #3-#5
- * — so block instances only live in the in-memory canvas slice for now.
- */
-export default function ProjectView() {
+interface ProjectViewProps {
+  // Unsaved changes since the last save (see project/useProjectSession.ts).
+  dirty: boolean;
+  onOpenSettings: () => void;
+  // Opens the project from disk again (Deployment, after pulling commits into it).
+  onReload: () => Promise<void>;
+  // Resolves with whether the project ended up saved.
+  onSave: () => Promise<boolean>;
+}
+
+/** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
+export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -218,6 +289,8 @@ export default function ProjectView() {
   const edges = useMemo(() => allEdges.filter(edge => edge.fileId === currentFileId), [allEdges, currentFileId]);
   const derivedPositions = useAppSelector(selectDerivedNodePositions);
   const [activeTab, setActiveTab] = useState(0);
+  // Generated Policy shows it; Deployment traces build problems to blocks with its source map.
+  const compiled = useCompiledPolicy(activeTab === 1 || activeTab === 3);
   const {
     selectedInstanceId,
     setSelectedInstanceId,
@@ -261,6 +334,18 @@ export default function ProjectView() {
   const canRedo = useAppSelector(state => state.history.future.length > 0);
   // In-app "full screen": side panels hidden, properties as an overlay.
   const [maximized, setMaximized] = useState(false);
+  // Test Results and Deployment have their own layout: no block palette or Properties panel.
+  const showSidebars = !maximized && activeTab < 2;
+  const testActivity = useTestActivity();
+  // Looking at the Test Results tab acknowledges how the last action ended.
+  useEffect(() => {
+    if (activeTab === 2 && testActivity.outcome) markTestActivitySeen();
+  }, [activeTab, testActivity.outcome]);
+  const projectPath = project?.path ?? null;
+  const deployActivity = useDeployActivity(projectPath);
+  useEffect(() => {
+    if (activeTab === 3 && deployActivity.outcome) markDeploySeen(projectPath);
+  }, [activeTab, deployActivity.outcome, projectPath]);
   const [addBlockAnchor, setAddBlockAnchor] = useState<HTMLElement | null>(null);
   const [tidyConfirmOpen, setTidyConfirmOpen] = useState(false);
   const [convertTargetId, setConvertTargetId] = useState<string | null>(null);
@@ -379,26 +464,31 @@ export default function ProjectView() {
   // change selectedInstanceId — unlike the palette's addBlockToCanvas, the
   // user's focus should stay on the block whose condition they're editing,
   // not jump to the class they just created.
-  const handleConditionCreateClass = (forInstanceId: string, definition: NewClassDefinition, entryId?: string) => {
+  const addClassBlock = (definition: NewClassDefinition) => {
     const defineClass = blockDescriptorsById.get('define-class');
     if (!currentFileId || !defineClass) return;
+    dispatch(
+      blockAdded({
+        blockId: 'define-class',
+        fileId: currentFileId,
+        label: definition.className,
+        params: {},
+        position: nextStackPosition(instances, sizeOf),
+        entries: [
+          newDefinitionEntry(defineClass, {
+            params: { [defineClass.entries?.name_param ?? 'class_name']: definition.className, ...definition.params },
+            valueSourceId: definition.valueSourceId,
+            classRefs: definition.classRefs
+          })
+        ]
+      })
+    );
+  };
+
+  const handleConditionCreateClass = (forInstanceId: string, definition: NewClassDefinition, entryId?: string) => {
+    if (!currentFileId || !blockDescriptorsById.get('define-class')) return;
     asOneStep(() => {
-      dispatch(
-        blockAdded({
-          blockId: 'define-class',
-          fileId: currentFileId,
-          label: definition.className,
-          params: {},
-          position: nextStackPosition(instances, sizeOf),
-          entries: [
-            newDefinitionEntry(defineClass, {
-              params: { [defineClass.entries?.name_param ?? 'class_name']: definition.className, ...definition.params },
-              valueSourceId: definition.valueSourceId,
-              classRefs: definition.classRefs
-            })
-          ]
-        })
-      );
+      addClassBlock(definition);
       dispatch(conditionClassNameChanged({ instanceId: forInstanceId, entryId, className: definition.className }));
     });
   };
@@ -551,17 +641,18 @@ export default function ProjectView() {
     setSelectedGateKey(null);
   };
 
+  // A block or group of the open file, selected (Generated Policy and Problems link to them).
+  const selectInFile = (id: string) => {
+    if (groups.some(group => group.id === id)) handleSelectGroup(id);
+    else {
+      handleSelectGroup(null);
+      setSelectedInstanceId(id);
+    }
+  };
+
   const handleTidy = () => {
-    const order = executionOrder(instances, edges, blockDescriptorsById);
-    const footprintOf = (instance: BlockInstance) => {
-      const chains = currentFileId ? dataFootprint(instance, currentFileId, nodeId => measured[nodeId]?.height, blockDescriptorsById) : { height: 0, left: 0 };
-      // With chains beside the block, its gate rises above them (see deriveGates).
-      const lifted = Boolean(instance.condition) && chains.left > 0;
-      return { above: lifted ? GATE_LIFT : 0, height: chains.height, left: Math.max(chains.left, instance.condition ? GATE_SPACE : 0) };
-    };
     asOneStep(() => {
-      const groupOf = (instance: BlockInstance) => (groups.some(group => group.id === instance.groupId) ? instance.groupId : undefined);
-      dispatch(blocksMoved({ positions: tidyLayout(instances, edges, order, sizeOf, footprintOf, blockDescriptorsById, groupOf) }));
+      dispatch(blocksMoved({ positions: tidyPositions(instances, edges, groups, currentFileId, sizeOf, nodeId => measured[nodeId]?.height) }));
       // Gates and data-chain nodes go back to their default spots beside their blocks.
       if (currentFileId) dispatch(derivedNodePositionsClearedForFile({ fileId: currentFileId }));
       // Frames go back to hugging their (re-laid-out) blocks.
@@ -581,7 +672,6 @@ export default function ProjectView() {
     announce,
     asOneStep,
     currentFileId,
-    files,
     instances,
     onPasted: selectOnly,
     sizeOf
@@ -597,7 +687,7 @@ export default function ProjectView() {
 
   useEffect(() => () => clearTimeout(statusMessageTimeoutRef.current), []);
 
-  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(instances, blockDescriptorsById), [instances]);
+  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId), [allInstances, currentFileId]);
 
   const handleEscape = () => {
     if (selectedGroup) setSelectedGroupId(null);
@@ -643,6 +733,7 @@ export default function ProjectView() {
     canvasActive: activeTab === 0,
     zoomControlsRef,
     onEscape: handleEscape,
+    onSave,
     onDelete: handleDeleteKey,
     onUndo: () => handleHistoryKey(false),
     onRedo: () => handleHistoryKey(true),
@@ -671,16 +762,19 @@ export default function ProjectView() {
     return index === -1 ? undefined : index + 1;
   };
   const selectedOrderNumber = selectedInstance ? orderNumberOf(selectedInstance.instanceId) : undefined;
-  const incomingArrows = selectedInstance
-    ? edges
-        .filter(edge => edge.target === selectedInstance.instanceId)
-        .map(edge => ({
+  const incomingArrowsOf = (targetId: string) =>
+    edges
+      .filter(edge => edge.target === targetId)
+      .map(edge => {
+        const group = groups.find(candidate => candidate.id === edge.source);
+        return {
           edgeId: edge.id,
           outcomes: edge.outcomes,
-          sourceLabel: instances.find(instance => instance.instanceId === edge.source)?.label ?? '(missing block)',
+          sourceLabel: group ? `group ${group.name}` : (instances.find(instance => instance.instanceId === edge.source)?.label ?? '(missing block)'),
           sourceOrder: orderNumberOf(edge.source)
-        }))
-    : [];
+        };
+      });
+  const incomingArrows = selectedInstance ? incomingArrowsOf(selectedInstance.instanceId) : [];
 
   const propertiesContent = (
     <>
@@ -693,6 +787,27 @@ export default function ProjectView() {
           key={selectedGroup.id}
           group={selectedGroup}
           members={membersOf(selectedGroup.id)}
+          condition={
+            <ConditionSection
+              condition={selectedGroup.condition}
+              scope="this group"
+              classNameOptions={buildClassNameOptions(allInstances, new Map(files.map(file => [file.id, file])), currentFileId)}
+              templateTokens={[]}
+              onEnable={() => dispatch(groupConditionEnabled({ groupId: selectedGroup.id }))}
+              onRemove={() => dispatch(groupConditionRemoved({ groupId: selectedGroup.id }))}
+              onModeChange={mode => dispatch(groupConditionModeChanged({ groupId: selectedGroup.id, mode }))}
+              onClassNameChange={className => dispatch(groupConditionClassNameChanged({ groupId: selectedGroup.id, className }))}
+            />
+          }
+          runsWhen={
+            <RunsWhenSection
+              arrows={incomingArrowsOf(selectedGroup.id)}
+              mode={selectedGroup.incomingMode ?? 'all'}
+              onModeChange={mode => dispatch(groupIncomingModeChanged({ groupId: selectedGroup.id, mode }))}
+              onOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
+              onRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
+            />
+          }
           orderOf={orderNumberOf}
           autoFocusName={freshGroupId === selectedGroup.id}
           onRename={name => dispatch(groupRenamed({ groupId: selectedGroup.id, name }))}
@@ -797,6 +912,7 @@ export default function ProjectView() {
               selectedInstance && dispatch(conditionClassNameChanged({ instanceId: selectedInstance.instanceId, entryId, className }))
             }
             onConditionCreateClass={(definition, entryId) => selectedInstance && handleConditionCreateClass(selectedInstance.instanceId, definition, entryId)}
+            onCreateClass={addClassBlock}
             onInventoryEnable={entryId => selectedInstance && dispatch(inventoryEnabled({ instanceId: selectedInstance.instanceId, entryId }))}
             onInventoryRemove={entryId => selectedInstance && dispatch(inventoryRemoved({ instanceId: selectedInstance.instanceId, entryId }))}
             onInventoryAttributeNameChange={(attributeName, entryId) =>
@@ -813,15 +929,22 @@ export default function ProjectView() {
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
         <TopBar
           projectName={project.name}
+          dirty={dirty}
+          masterfiles={project.masterfiles}
           namespace={currentFile?.namespace ?? ''}
           fileGate={describeFileCondition(currentFile?.condition)}
           blockCount={instances.length}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
+          onSave={onSave}
+          onOpenSettings={onOpenSettings}
+          savedToDisk={Boolean(project.path)}
+          type={project.type}
         />
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-          {!maximized && (
+          {showSidebars && (
             <>
               <Box
                 sx={{
@@ -863,6 +986,7 @@ export default function ProjectView() {
             <FlowCanvas
               // One React Flow per file: remounting fits the view to the file just opened.
               key={currentFileId ?? 'none'}
+              allInstances={allInstances}
               instances={instances}
               edges={edges}
               files={files}
@@ -963,12 +1087,30 @@ export default function ProjectView() {
               }
             />
           ) : (
-            <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography sx={{ color: 'text.muted' }}>{TAB_PLACEHOLDER_TEXT[activeTab]}</Typography>
-            </Box>
+            <OtherTab
+              tab={activeTab}
+              onSave={onSave}
+              onReload={onReload}
+              dirty={dirty}
+              onOpenTests={() => setActiveTab(2)}
+              compiled={compiled}
+              currentFileId={currentFileId}
+              selectedId={selectedGroupId ?? selectedInstanceId}
+              onSelect={id => selectInFile(id)}
+              onFollow={(fileId, id) => {
+                dispatch(fileSelected({ fileId }));
+                selectInFile(id);
+              }}
+              onShowBlock={(fileId, id) => {
+                // A problem's block (or group) on the canvas, selected.
+                dispatch(fileSelected({ fileId }));
+                setActiveTab(0);
+                selectInFile(id);
+              }}
+            />
           )}
 
-          {!maximized && (
+          {showSidebars && (
             <>
               <ResizeHandle label="Resize properties panel" orientation="vertical" onResize={handleRightResize} onResizeEnd={commitLayout} />
               <Box
@@ -1055,7 +1197,7 @@ export default function ProjectView() {
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusMessage ?? 'Ready'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Project: {project.name}</Typography>
+              <ProjectStatusLabel project={project} />
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>File: {currentFile ? `${currentFile.name}.cf` : '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>

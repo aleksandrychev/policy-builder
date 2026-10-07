@@ -5,9 +5,12 @@
 
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
-# collect_data_files, not collect_all: collect_all enumerates cfengine_cli.main,
-# which imports cf_remote and drags in ~27 MB of libcloud drivers.
+# collect_data_files, not collect_all: only the packages' data, no module sweep.
 datas = collect_data_files("cfengine_cli") + collect_data_files("cfbs")
+# cf-remote deploy copies its nt-discovery.sh to the hub.
+datas += collect_data_files("cf_remote")
+# The block descriptors the compiler reads (see cfpb_compiler.blocks_dir).
+datas += [("../blocks/*.json", "blocks"), ("../blocks/lib/*.json", "blocks/lib")]
 binaries = []
 
 # Compiled extension modules and the CFEngine grammar — invisible to static analysis.
@@ -17,7 +20,8 @@ for package in ("tree_sitter", "tree_sitter_cfengine"):
     binaries += package_binaries
 
 # Named so a missing module fails the build, not the packaged app.
-hiddenimports = ["cfengine_cli.format", "cfengine_cli.lint", "cfbs.pretty"]
+# cfbs.main is imported lazily by `init`; its own imports are all static.
+hiddenimports = ["cfengine_cli.format", "cfengine_cli.lint", "cfbs.main", "cfbs.pretty", "cf_remote.commands"]
 
 a = Analysis(
     ["cfpb_backend.py"],
@@ -28,16 +32,9 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    # Headless sidecar: no GUI toolkit, test framework, or cloud drivers. Tens of MB each.
-    #
-    # Fragile by upstream design: cfengine_cli/__init__.py os.listdir()s its own
-    # directory and __import__s every .py it finds, including main.py -> cf_remote
-    # -> libcloud. These excludes only hold because the PYZ leaves no .py files on
-    # disk for listdir to see. Anything that materialises them — noarchive=True,
-    # collect_all("cfengine_cli") instead of collect_data_files, upstream shipping
-    # .py files as data — makes the packaged app die on import while dev keeps
-    # working.
-    excludes=["tkinter", "pytest", "IPython", "cf_remote", "libcloud"],
+    # Headless sidecar: no GUI toolkit or test framework. Tens of MB each.
+    # cf_remote stays, for deploying: it brings ~27 MB of libcloud drivers along.
+    excludes=["tkinter", "pytest", "IPython"],
     noarchive=False,
 )
 

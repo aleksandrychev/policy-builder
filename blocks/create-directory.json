@@ -1,0 +1,60 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "create-directory",
+  "version": 1,
+  "name": "Create Directory",
+  "category": "Files",
+  "description": "Ensures directories exist with the given ownership and mode, parents included.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}/.",
+      "attributes": {
+        "create": "true",
+        "perms": {
+          "body": "mog",
+          "args": [
+            "{{mode}}",
+            "{{owner}}",
+            "{{group}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "Directory",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One absolute path per line. Missing parent directories are created too (mode 700).",
+      "path": "absolute"
+    },
+    {
+      "name": "mode",
+      "label": "Permissions",
+      "type": "string",
+      "required": true,
+      "default": "755",
+      "allowed_chars": "0-7"
+    },
+    {
+      "name": "owner",
+      "label": "Owner",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "group",
+      "label": "Group",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    }
+  ]
+}

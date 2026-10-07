@@ -1,0 +1,36 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "remove-directory",
+  "version": 1,
+  "name": "Remove Directory",
+  "category": "Files",
+  "description": "Deletes directories and everything in them.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "methods",
+      "promiser": "remove {{path}}",
+      "attributes": {
+        "usebundle": {
+          "bundle": "rm_rf",
+          "args": [
+            "{{path}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "Directory",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "path": "absolute",
+      "help": "One absolute path per line; the whole tree goes. A plain file at the path is removed too."
+    }
+  ]
+}

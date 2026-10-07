@@ -3,7 +3,7 @@ import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 import { decoratorsById } from '../../blocks/decorators';
 import { blockDescriptorsById } from '../../blocks/loadBlocks';
 import { groupCreated, groupRemoved } from '../groupsSlice/actions';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 import type { BlockInstance, ClassReference, Condition, DecoratorInstance, DefinitionEntry, EditableSubject, ParamBinding } from './types';
 
 // Field-level edits target the instance itself, one of its entries
@@ -218,6 +218,7 @@ const canvasSlice = createSlice({
   extraReducers: builder => {
     builder
       .addCase(projectCreated, () => [])
+      .addCase(projectLoaded, (_state, action) => action.payload.content.canvas)
       .addCase(groupCreated, (state, action) => {
         for (const instance of state) if (action.payload.instanceIds.includes(instance.instanceId)) instance.groupId = action.payload.id;
       })

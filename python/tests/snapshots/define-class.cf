@@ -1,0 +1,53 @@
+### source always-true
+    # Case 0
+    "always_true" expression => "any";
+
+### source always-false
+    # Case 1
+    "always_false" expression => "!any";
+
+### source combine-and
+    # Case 2
+    "combine_and" and => { "default:linux", "!default:debian" };
+
+### source combine-or
+    # Case 3
+    "combine_or" or => { "default:linux", "!default:debian" };
+
+### source check-file-exists
+    # Case 4
+    "check_file_exists" expression => fileexists("/etc/hosts");
+
+### source check-dir-exists
+    # Case 5
+    "check_dir_exists" expression => isdir("/etc/hosts");
+
+### source check-variable-defined
+    # Case 6
+    "check_variable_defined" expression => isvariable("snap:vars.literal");
+
+### source check-matches-pattern
+    # Case 7
+    "check_matches_pattern" expression => regcmp("h.*", "hello");
+
+### source check-values-equal
+    # Case 8
+    "check_values_equal" expression => strcmp("a", "b");
+
+### source check-greater-than
+    # Case 9
+    "check_greater_than" expression => isgreaterthan("hello", "1");
+
+### source check-less-than
+    # Case 10
+    "check_less_than" expression => islessthan("hello", "1");
+
+### source check-command-succeeds
+    # Case 11
+    "check_command_succeeds"
+      expression => returnszero("/bin/echo hello", "noshell"),
+      if => "agent";
+
+### source custom
+    # Case 12
+    "custom" expression => "default:linux";

@@ -22,8 +22,8 @@ export function filterIdentifierChars(value: string): string {
 }
 
 // A *reference* to an existing class (as opposed to a name being defined)
-// also needs to allow ':' — cross-file class references are namespace-
-// qualified as "namespace:name" (see projectDefinedTokens in classOptions.tsx).
+// also allows ':', for a class from another namespace: another file's
+// ("<ns>:name") or one a cfbs module defines.
 export function filterClassReferenceChars(value: string): string {
   return value.replace(/[^a-zA-Z0-9_:]/g, '');
 }

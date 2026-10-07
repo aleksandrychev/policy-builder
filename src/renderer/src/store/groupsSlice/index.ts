@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { blocksRemovedForFile } from '../canvasSlice';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 import { groupCreated, groupRemoved } from './actions';
 import type { BlockGroup, GroupColor } from './types';
 
@@ -24,11 +24,32 @@ const groupsSlice = createSlice({
     groupColorChanged(state, action: PayloadAction<{ color: GroupColor; groupId: string }>) {
       const group = state.find(item => item.id === action.payload.groupId);
       if (group) group.color = action.payload.color;
+    },
+    groupConditionEnabled(state, action: PayloadAction<{ groupId: string }>) {
+      const group = state.find(item => item.id === action.payload.groupId);
+      if (group && !group.condition) group.condition = { kind: 'class', mode: 'if', className: '' };
+    },
+    groupConditionRemoved(state, action: PayloadAction<{ groupId: string }>) {
+      const group = state.find(item => item.id === action.payload.groupId);
+      if (group) delete group.condition;
+    },
+    groupConditionModeChanged(state, action: PayloadAction<{ groupId: string; mode: 'if' | 'unless' }>) {
+      const group = state.find(item => item.id === action.payload.groupId);
+      if (group?.condition) group.condition.mode = action.payload.mode;
+    },
+    groupConditionClassNameChanged(state, action: PayloadAction<{ className: string; groupId: string }>) {
+      const group = state.find(item => item.id === action.payload.groupId);
+      if (group?.condition) group.condition.className = action.payload.className;
+    },
+    groupIncomingModeChanged(state, action: PayloadAction<{ groupId: string; mode: 'all' | 'any' }>) {
+      const group = state.find(item => item.id === action.payload.groupId);
+      if (group) group.incomingMode = action.payload.mode;
     }
   },
   extraReducers: builder => {
     builder
       .addCase(projectCreated, () => [])
+      .addCase(projectLoaded, (_state, action) => action.payload.content.groups)
       .addCase(groupCreated, (state, action) => {
         const { color, fileId, id, name } = action.payload;
         state.push({ color, fileId, id, name });
@@ -39,5 +60,15 @@ const groupsSlice = createSlice({
 });
 
 export { groupCreated, groupRemoved };
-export const { groupRenamed, groupColorChanged, groupFrameResized, groupFramesFitted } = groupsSlice.actions;
+export const {
+  groupRenamed,
+  groupColorChanged,
+  groupConditionEnabled,
+  groupConditionRemoved,
+  groupConditionModeChanged,
+  groupConditionClassNameChanged,
+  groupIncomingModeChanged,
+  groupFrameResized,
+  groupFramesFitted
+} = groupsSlice.actions;
 export default groupsSlice.reducer;

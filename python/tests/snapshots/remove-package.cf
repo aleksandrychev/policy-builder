@@ -1,0 +1,4 @@
+### example
+  # Case 0
+  packages:
+    "telnet" policy => "absent";

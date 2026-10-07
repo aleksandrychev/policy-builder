@@ -1,0 +1,79 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "set-config-values",
+  "version": 1,
+  "name": "Set Config Values",
+  "category": "File Contents",
+  "description": "Sets keys in a config file: updates, uncomments or adds each line.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "edit_line": {
+          "bundle": "set_line_based",
+          "args": [
+            {
+              "array_param": "settings"
+            },
+            {
+              "choose": "format",
+              "cases": {
+                "equals": "=",
+                "space": " "
+              }
+            },
+            {
+              "choose": "format",
+              "cases": {
+                "equals": "\\s*=\\s*",
+                "space": "\\s+"
+              }
+            },
+            ".*",
+            "\\s*#\\s*"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "help": "An absolute path, e.g. /etc/ssh/sshd_config or /etc/sysctl.conf.",
+      "path": "absolute"
+    },
+    {
+      "name": "format",
+      "label": "File format",
+      "type": "string",
+      "required": true,
+      "default": "space",
+      "options": [
+        {
+          "value": "space",
+          "label": "Key value",
+          "help": "sshd_config, login.defs, …"
+        },
+        {
+          "value": "equals",
+          "label": "key=value",
+          "help": "sysctl.conf, /etc/default/*, …"
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "label": "Settings",
+      "type": "text",
+      "required": true,
+      "help": "One per line: the key, then its value after a space or =, e.g. PermitRootLogin no. Other lines are left alone."
+    }
+  ]
+}

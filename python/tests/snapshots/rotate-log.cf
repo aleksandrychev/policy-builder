@@ -1,0 +1,8 @@
+### example
+  # Case 0
+  vars:
+    "case_0_path" slist => { "/var/log/app.log", "/var/log/worker.log" };
+
+  methods:
+    "rotate $(case_0_path)"
+      usebundle => default:logrotate("$(case_0_path)", "50M", "5");

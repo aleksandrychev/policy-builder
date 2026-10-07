@@ -164,7 +164,7 @@
           "type": "string",
           "required": true,
           "references": "variable",
-          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+          "help": "E.g. vars.myvar (this file) or common:vars.myvar (another file's, by its namespace)."
         }
       ],
       "steps": [

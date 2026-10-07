@@ -1,0 +1,71 @@
+name: Electron security
+
+# Checks the app follows Electron's security checklist (SECURITY-CHECKLIST.md): in the source,
+# in the running window, and in the packaged binary. Weekly too: Electron support can lapse
+# and advisories appear without any change here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Source checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/security-checks.mjs
+
+  electron:
+    name: Supported Electron, no advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/electron-support-check.mjs
+
+  runtime:
+    name: Running window
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Ubuntu 24.04's AppArmor blocks the unprivileged user namespaces Chromium's sandbox needs.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: npx electron-vite build
+      - run: xvfb-run -a npx playwright test -c e2e/playwright.config.ts e2e/security.spec.ts
+
+  packaged:
+    name: Fuses in the packaged app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx electron-vite build
+      # The sidecar isn't what's checked here: an empty bundle folder satisfies extraResources.
+      - run: mkdir -p python/dist/cfpb-backend
+      - run: npx electron-builder --linux --dir
+      - run: node scripts/fuses-check.mjs release/linux-unpacked/cfengine-policy-builder

@@ -2,19 +2,17 @@ import type { Condition } from '../canvasSlice/types';
 
 export interface PolicyFile {
   // Gates the whole file — every block, variables and classes included. It
-  // compiles to one if/unless on the call to the file's entry bundle.
+  // compiles to a class guard over the file's calls and definitions.
   condition?: Condition;
+  // What the file is for: shown on hovering its name.
+  description?: string;
   id: string;
   name: string;
-  // Derived from name at creation time; per architecture-plan.md, never
-  // changes afterward even if the file is renamed. Distinct per file, unlike
-  // a project-wide namespace: each file's `body file control` declares its
-  // own, and referencing another file's variable/class needs a
-  // namespace-qualified name.
+  // The file's CFEngine namespace (`bundle common vars`, `bundle agent main`, its blocks), unique
+  // project-wide. Derived from name once, never changed on rename: `<ns>:vars.x` references depend on it.
   namespace: string;
-  // Purely organizational — folders carry no CFEngine meaning (unlike
-  // namespace, which is per file regardless of nesting). null means the
-  // project's root.
+  // Organizational, and the file's path: a top-level folder is one cfbs
+  // directory module. null means the project's root.
   parentId: string | null;
 }
 

@@ -1,0 +1,9 @@
+### example
+  # Case 0
+  files:
+    "/etc/app.conf"
+      create => "true",
+      content => "name = \"app\"
+port = 8080
+",
+      perms => default:mog("644", "root", "root");

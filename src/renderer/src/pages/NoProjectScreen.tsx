@@ -1,14 +1,93 @@
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import { Box, Button, ButtonBase, Divider, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { Box, Button, ButtonBase, Divider, Stack, Tooltip, Typography } from '@mui/material';
+
+import { middleTruncate } from '../components/ProjectStatusLabel';
 import { StatusBar } from '../components/StatusBar';
 import { BlockNodesIcon } from '../components/icons/BlockNodesIcon';
-import { createNginxDemoProject } from '../demo/nginxDemoProject';
-import { useAppDispatch } from '../store';
+
+const RECENT_PATH_CHARS = 60;
+
+type RecentProject = Awaited<ReturnType<NonNullable<Window['api']>['getRecentProjects']>>[number];
 
 interface NoProjectScreenProps {
   onNewProject: () => void;
+  onOpenProject: (path?: string) => void;
+  onTryDemo: () => void;
+  // Changes when the recent-projects list does.
+  recentsVersion: number;
+}
+
+function RecentProjects({ onOpen, version }: { onOpen: (path: string) => void; version: number }) {
+  const [recents, setRecents] = useState<RecentProject[]>([]);
+  useEffect(() => {
+    let current = true;
+    window.api
+      ?.getRecentProjects()
+      .then(list => current && setRecents(list))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [version]);
+
+  if (!recents.length) return null;
+  return (
+    <Box sx={{ width: '100%', mb: 3, textAlign: 'left' }}>
+      <Typography component="h2" sx={{ fontSize: 12, fontWeight: 700, color: 'text.muted', mb: 1 }}>
+        Recent projects
+      </Typography>
+      <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, border: '1px solid', borderColor: 'divider', borderRadius: '8px', bgcolor: 'background.paper' }}>
+        {recents.map(({ exists, name, path }, index) => (
+          <Box component="li" key={path} sx={{ display: 'flex', alignItems: 'center', borderTop: index ? '1px solid' : 'none', borderColor: 'divider' }}>
+            <ButtonBase
+              disabled={!exists}
+              onClick={() => onOpen(path)}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                px: 1.5,
+                py: 1,
+                textAlign: 'left',
+                borderRadius: '8px',
+                opacity: exists ? 1 : 0.55,
+                '&:hover .recent-name, &.Mui-focusVisible .recent-name': { color: 'primary.main' }
+              }}
+            >
+              <FolderOutlinedIcon sx={{ fontSize: 20, color: 'text.muted', flexShrink: 0 }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography className="recent-name" noWrap sx={{ fontSize: 14, fontWeight: 700, color: 'text.primary' }}>
+                  {name}
+                </Typography>
+                <Tooltip title={path} placement="bottom-start" enterDelay={500}>
+                  <Typography noWrap sx={{ fontSize: 12, color: 'text.muted' }}>
+                    {exists ? middleTruncate(path, RECENT_PATH_CHARS) : `Not found: ${middleTruncate(path, RECENT_PATH_CHARS - 11)}`}
+                  </Typography>
+                </Tooltip>
+              </Box>
+            </ButtonBase>
+            {!exists && (
+              <Button
+                size="small"
+                variant="text"
+                color="primary"
+                sx={{ mr: 1, flexShrink: 0 }}
+                onClick={() => window.api?.forgetRecentProject(path).catch(() => {})}
+              >
+                Remove
+              </Button>
+            )}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 /**
@@ -17,9 +96,7 @@ interface NoProjectScreenProps {
  * File menu's "New Project…" needs to open it regardless of which screen
  * is currently showing, not just from this one's button.
  */
-export default function NoProjectScreen({ onNewProject }: NoProjectScreenProps) {
-  const dispatch = useAppDispatch();
-
+export default function NoProjectScreen({ onNewProject, onOpenProject, onTryDemo, recentsVersion }: NoProjectScreenProps) {
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
       <Box component="main" sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', px: 3, pb: 10 }}>
@@ -33,17 +110,18 @@ export default function NoProjectScreen({ onNewProject }: NoProjectScreenProps) 
             <Button variant="contained" color="primary" onClick={onNewProject}>
               New Project
             </Button>
-            <Button variant="outlined" color="primary">
+            <Button variant="outlined" color="primary" onClick={() => onOpenProject()}>
               Open Project…
             </Button>
           </Stack>
+          <RecentProjects onOpen={onOpenProject} version={recentsVersion} />
 
           <Divider sx={{ width: '100%', '&::before, &::after': { borderColor: 'divider' } }}>
             <Typography sx={{ fontSize: 12, color: 'text.muted', px: 1 }}>or explore</Typography>
           </Divider>
 
           <ButtonBase
-            onClick={() => createNginxDemoProject(dispatch)}
+            onClick={onTryDemo}
             sx={{
               width: '100%',
               mt: 3,

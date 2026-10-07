@@ -53,8 +53,33 @@ export interface IfSetExpression {
   value: Expression;
 }
 
+// The case for an options parameter's value.
+export interface ChooseExpression {
+  cases: Record<string, Expression>;
+  choose: string;
+}
+
+// A cases parameter's rows as ifelse(condition, value, …, otherwise).
+export interface CasesParamExpression {
+  cases_param: string;
+  otherwise: Expression;
+}
+
+// `key value` lines as a local array, passed by its qualified name.
+export interface ArrayParamExpression {
+  array_param: string;
+}
+
+// Attributes only: the parameter's text as its own file next to the policy (templates).
+export interface TemplateFileExpression {
+  template_file: string;
+}
+
 export type Expression =
   | Template
+  | ChooseExpression
+  | ArrayParamExpression
+  | CasesParamExpression
   | CallExpression
   | BodyExpression
   | ListExpression
@@ -64,7 +89,8 @@ export type Expression =
   | BundleExpression
   | VariableExpression
   | PreviousExpression
-  | IfSetExpression;
+  | IfSetExpression
+  | TemplateFileExpression;
 
 export interface BlockStep {
   attributes?: Record<string, Expression>;
@@ -95,7 +121,8 @@ export interface BlockParameter {
   path?: 'absolute';
   references?: 'variable';
   required: boolean;
-  type: 'boolean' | 'number' | 'string' | 'text';
+  // "cases": condition + value rows as JSON (blocks/cases.ts).
+  type: 'boolean' | 'cases' | 'number' | 'string' | 'text';
 }
 
 export type ValueType = 'data' | 'slist' | 'string';

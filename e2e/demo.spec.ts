@@ -1,43 +1,6 @@
-import { type ElectronApplication, type Page, _electron as electron, expect, test } from '@playwright/test';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import { join, resolve } from 'path';
+import { expect, test } from './fixtures';
 
-const appEntry = resolve(__dirname, '../out/main/index.js');
-
-let app: ElectronApplication;
-let window: Page;
-let userDataDir: string;
-const consoleErrors: string[] = [];
-
-test.beforeEach(async () => {
-  // A throwaway profile, so the run never reads or writes the developer's layout settings.
-  userDataDir = mkdtempSync(join(tmpdir(), 'cfpb-e2e-'));
-  // ELECTRON_RUN_AS_NODE=1 would start Electron as plain Node, with no window.
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key, value]) => key !== 'ELECTRON_RUN_AS_NODE' && value !== undefined)) as Record<
-    string,
-    string
-  >;
-  app = await electron.launch({ args: [appEntry, `--user-data-dir=${userDataDir}`], env });
-  window = await app.firstWindow();
-  window.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
-  });
-  window.on('pageerror', error => consoleErrors.push(`pageerror: ${error.message}`));
-});
-
-// eslint-disable-next-line no-empty-pattern -- Playwright requires the fixtures arg to be destructured
-test.afterEach(async ({}, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus && window) {
-    const path = testInfo.outputPath('failure.png');
-    await window.screenshot({ path });
-    await testInfo.attach('screenshot', { path, contentType: 'image/png' });
-  }
-  await app?.close();
-  rmSync(userDataDir, { recursive: true, force: true });
-});
-
-test('demo project: switch files, delete + undo, add and rename a block', async () => {
+test('demo project: switch files, delete + undo, add and rename a block', async ({ app, window, consoleErrors }) => {
   const statusBar = window.locator('footer');
   const blockCount = async () => Number((await statusBar.getByText(/^Blocks: \d+$/).textContent())?.match(/\d+/)?.[0]);
 
@@ -85,6 +48,17 @@ test('demo project: switch files, delete + undo, add and rename a block', async 
   await test.step('editing the label in Properties updates the canvas', async () => {
     await window.getByLabel('Label').fill('Copy the motd');
     await expect(window.locator('.react-flow').getByText('Copy the motd', { exact: true })).toBeVisible();
+  });
+
+  await test.step('closing the window with unsaved changes asks first', async () => {
+    await expect
+      .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle()))
+      .toBe('Nginx Web Server Demo — CFEngine Policy Builder');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    const prompt = window.getByRole('dialog', { name: /save changes/i });
+    await expect(prompt).toBeVisible();
+    await prompt.getByRole('button', { name: 'Cancel' }).click();
+    await expect(prompt).toBeHidden();
   });
 
   expect(consoleErrors, 'console errors during the run').toEqual([]);

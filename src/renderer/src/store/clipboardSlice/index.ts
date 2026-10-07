@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import type { BlockInstance } from '../canvasSlice/types';
-import { projectCreated } from '../projectSlice';
+import { projectCreated, projectLoaded } from '../projectSlice';
 import type { ClipboardState } from './types';
 
 const initialState: ClipboardState = { mode: null, snapshot: null };
@@ -33,7 +33,7 @@ const clipboardSlice = createSlice({
     }
   },
   extraReducers: builder => {
-    builder.addCase(projectCreated, () => initialState);
+    builder.addCase(projectCreated, () => initialState).addCase(projectLoaded, () => initialState);
   }
 });
 

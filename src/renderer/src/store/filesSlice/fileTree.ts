@@ -5,8 +5,7 @@ import type { PolicyFile, PolicyFolder } from './types';
 // folders, and by both create and rename.
 export const MAX_NAME_LENGTH = 256;
 
-// Files/folders eventually become real paths on disk (policy/<folder>/<name>.cf,
-// per the cfbs integration plan in .claude/architecture-plan.md), so path
+// Files and folders become paths in the project (./<folder>/<name>.cf), so path
 // separators and the extension dot can't be part of a name — everything else
 // a real filesystem tolerates is left alone.
 const FORBIDDEN_CHARS = /[/\\:.]/g;

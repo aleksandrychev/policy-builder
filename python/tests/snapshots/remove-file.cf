@@ -1,0 +1,6 @@
+### example
+  # Case 0
+  files:
+    "/etc/nginx/sites-enabled/default"
+      delete => default:tidy,
+      pathtype => "literal";

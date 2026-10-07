@@ -53,8 +53,8 @@ jobs:
       - run: npm ci
       - run: npm run test
 
-  e2e:
-    name: E2E smoke test
+  integration:
+    name: Integration tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,6 +63,28 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The main process runs the real Python sidecar.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
+      - run: npm run test:integration
+
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Saving a project runs the Python sidecar's policy compiler.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
       # Ubuntu 24.04's AppArmor blocks the unprivileged user namespaces Chromium's sandbox needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: xvfb-run -a npm run test:e2e

@@ -1,6 +1,6 @@
 import { blockLabelChanged, blockMoved, blockParamChanged } from './canvasSlice';
 import { clipboardCopied } from './clipboardSlice';
-import { fileSelected } from './filesSlice';
+import { fileDescriptionChanged, fileSelected } from './filesSlice';
 import { groupCreated, groupRenamed } from './groupsSlice';
 import { historyBatchEnded, historyBatchStarted, historyCleared, inOneStep, redone, undone } from './history';
 import { type TestStore, addBlock, addFile, blockOf, makeStore, undoAll } from './test/storeTestUtils';
@@ -159,6 +159,16 @@ describe('history', () => {
       for (const name of ['W', 'We', 'Web']) store.dispatch(groupRenamed({ groupId, name }));
       store.dispatch(undone());
       expect(store.getState().groups[0].name).toBe('G');
+    });
+    it('merges file description edits, per file', () => {
+      const store = makeStore();
+      const first = addFile(store, 'First');
+      const second = addFile(store, 'Second');
+      store.dispatch(historyCleared());
+      for (const description of ['W', 'We', 'Web']) store.dispatch(fileDescriptionChanged({ fileId: first, description }));
+      store.dispatch(fileDescriptionChanged({ fileId: second, description: 'S' }));
+      expect(undoAll(store)).toBe(2);
+      expect(store.getState().files.files.every(file => file.description === undefined)).toBe(true);
     });
   });
 

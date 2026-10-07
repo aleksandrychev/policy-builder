@@ -1,0 +1,442 @@
+import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { executionOrder, isSequenced } from '../canvas/executionOrder';
+import { attachToFrames } from '../canvas/groupEdges';
+import type { RootState } from '../store';
+import type { BlockInstance, Condition } from '../store/canvasSlice/types';
+import type { BlockEdge } from '../store/edgesSlice/types';
+import filesReducer, { projectFilesInitialized } from '../store/filesSlice';
+import { deriveNamespace } from '../store/filesSlice/deriveNamespace';
+import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
+import type { BlockGroup } from '../store/groupsSlice/types';
+import type { UndoableKey } from '../store/history';
+import type { ProjectType } from '../store/projectSlice/types';
+import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
+import { moduleNameFor } from './moduleName';
+
+/**
+ * The builder's state on disk: a plain cfbs project (one local module per top-level file or folder),
+ * and the builder's own data in `.policy-builder/project.json`.
+ */
+
+// 2: groups compile into bundles of their own (`groups`), arrows may end on them.
+export const SCHEMA_VERSION = 2;
+const ROOT = './';
+const OUTPUT_DIR = 'services/cfbs/';
+// Top-level names taken next to cfbs.json: cfbs's build output, and generated templates.
+const RESERVED_FOLDERS = ['./out/', './templates/'];
+
+export type ProjectData = Pick<RootState, UndoableKey>;
+type Position = { x: number; y: number };
+
+export interface ProjectMeta {
+  current_file_id: string | null;
+  // In file order; each file's `path` is where its policy is written.
+  files: FileMeta[];
+  // `path` is the folder's directory, e.g. "./services/".
+  folders: (PolicyFolder & { path: string })[];
+  // The name the project is provided under when stored as a cfbs module.
+  module_name: string;
+  // The display name (a module's cfbs.json name has to be its module name).
+  name: string;
+  schema_version: number;
+  // Stamped by the main process on save (the app's version).
+  tool_version?: string;
+}
+
+export interface FileMeta {
+  blocks: Omit<BlockInstance, 'fileId' | 'position'>[];
+  condition?: Condition;
+  description?: string;
+  edges: Omit<BlockEdge, 'fileId'>[];
+  // What a group compiles from; its look is in layout.groups.
+  groups: Pick<BlockGroup, 'condition' | 'id' | 'incomingMode' | 'name'>[];
+  id: string;
+  // Editor-only: nothing here changes the compiled policy.
+  layout: {
+    // derivedNodes positions, keyed without the `${fileId}|` prefix.
+    derived_positions: Record<string, Position>;
+    groups: Pick<BlockGroup, 'color' | 'id' | 'rect'>[];
+    positions: Record<string, Position>;
+  };
+  // The display name; the path is a slug.
+  name: string;
+  // The file's CFEngine namespace; its entry bundle is `<namespace>:main`.
+  namespace: string;
+  // The methods: call order, resolved here so a compiler needs no canvas.
+  order: string[];
+  // The generated policy file, e.g. "./services/db/postgres.cf".
+  path: string;
+}
+
+export interface PolicyModule {
+  added_by: 'cfbs add';
+  description: string;
+  name: string;
+  steps: string[];
+  tags: string[];
+}
+
+// The one module a project stored as a cfbs module provides: cfbs.json `provides[<module_name>]`.
+export interface ProvidedModule {
+  description: string;
+  steps: string[];
+  tags: string[];
+}
+
+export interface CfbsProjectContent {
+  // cfbs.json `build` entries, when stored as a policy set.
+  modules: PolicyModule[];
+  // .policy-builder/project.json.
+  project: ProjectMeta;
+  // When stored as a module. The main process adds a templates/ copy step when there are templates.
+  provided: ProvidedModule;
+  // .policy-builder/test-environments.json.
+  testEnvironments: TestEnvironment[];
+}
+
+// What the project is called and provided as.
+interface Identity {
+  description: string;
+  moduleName: string;
+  name: string;
+}
+
+const withoutFileId = <T extends { fileId: string }>({ fileId: _fileId, ...rest }: T): Omit<T, 'fileId'> => rest;
+
+// A folder's directory name. cfbs wants a module's last path part to start with a letter.
+const slug = (name: string) => {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || 'folder';
+  return /^[a-z]/.test(base) ? base : `folder-${base}`;
+};
+
+// Folder id → its directory; sibling folders whose slugs clash get -2, -3….
+function folderPaths(folders: PolicyFolder[]): Map<string, string> {
+  const paths = new Map<string, string>();
+  const resolve = (folder: PolicyFolder): string => {
+    const known = paths.get(folder.id);
+    if (known) return known;
+    const parent = folders.find(item => item.id === folder.parentId);
+    const base = parent ? resolve(parent) : ROOT;
+    const taken = new Set([...RESERVED_FOLDERS, ...paths.values()]);
+    let path = `${base}${slug(folder.name)}/`;
+    for (let suffix = 2; taken.has(path); suffix += 1) path = `${base}${slug(folder.name)}-${suffix}/`;
+    paths.set(folder.id, path);
+    return path;
+  };
+  folders.forEach(resolve);
+  return paths;
+}
+
+function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta {
+  const prefix = `${file.id}|`;
+  const instances = data.canvas.filter(block => block.fileId === file.id);
+  const edges = attachToFrames(
+    data.edges.filter(edge => edge.fileId === file.id),
+    instances
+  );
+  const groups = data.groups.filter(group => group.fileId === file.id);
+  const derivedPositions = Object.entries(data.derivedNodes)
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, position]) => [key.slice(prefix.length), position]);
+  return {
+    id: file.id,
+    name: file.name,
+    namespace: file.namespace,
+    path,
+    ...(file.condition ? { condition: file.condition } : {}),
+    ...(file.description ? { description: file.description } : {}),
+    blocks: instances.map(({ fileId: _fileId, position: _position, ...rest }) => rest),
+    edges: edges.map(withoutFileId),
+    groups: groups.map(({ condition, id, incomingMode, name }) => ({
+      id,
+      name,
+      ...(condition ? { condition } : {}),
+      ...(incomingMode ? { incomingMode } : {})
+    })),
+    order: executionOrder(instances, edges, blockDescriptorsById),
+    layout: {
+      positions: Object.fromEntries(instances.flatMap(block => (block.position ? [[block.instanceId, block.position]] : []))),
+      groups: groups.map(({ color, id, rect }) => ({ id, color, ...(rect ? { rect } : {}) })),
+      derived_positions: Object.fromEntries(derivedPositions)
+    }
+  };
+}
+
+// The module a policy file belongs to: "./nginx.cf" itself, or its top-level folder "./services/".
+export const moduleNameOf = (path: string) => {
+  const parts = path.slice(ROOT.length).split('/');
+  return parts.length === 1 ? path : `${ROOT}${parts[0]}/`;
+};
+
+// cfbs's MAX_BUILD_STEP_LENGTH.
+const MAX_STEP_LENGTH = 256;
+
+// `bundles a b c`, split over as many steps as cfbs's step length limit needs.
+function bundlesSteps(bundles: string[]): string[] {
+  const steps: string[] = [];
+  for (const bundle of bundles) {
+    const last = steps.at(-1);
+    if (last && last.length + 1 + bundle.length <= MAX_STEP_LENGTH) steps[steps.length - 1] = `${last} ${bundle}`;
+    else steps.push(`bundles ${bundle}`);
+  }
+  return steps;
+}
+
+// Exactly what `cfbs add` writes for a file or a directory, except the `bundles`
+// step: it lists every file's `<ns>:main` (cfbs would pick one); a file of only
+// variables and classes has none to list.
+function toModule(name: string, entryBundles: string[]): PolicyModule {
+  const output = `${OUTPUT_DIR}${name.slice(ROOT.length)}`;
+  const isDirectory = name.endsWith('/');
+  return {
+    name,
+    description: isDirectory ? 'Local subdirectory added using cfbs command line' : 'Local policy file added using cfbs command line',
+    tags: ['local'],
+    added_by: 'cfbs add',
+    steps: [isDirectory ? `directory ./ ${output}` : `copy ${name} ${output}`, `policy_files ${output}`, ...bundlesSteps(entryBundles)]
+  };
+}
+
+// A module's steps: its files and folders copied into services/cfbs/<module>/, as the
+// policy-set modules lay them out, so templates are found the same way.
+function toProvided(names: Map<string, string[]>, identity: Identity): ProvidedModule {
+  const output = `${OUTPUT_DIR}${identity.moduleName}/`;
+  const copies = [...names.keys()].map(name => `copy ${name} ${output}${name.slice(ROOT.length)}`);
+  return {
+    description: identity.description || 'Policy built with CFEngine Policy Builder',
+    tags: ['policy-builder'],
+    steps: [...copies, `policy_files ${output}`, ...bundlesSteps([...names.values()].flat())]
+  };
+}
+
+export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjectContent {
+  const paths = folderPaths(data.files.folders);
+  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.namespace}.cf`;
+  const callsBlocks = (file: PolicyFile) => data.canvas.some(block => block.fileId === file.id && isSequenced(blockDescriptorsById.get(block.blockId)));
+  // Modules in the order their first file appears; a folder's bundles in file order.
+  const modules = new Map<string, string[]>();
+  for (const file of data.files.files) {
+    const name = moduleNameOf(pathOf(file));
+    modules.set(name, [...(modules.get(name) ?? []), ...(callsBlocks(file) ? [`${file.namespace}:main`] : [])]);
+  }
+  return {
+    project: {
+      schema_version: SCHEMA_VERSION,
+      name: identity.name,
+      module_name: identity.moduleName,
+      folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
+      files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
+      current_file_id: data.files.currentFileId
+    },
+    modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
+    provided: toProvided(modules, identity),
+    testEnvironments: data.testEnvironments
+  };
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const listOf = <T>(value: T[] | undefined): T[] => (Array.isArray(value) ? value : []);
+
+function checkSchemaVersion(version: unknown) {
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new Error('The project’s builder data is corrupt (no valid schema version)');
+  }
+  if (version > SCHEMA_VERSION) {
+    throw new Error(
+      `This project was made with a newer version of CFEngine Policy Builder (schema version ${version}; this app supports up to ${SCHEMA_VERSION}). Update the app to open it.`
+    );
+  }
+}
+
+/** Rebuilds the builder's in-memory state from a parsed .policy-builder/project.json. */
+export function fromBuilderProject(json: unknown): ProjectData {
+  if (!isObject(json)) throw new Error('The project’s builder data (.policy-builder/project.json) is not a JSON object');
+  const project = json as unknown as ProjectMeta;
+  checkSchemaVersion(project.schema_version);
+  try {
+    return readBuilderProject(project);
+  } catch (cause) {
+    // A wrong type somewhere inside (hand-edited or corrupt): say which file, not the TypeError.
+    if (cause instanceof TypeError) throw new Error('The project’s builder data (.policy-builder/project.json) is malformed', { cause });
+    throw cause;
+  }
+}
+
+function readBuilderProject(project: ProjectMeta): ProjectData {
+  const folders = listOf(project.folders);
+  const modules = listOf(project.files)
+    .filter(file => isObject(file) && typeof file.id === 'string')
+    .map(file => ({ file, path: typeof file.path === 'string' ? file.path : '' }));
+
+  // A file's folder is the one whose directory holds it.
+  const folderOf = (path: string) => folders.find(folder => typeof folder.path === 'string' && path === `${folder.path}${path.split('/').pop()}`);
+  const files: PolicyFile[] = modules.map(({ file: { condition, description, id, name, namespace, ...rest }, path }) => ({
+    // Projects saved between Oct 1 and the return of namespaces have `bundle` instead.
+    namespace:
+      [namespace, (rest as { bundle?: unknown }).bundle].find((value): value is string => typeof value === 'string' && value !== '') ??
+      deriveNamespace(typeof name === 'string' ? name : ''),
+    ...(condition ? { condition } : {}),
+    ...(typeof description === 'string' && description ? { description } : {}),
+    id,
+    name: typeof name === 'string' ? name : id,
+    parentId: folderOf(path)?.id ?? null
+  }));
+  const canvas = modules.flatMap(({ file }) => {
+    const positions = isObject(file.layout?.positions) ? file.layout.positions : {};
+    return listOf(file.blocks).map(block => {
+      const position = positions[block.instanceId];
+      return { ...block, fileId: file.id, ...(position ? { position } : {}) } as BlockInstance;
+    });
+  });
+  const derivedNodes = Object.fromEntries(
+    modules.flatMap(({ file }) =>
+      Object.entries(isObject(file.layout?.derived_positions) ? file.layout.derived_positions : {}).map(([key, position]) => [`${file.id}|${key}`, position])
+    )
+  );
+  const currentFileId = files.some(file => file.id === project.current_file_id) ? project.current_file_id : (files[0]?.id ?? null);
+
+  // A group's look (layout.groups; schema 1 kept all of it there) and what it compiles from (groups).
+  const groups = modules.flatMap(({ file }) => {
+    const looks = listOf(isObject(file.layout) ? (file.layout.groups as Partial<BlockGroup>[]) : undefined);
+    const semantics = listOf(file.groups as Partial<BlockGroup>[] | undefined);
+    const ids = [...new Set([...looks, ...semantics].map(group => group.id).filter((id): id is string => typeof id === 'string'))];
+    return ids.map(id => ({
+      color: 'primary' as const,
+      name: '',
+      ...looks.find(group => group.id === id),
+      ...semantics.find(group => group.id === id),
+      id,
+      fileId: file.id
+    })) as BlockGroup[];
+  });
+  // Schema 1 arrows could cross a group's frame; they attach to the group now.
+  const edges = modules.flatMap(({ file }) =>
+    attachToFrames(
+      listOf(file.edges).map(edge => ({ ...edge, fileId: file.id })),
+      canvas.filter(block => block.fileId === file.id)
+    )
+  );
+
+  return {
+    canvas,
+    derivedNodes,
+    edges,
+    files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
+    groups,
+    // Read from their own file; see loadCfbsProject.
+    testEnvironments: []
+  };
+}
+
+export interface LoadedProject {
+  data: ProjectData;
+  description: string;
+  masterfiles: string | null;
+  moduleName: string;
+  name: string;
+  type: ProjectType;
+}
+
+// The masterfiles build entry's release, "master" for a branch/URL one, null without (or for
+// anything else: the version names a cache folder for test runs).
+function masterfilesOf(build: unknown[]): string | null {
+  const entry = build.find(item => isObject(item) && typeof item.name === 'string' && /(^|\/)masterfiles$/.test(item.name)) as
+    Record<string, unknown> | undefined;
+  if (!entry) return null;
+  if (typeof entry.version === 'string' && /^(\d+\.\d+\.\d+(-\d+)?|master)$/.test(entry.version)) return entry.version;
+  return typeof entry.url === 'string' || typeof entry.branch === 'string' ? 'master' : null;
+}
+
+/**
+ * An opened project's cfbs.json and builder data (.policy-builder/project.json,
+ * null when there is none) → what goes into the store. A cfbs project
+ * without builder data opens with one empty policy file named after it.
+ */
+const stringMap = (value: unknown): Record<string, string> =>
+  isObject(value) ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+const text = (value: unknown, fallback: string) => (typeof value === 'string' && value ? value : fallback);
+
+/** The environments in .policy-builder/test-environments.json, whatever is unusable dropped. */
+export function environmentsFrom(value: unknown): TestEnvironment[] {
+  return listOf(Array.isArray(value) ? value : undefined)
+    .filter(isObject)
+    .flatMap(environment => {
+      const hosts = listOf(Array.isArray(environment.hosts) ? environment.hosts : undefined)
+        .filter(isObject)
+        .filter(host => typeof host.id === 'string')
+        .map(host => ({
+          id: host.id as string,
+          name: text(host.name, 'host'),
+          platform: text(host.platform, 'ubuntu-22'),
+          ports: listOf(Array.isArray(host.ports) ? host.ports : undefined)
+            .filter(isObject)
+            .filter(port => Number.isInteger(port.host) && Number.isInteger(port.container))
+            .map(port => ({ host: port.host as number, container: port.container as number })),
+          env: stringMap(host.env),
+          ...(typeof host.image === 'string' && host.image ? { image: host.image } : {})
+        }));
+      if (typeof environment.id !== 'string' || hosts.length === 0) return [];
+      const hub = hosts.some(host => host.id === environment.hub) ? (environment.hub as string) : hosts[0].id;
+      return [
+        {
+          id: environment.id,
+          name: text(environment.name, 'Environment'),
+          arch: environment.arch === 'aarch64' ? ('aarch64' as const) : ('x86_64' as const),
+          edition: environment.edition === 'enterprise' ? ('enterprise' as const) : ('community' as const),
+          version: text(environment.version, 'latest'),
+          hub,
+          env: stringMap(environment.env),
+          envFile: typeof environment.envFile === 'string' ? environment.envFile : null,
+          ...(Number.isInteger(environment.maxRuns) && (environment.maxRuns as number) >= 1 && (environment.maxRuns as number) <= 10
+            ? { maxRuns: environment.maxRuns as number }
+            : {}),
+          hosts
+        }
+      ];
+    });
+}
+
+// The project's own top-level policy files (./<name>.cf build entries or copy sources): ours must not overwrite one.
+const ownPolicyFiles = (build: unknown[]) =>
+  build
+    .filter(isObject)
+    .flatMap(entry => [
+      entry.name,
+      ...(Array.isArray(entry.steps) ? entry.steps : []).map(step => (typeof step === 'string' ? step.split(/\s+/)[1] : undefined))
+    ])
+    .flatMap(path => (typeof path === 'string' && /^\.\/[^/]+\.cf$/i.test(path) ? [path.slice(2, -3).toLowerCase()] : []));
+
+export function loadCfbsProject(json: unknown, builder: unknown, folderName: string, testEnvironments: unknown = null): LoadedProject {
+  if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
+  const type: ProjectType = json.type === 'module' ? 'module' : 'policy-set';
+  const cfbsName = (typeof json.name === 'string' && json.name.trim()) || folderName;
+  const saved = isObject(builder) ? builder : {};
+  // A policy set's cfbs.json name is its display name; a module's is its module name, so its display name is the builder's.
+  const name = (type === 'module' && typeof saved.name === 'string' && saved.name.trim()) || cfbsName;
+  const moduleName = typeof saved.module_name === 'string' && saved.module_name ? saved.module_name : type === 'module' ? cfbsName : moduleNameFor(name);
+  const identity = { description: typeof json.description === 'string' ? json.description : '', moduleName, name, type };
+  const masterfiles = masterfilesOf(Array.isArray(json.build) ? json.build : []);
+  const environments = environmentsFrom(testEnvironments);
+  const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
+  if (data && data.files.files.length > 0) return { ...identity, data: { ...data, testEnvironments: environments }, masterfiles };
+  const files = filesReducer(undefined, projectFilesInitialized(name, ownPolicyFiles(Array.isArray(json.build) ? json.build : [])));
+  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [], testEnvironments: environments }, masterfiles };
+}
+
+/** The project folder's name for a project name: "Web Server Hardening" → "web-server-hardening". */
+export function projectFolderName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100)
+    .replace(/-+$/, '');
+}

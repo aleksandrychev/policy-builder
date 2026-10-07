@@ -19,8 +19,8 @@ export function inOneStep(dispatch: Dispatch, run: () => void) {
 }
 
 const LIMIT = 100;
-const UNDOABLE_KEYS = ['canvas', 'derivedNodes', 'edges', 'files', 'groups'] as const;
-type UndoableKey = (typeof UNDOABLE_KEYS)[number];
+export const UNDOABLE_KEYS = ['canvas', 'derivedNodes', 'edges', 'files', 'groups', 'testEnvironments'] as const;
+export type UndoableKey = (typeof UNDOABLE_KEYS)[number];
 
 // Text edits dispatch per keystroke: consecutive ones to the same field merge
 // into one step. The value is the payload field being typed into.
@@ -33,7 +33,10 @@ const TYPING_FIELDS: Record<string, string> = {
   'canvas/inventoryAttributeNameChanged': 'attributeName',
   'canvas/sampleInputChanged': 'value',
   'files/fileConditionClassNameChanged': 'className',
-  'groups/groupRenamed': 'name'
+  'files/fileDescriptionChanged': 'description',
+  'groups/groupConditionClassNameChanged': 'className',
+  'groups/groupRenamed': 'name',
+  'testEnvironments/hostRenamed': 'name'
 };
 // Change undoable state without being worth a step of their own.
 const UNTRACKED = new Set(['files/fileSelected']);

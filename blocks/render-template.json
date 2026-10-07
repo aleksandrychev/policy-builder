@@ -14,8 +14,10 @@
       "promiser": "{{destination}}",
       "attributes": {
         "create": "true",
-        "edit_template_string": "{{template_content}}",
-        "template_method": "inline_mustache",
+        "edit_template": {
+          "template_file": "template_content"
+        },
+        "template_method": "mustache",
         "perms": {
           "body": "mog",
           "args": [
@@ -42,7 +44,7 @@
       "type": "text",
       "required": true,
       "mustache": true,
-      "help": "Mustache: {{{vars.<namespace>:vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<namespace>:<class>}}…{{/classes.<namespace>:<class>}} keeps a section only while the class is set. $(name) is expanded by CFEngine first."
+      "help": "Mustache: {{{vars.<namespace>:vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<namespace>:<class>}}…{{/classes.<namespace>:<class>}} keeps a section only while the class is set. It's saved as its own .mustache file next to the policy, used as written: $(name) isn't expanded there, use {{{vars.…}}}."
     },
     {
       "name": "mode",

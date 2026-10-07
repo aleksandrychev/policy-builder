@@ -1,0 +1,14 @@
+### example
+  # Case 0
+  users:
+    "deploy" policy => "present";
+
+### state = 'locked'
+  # Case 1
+  users:
+    "deploy" policy => "locked";
+
+### state = 'absent'
+  # Case 2
+  users:
+    "deploy" policy => "absent";

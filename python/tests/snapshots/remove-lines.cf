@@ -1,0 +1,4 @@
+### example
+  # Case 0
+  files:
+    "/etc/sudoers" edit_line => default:delete_lines_matching(".*NOPASSWD.*");

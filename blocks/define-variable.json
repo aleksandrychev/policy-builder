@@ -76,6 +76,41 @@
       ]
     },
     {
+      "id": "per-condition",
+      "label": "Per condition",
+      "badge": "ifelse()",
+      "value_type": "string",
+      "literal": true,
+      "parameters": [
+        {
+          "name": "cases",
+          "label": "Values",
+          "type": "cases",
+          "required": false,
+          "help": "The first row whose condition holds gives the value."
+        },
+        {
+          "name": "otherwise",
+          "label": "Otherwise",
+          "type": "string",
+          "required": false,
+          "help": "When no condition holds."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "cases_param": "cases",
+              "otherwise": "{{otherwise}}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "structured-data-literal",
       "label": "Structured data (literal)",
       "badge": "parsejson()",
@@ -108,6 +143,7 @@
     {
       "id": "variable",
       "label": "Variable",
+      "summary": "The value of {{from_variable}}",
       "badge": "$(…)",
       "value_type": "string",
       "parameters": [
@@ -117,7 +153,7 @@
           "type": "string",
           "required": true,
           "references": "variable",
-          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+          "help": "E.g. vars.myvar (this file) or common:vars.myvar (another file's, by its namespace)."
         }
       ],
       "steps": [
@@ -136,6 +172,7 @@
     {
       "id": "list-variable",
       "label": "List variable",
+      "summary": "The list {{from_variable}}",
       "badge": "@(…)",
       "value_type": "slist",
       "parameters": [
@@ -145,7 +182,7 @@
           "type": "string",
           "required": true,
           "references": "variable",
-          "help": "E.g. vars.myvar (this file) or namespace:vars.myvar (another file)."
+          "help": "E.g. vars.myvar (this file) or common:vars.myvar (another file's, by its namespace)."
         }
       ],
       "steps": [
@@ -164,6 +201,7 @@
     {
       "id": "command-output",
       "label": "Command output",
+      "summary": "The {{output}} of \"{{command}}\"",
       "badge": "execresult()",
       "value_type": "string",
       "parameters": [
@@ -238,6 +276,7 @@
     {
       "id": "file-lines",
       "label": "File lines",
+      "summary": "The lines of {{path}}",
       "badge": "readstringlist()",
       "help": "Reads the file as a list of lines — chain \"Keep matching entries (grep)\" and/or \"Count entries\" below to build things like a CPU count from /proc/cpuinfo.",
       "value_type": "slist",
@@ -306,6 +345,7 @@
     {
       "id": "file-content",
       "label": "File content",
+      "summary": "The content of {{path}}",
       "badge": "readfile()",
       "value_type": "string",
       "parameters": [
@@ -346,6 +386,7 @@
     {
       "id": "file-metadata",
       "label": "File metadata",
+      "summary": "The {{attribute}} of {{path}}",
       "badge": "filestat()",
       "value_type": "string",
       "parameters": [
@@ -406,6 +447,7 @@
     {
       "id": "environment-variable",
       "label": "Environment variable",
+      "summary": "The environment variable {{env_var_name}}",
       "badge": "getenv()",
       "value_type": "string",
       "parameters": [
@@ -445,6 +487,7 @@
     {
       "id": "structured-data-json",
       "label": "Structured data (JSON)",
+      "summary": "The JSON in {{path}}",
       "badge": "readjson()",
       "value_type": "data",
       "parameters": [

@@ -1,0 +1,7 @@
+### example
+  # Case 0
+  files:
+    "/var/tmp"
+      delete => default:tidy,
+      file_select => default:days_old("14"),
+      depth_search => default:recurse("inf");

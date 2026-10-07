@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "folders": [],
+  "files": [
+    {
+      "id": "beec3314-181e-4d23-b4b7-e05946f6fe9e",
+      "name": "Common",
+      "namespace": "common",
+      "path": "./common.cf",
+      "blocks": [
+        {
+          "blockId": "define-variable",
+          "label": "Nginx settings",
+          "params": {},
+          "entries": [
+            {
+              "valueSourceId": "literal",
+              "params": {
+                "variable_name": "webserver_package",
+                "value": "nginx"
+              },
+              "id": "84cd8d55-0d06-452d-8c5c-66951d706dc5"
+            },
+            {
+              "valueSourceId": "file-lines",
+              "params": {
+                "variable_name": "worker_processes",
+                "path": "/proc/cpuinfo",
+                "comment": "",
+                "split": "\\n",
+                "max_entries": "1000",
+                "max_bytes": "1048576"
+              },
+              "sampleInput": "processor\t: 0\nmodel name\t: Example CPU\nprocessor\t: 1\nmodel name\t: Example CPU",
+              "decorators": [
+                {
+                  "id": "d75aa885-49b1-4218-9e55-e37a3fb9c693",
+                  "decoratorId": "grep",
+                  "params": {
+                    "pattern": "processor.*"
+                  }
+                },
+                {
+                  "id": "c859fcd7-d8d0-4c4f-a8ea-1e1554a384b4",
+                  "decoratorId": "length",
+                  "params": {}
+                },
+                {
+                  "id": "0c94d100-4bde-44e9-939a-b6cb0023b254",
+                  "decoratorId": "default-if-empty",
+                  "params": {
+                    "trigger": "0",
+                    "fallback": "auto"
+                  }
+                }
+              ],
+              "id": "fdc4db45-5b87-4865-970f-e40da2a12aca"
+            },
+            {
+              "valueSourceId": "literal",
+              "params": {
+                "variable_name": "worker_connections",
+                "value": "1024"
+              },
+              "id": "4b8f0848-456b-4f15-8e38-0683e69dcffb"
+            }
+          ],
+          "instanceId": "bb842770-aab9-4ba1-9a38-94d5f24eeea0"
+        },
+        {
+          "blockId": "define-class",
+          "label": "Web server role",
+          "params": {},
+          "entries": [
+            {
+              "valueSourceId": "always-true",
+              "params": {
+                "class_name": "webserver_role"
+              },
+              "id": "99f8b83f-1d9e-49c4-b12b-1cc77a6c3d82"
+            }
+          ],
+          "instanceId": "90bdb40b-0cbc-4e48-bd33-c6024b3ee610"
+        }
+      ],
+      "edges": [],
+      "order": [],
+      "layout": {
+        "positions": {
+          "bb842770-aab9-4ba1-9a38-94d5f24eeea0": {
+            "x": 0,
+            "y": 0
+          },
+          "90bdb40b-0cbc-4e48-bd33-c6024b3ee610": {
+            "x": 0,
+            "y": 200
+          }
+        },
+        "groups": [],
+        "derived_positions": {}
+      }
+    },
+    {
+      "id": "60701a34-ee55-4f15-95c6-f5d52fc5e6f6",
+      "name": "Webserver",
+      "namespace": "webserver",
+      "path": "./webserver.cf",
+      "blocks": [
+        {
+          "blockId": "install-package",
+          "label": "Install web server package",
+          "params": {
+            "package_name": "$(common:vars.webserver_package)"
+          },
+          "condition": {
+            "mode": "if",
+            "kind": "class",
+            "className": "common:webserver_role"
+          },
+          "instanceId": "c19ceb8e-2859-47b8-b339-1ae392168737"
+        },
+        {
+          "blockId": "remove-package",
+          "label": "Remove conflicting Apache",
+          "params": {
+            "package_name": "apache2"
+          },
+          "condition": {
+            "mode": "if",
+            "kind": "class",
+            "className": "common:webserver_role"
+          },
+          "instanceId": "dd5360cc-df24-456c-97eb-b6790dec7c00"
+        },
+        {
+          "blockId": "render-template",
+          "label": "Render nginx config",
+          "params": {
+            "destination": "/etc/nginx/nginx.conf",
+            "template_content": "user www-data;\nworker_processes {{{vars.common:vars.worker_processes}}};\n\nevents {\n    worker_connections {{{vars.common:vars.worker_connections}}};\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n\n    server {\n        listen 80;\n        server_name example.com;\n        root /var/www/html;\n    }\n}\n",
+            "mode": "644",
+            "owner": "root",
+            "group": "root"
+          },
+          "instanceId": "18028a1a-9914-47e0-827c-ac3d04fda613"
+        },
+        {
+          "blockId": "manage-service",
+          "label": "Restart nginx on config change",
+          "params": {
+            "service_name": "nginx",
+            "action": "restart"
+          },
+          "instanceId": "ffd1bcb7-45b2-4188-b81f-6f3c4015d602"
+        },
+        {
+          "blockId": "manage-service",
+          "label": "Keep nginx running",
+          "params": {
+            "service_name": "nginx",
+            "action": "start"
+          },
+          "instanceId": "5b0ead2a-64de-494f-9445-2e0766a12e45"
+        },
+        {
+          "blockId": "render-template",
+          "label": "Publish the demo landing page",
+          "params": {
+            "destination": "/var/www/html/index.html",
+            "template_content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>CFEngine Policy Builder demo project</title>\n  <style>\n    :root { color-scheme: light dark; --accent: #0b7ad1; --ink: #1f2933; --muted: #5f6c7b; --card: #ffffff; --page: #eef2f7; }\n    @media (prefers-color-scheme: dark) { :root { --ink: #e6edf3; --muted: #9aa7b4; --card: #161b22; --page: #0d1117; } }\n    * { box-sizing: border-box; }\n    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;\n           font: 16px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--ink); background: var(--page); }\n    main { width: min(640px, 100%); background: var(--card); border-radius: 16px; padding: 40px;\n           box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12); border-top: 6px solid var(--accent); }\n    h1 { margin: 0 0 8px; font-size: 28px; }\n    p { margin: 0 0 24px; color: var(--muted); }\n    dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }\n    dt { color: var(--muted); }\n    dd { margin: 0; font-family: ui-monospace, \"SF Mono\", Menlo, monospace; }\n    .badge { display: inline-block; margin-bottom: 16px; padding: 2px 10px; border-radius: 999px;\n             background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; }\n    footer { margin-top: 32px; font-size: 13px; color: var(--muted); }\n  </style>\n</head>\n<body>\n  <main>\n    {{#classes.common:webserver_role}}<span class=\"badge\">Web server role</span>{{/classes.common:webserver_role}}\n    <h1>CFEngine Policy Builder demo project</h1>\n    <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>\n    <dl>\n      <dt>Host</dt><dd>{{{vars.sys.fqhost}}}</dd>\n      <dt>Operating system</dt><dd>{{{vars.sys.flavor}}}</dd>\n      <dt>nginx workers</dt><dd>{{{vars.common:vars.worker_processes}}}</dd>\n      <dt>CFEngine</dt><dd>{{{vars.sys.cf_version}}}</dd>\n    </dl>\n    <footer>Rendered by cf-agent from a Mustache template.</footer>\n  </main>\n</body>\n</html>\n",
+            "mode": "644",
+            "owner": "root",
+            "group": "root"
+          },
+          "instanceId": "0842bd8b-46a1-4880-8a87-9f4696f7fc36"
+        },
+        {
+          "blockId": "remove-file",
+          "label": "Remove default nginx site",
+          "params": {
+            "path": "/etc/nginx/sites-enabled/default"
+          },
+          "instanceId": "6eece74e-d0e2-4e7e-a990-9b2a1734211a"
+        },
+        {
+          "blockId": "set-permissions",
+          "label": "Lock down nginx config files",
+          "params": {
+            "path": "/etc/nginx/nginx.conf\n/etc/nginx/conf.d/default.conf",
+            "mode": "644",
+            "owner": "root",
+            "group": "root"
+          },
+          "instanceId": "22dcd453-c2fb-4b2f-b612-3b48e43a0377"
+        },
+        {
+          "blockId": "manage-users",
+          "label": "Create deploy user",
+          "params": {
+            "username": "deploy",
+            "state": "present"
+          },
+          "instanceId": "8bfe30f3-7c84-4098-8fdd-618f9fdc9829"
+        },
+        {
+          "blockId": "report-message",
+          "label": "Report provisioning done",
+          "params": {
+            "message": "Web server provisioning complete"
+          },
+          "instanceId": "fd25bfcf-1a69-4c73-b76c-f79005160f50"
+        }
+      ],
+      "edges": [
+        {
+          "source": "c19ceb8e-2859-47b8-b339-1ae392168737",
+          "target": "18028a1a-9914-47e0-827c-ac3d04fda613",
+          "outcomes": [
+            "kept",
+            "repaired"
+          ],
+          "id": "d836004c-68f2-4412-8509-efb47db09f50"
+        },
+        {
+          "source": "c19ceb8e-2859-47b8-b339-1ae392168737",
+          "target": "5b0ead2a-64de-494f-9445-2e0766a12e45",
+          "outcomes": [
+            "kept",
+            "repaired"
+          ],
+          "id": "d56509a8-b05d-47a2-89a7-3f061b7a4d4a"
+        },
+        {
+          "source": "c19ceb8e-2859-47b8-b339-1ae392168737",
+          "target": "0842bd8b-46a1-4880-8a87-9f4696f7fc36",
+          "outcomes": [
+            "kept",
+            "repaired"
+          ],
+          "id": "42b178ca-3b7e-411d-9cdf-7584d85cc13a"
+        },
+        {
+          "source": "18028a1a-9914-47e0-827c-ac3d04fda613",
+          "target": "ffd1bcb7-45b2-4188-b81f-6f3c4015d602",
+          "outcomes": [
+            "repaired"
+          ],
+          "id": "3277dd98-2b9d-466d-9c0f-313729a60282"
+        }
+      ],
+      "order": [
+        "c19ceb8e-2859-47b8-b339-1ae392168737",
+        "dd5360cc-df24-456c-97eb-b6790dec7c00",
+        "18028a1a-9914-47e0-827c-ac3d04fda613",
+        "ffd1bcb7-45b2-4188-b81f-6f3c4015d602",
+        "5b0ead2a-64de-494f-9445-2e0766a12e45",
+        "0842bd8b-46a1-4880-8a87-9f4696f7fc36",
+        "6eece74e-d0e2-4e7e-a990-9b2a1734211a",
+        "22dcd453-c2fb-4b2f-b612-3b48e43a0377",
+        "8bfe30f3-7c84-4098-8fdd-618f9fdc9829",
+        "fd25bfcf-1a69-4c73-b76c-f79005160f50"
+      ],
+      "layout": {
+        "positions": {
+          "c19ceb8e-2859-47b8-b339-1ae392168737": {
+            "x": 0,
+            "y": 0
+          },
+          "dd5360cc-df24-456c-97eb-b6790dec7c00": {
+            "x": 0,
+            "y": 160
+          },
+          "18028a1a-9914-47e0-827c-ac3d04fda613": {
+            "x": 0,
+            "y": 320
+          },
+          "ffd1bcb7-45b2-4188-b81f-6f3c4015d602": {
+            "x": 0,
+            "y": 560
+          },
+          "5b0ead2a-64de-494f-9445-2e0766a12e45": {
+            "x": 0,
+            "y": 740
+          },
+          "0842bd8b-46a1-4880-8a87-9f4696f7fc36": {
+            "x": 0,
+            "y": 920
+          },
+          "6eece74e-d0e2-4e7e-a990-9b2a1734211a": {
+            "x": 0,
+            "y": 1160
+          },
+          "22dcd453-c2fb-4b2f-b612-3b48e43a0377": {
+            "x": 0,
+            "y": 1320
+          },
+          "8bfe30f3-7c84-4098-8fdd-618f9fdc9829": {
+            "x": 0,
+            "y": 1540
+          },
+          "fd25bfcf-1a69-4c73-b76c-f79005160f50": {
+            "x": 0,
+            "y": 1720
+          }
+        },
+        "groups": [],
+        "derived_positions": {}
+      }
+    }
+  ],
+  "current_file_id": "60701a34-ee55-4f15-95c6-f5d52fc5e6f6"
+}

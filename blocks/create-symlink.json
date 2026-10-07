@@ -1,0 +1,61 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "create-symlink",
+  "version": 1,
+  "name": "Create Symlink",
+  "category": "Files",
+  "description": "Ensures a symbolic link points at a target.",
+  "compile_target": "own_bundle",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{link}}",
+      "attributes": {
+        "link_from": {
+          "body": "ln_s",
+          "args": [
+            "{{target}}"
+          ]
+        },
+        "move_obstructions": "{{replace}}"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "link",
+      "label": "Link",
+      "type": "string",
+      "required": true,
+      "path": "absolute",
+      "help": "Where the link goes, e.g. /etc/nginx/sites-enabled/app."
+    },
+    {
+      "name": "target",
+      "label": "Points to",
+      "type": "string",
+      "required": true,
+      "path": "absolute",
+      "help": "Created even if the target doesn't exist yet."
+    },
+    {
+      "name": "replace",
+      "label": "If something else is there",
+      "type": "string",
+      "required": true,
+      "default": "false",
+      "options": [
+        {
+          "value": "false",
+          "label": "Leave it, and fail"
+        },
+        {
+          "value": "true",
+          "label": "Move it aside",
+          "help": "Renamed with a .cfsaved suffix."
+        }
+      ]
+    }
+  ]
+}

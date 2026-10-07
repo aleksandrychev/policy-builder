@@ -163,6 +163,7 @@ export function NewClassModal({
           value={paramValue(editingParam)}
           variables={templateTokens}
           mustache={editingParam.mustache === true}
+          help={editingParam.help}
           onClose={() => setEditingParam(null)}
           onSave={value => setParams(current => ({ ...current, [editingParam.name]: value }))}
         />

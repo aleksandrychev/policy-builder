@@ -34,3 +34,6 @@ class DOMMatrixReadOnlyStub {
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
 browserGlobals.ResizeObserver ??= ResizeObserverStub;
 browserGlobals.DOMMatrixReadOnly ??= DOMMatrixReadOnlyStub;
+
+// jsdom has no scrolling (the test log scrolls to its end).
+Element.prototype.scrollIntoView ??= () => {};

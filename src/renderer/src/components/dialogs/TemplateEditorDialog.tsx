@@ -2,7 +2,7 @@ import { type KeyboardEvent, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
-import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography, useTheme } from '@mui/material';
 
 import { autocompletion } from '@codemirror/autocomplete';
 import { EditorView } from '@codemirror/view';
@@ -13,6 +13,8 @@ import { mustacheLanguage } from '../editor/mustacheLanguage';
 import { type TemplateToken, type TemplateTokenSyntax, insertTemplateToken, templateTokenCompletionSource } from '../editor/templateTokens';
 
 interface TemplateEditorDialogProps {
+  // The parameter's help, shown under a Mustache template (its syntax notes).
+  help?: string;
   // True only for a field that's an actual Mustache template body (e.g.
   // render-template's template_content); false for plain CFEngine promise
   // text (a command string, a vars: literal, ...) where Mustache braces are
@@ -143,7 +145,8 @@ function TokenGroup({
   );
 }
 
-export function TemplateEditorDialog({ open, title, value, variables, mustache, onClose, onSave }: TemplateEditorDialogProps) {
+export function TemplateEditorDialog({ open, title, value, variables, mustache, help, onClose, onSave }: TemplateEditorDialogProps) {
+  const theme = useTheme();
   // The parent unmounts this dialog on close (conditional render), so a fresh
   // mount is guaranteed each time it opens — no effect needed to resync `draft`.
   const [draft, setDraft] = useState(value);
@@ -197,13 +200,17 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
 
   return (
     <Dialog open={open} onClose={handleDialogClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ fontSize: 16, fontWeight: 700 }}>{title}</DialogTitle>
+      <DialogTitle sx={{ fontSize: 16, fontWeight: 700 }}>
+        {title}
+        {mustache && help && <Typography sx={{ fontSize: 12, color: 'text.muted', mt: 0.5 }}>{help}</Typography>}
+      </DialogTitle>
       <DialogContent sx={{ display: 'flex', gap: 2, height: 480 }}>
         <Box sx={{ flex: 1, minWidth: 0, border: '1px solid', borderColor: 'divider', borderRadius: '4px', overflow: 'hidden' }}>
           <CodeMirror
             ref={(instance: ReactCodeMirrorRef | null) => setEditorView(instance?.view ?? null)}
             value={draft}
             onChange={setDraft}
+            theme={theme.palette.mode}
             height="100%"
             style={{ height: '100%', fontSize: 13 }}
             extensions={extensions}

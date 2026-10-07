@@ -3,6 +3,7 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileConditionRemoved,
+  fileDescriptionChanged,
   fileRemoved,
   fileRenamed,
   fileSelected,
@@ -36,11 +37,11 @@ describe('filesSlice', () => {
       expect([first, second, third].map(id => fileOf(store, id)?.namespace)).toEqual(['web', 'web_2', 'web_3']);
     });
 
-    it('never derives an empty or reserved namespace', () => {
+    it('never derives an empty or reserved namespace; masterfiles bundle names are fine', () => {
       const store = makeStore();
-      const ids = ['***', 'Default', 'sys', 'this'].map(name => addFile(store, name));
+      const ids = ['***', 'Default', 'sys', 'def', 'Main', 'inventory'].map(name => addFile(store, name));
       const namespaces = ids.map(id => fileOf(store, id)?.namespace);
-      expect(namespaces).toEqual(['file', 'default_2', 'sys_2', 'this_2']);
+      expect(namespaces).toEqual(['file', 'default_2', 'sys_2', 'def_2', 'main', 'inventory']);
     });
 
     it('names siblings uniquely, case-insensitively, but not across folders', () => {
@@ -65,6 +66,18 @@ describe('filesSlice', () => {
     it('skips taken and reserved suffixed candidates', () => {
       expect(deriveNamespace('web', ['web', 'web_2'])).toBe('web_3');
       expect(deriveNamespace('', ['file'])).toBe('file_2');
+    });
+
+    it('starts with a letter', () => {
+      expect(deriveNamespace('2024 plan')).toBe('file_2024_plan');
+      expect(deriveNamespace('_9')).toBe('file_9');
+    });
+
+    it('never is a reserved name', () => {
+      for (const name of ['default', 'sys', 'const', 'mon', 'this', 'match', 'edit', 'vars', 'classes', 'def']) {
+        expect(deriveNamespace(name)).toBe(`${name}_2`);
+      }
+      expect(deriveNamespace('vars', ['vars_2'])).toBe('vars_3');
     });
   });
 
@@ -167,6 +180,31 @@ describe('filesSlice', () => {
       store.dispatch(fileConditionModeChanged({ fileId, mode: 'unless' }));
       store.dispatch(fileConditionClassNameChanged({ fileId, className: 'x' }));
       expect(fileOf(store, fileId)?.condition).toBeUndefined();
+    });
+  });
+
+  describe('fileDescriptionChanged', () => {
+    it('sets the description as typed', () => {
+      const store = makeStore();
+      const fileId = addFile(store);
+      store.dispatch(fileDescriptionChanged({ fileId, description: ' Web tier. ' }));
+      expect(fileOf(store, fileId)?.description).toBe(' Web tier. ');
+    });
+
+    it('removes a description cleared to whitespace', () => {
+      const store = makeStore();
+      const fileId = addFile(store);
+      store.dispatch(fileDescriptionChanged({ fileId, description: 'Web tier.' }));
+      store.dispatch(fileDescriptionChanged({ fileId, description: '  \n ' }));
+      expect(fileOf(store, fileId)).not.toHaveProperty('description');
+    });
+
+    it('ignores an unknown file', () => {
+      const store = makeStore();
+      addFile(store);
+      const before = store.getState().files;
+      store.dispatch(fileDescriptionChanged({ fileId: 'nope', description: 'x' }));
+      expect(store.getState().files).toBe(before);
     });
   });
 

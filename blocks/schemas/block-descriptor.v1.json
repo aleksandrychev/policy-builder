@@ -161,6 +161,10 @@
         "help": {
           "type": "string"
         },
+        "summary": {
+          "$ref": "common.v1.json#/$defs/template",
+          "description": "One line for the generated policy's comment when the value goes through a chain or feeds a parameter, e.g. \"The {{output}} of {{command}}\"."
+        },
         "group": {
           "type": "string",
           "description": "Header this source is listed under in the selector."

@@ -1,0 +1,86 @@
+name: Coverage
+
+# Measures test coverage and uploads it to Codecov, one flag per language (badges in README.md).
+# Codecov's GitHub app authenticates the upload through OIDC: no token, so it runs in the
+# org's own repository only, for pushes and same-repository pull requests (forks get no OIDC token).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typescript:
+    name: TypeScript
+    if: github.repository_owner == 'cfengine' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-typescript
+          path: coverage/lcov.info
+          retention-days: 1
+
+  python:
+    name: Python
+    if: github.repository_owner == 'cfengine' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
+      - run: uv run --no-sync --directory python pytest --cov --cov-report=xml
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-python
+          path: python/coverage.xml
+          retention-days: 1
+
+  # Only this job gets an OIDC token: it runs none of the project's code or dependencies.
+  upload:
+    name: Upload
+    needs: [typescript, python]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Codecov maps the reports' paths onto the repository's files.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: coverage-typescript
+          path: coverage
+      - uses: actions/download-artifact@v7
+        with:
+          name: coverage-python
+          path: python
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          use_oidc: true
+          files: coverage/lcov.info
+          flags: typescript
+          fail_ci_if_error: true
+      - uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+        with:
+          use_oidc: true
+          files: python/coverage.xml
+          flags: python
+          fail_ci_if_error: true

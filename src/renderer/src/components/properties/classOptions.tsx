@@ -12,20 +12,10 @@ import { hardClasses } from '../editor/hardClasses';
 import { specialVariables } from '../editor/specialVariables';
 import type { TemplateToken } from '../editor/templateTokens';
 
-// Other blocks across the project that define a class or variable the user
-// might reference from a template. Classes default to namespace scope in
-// CFEngine (visible from any bundle within the same namespace unqualified),
-// so a class defined in the same file needs only its bare name — but one
-// namespace per file (see architecture-plan.md's Namespaces section) means a
-// class defined in a *different* file needs a "namespace:name" qualifier.
-// Variables are bundle-scoped: Define Variable instances all compile into
-// one shared "vars" bundle per file (see Block-to-policy compilation in
-// architecture-plan.md — this is an exception to the usual one-bundle-per-
-// instance rule, chosen for shorter references at the cost of variable names
-// having to be unique within a file), so a same-file reference only needs
-// "vars.name", and a cross-file one needs "namespace:vars.name".
-// Mustache always needs the namespace, even same-file: templates render
-// against datastate(), keyed "vars.<ns>:vars.<name>" / "classes.<ns>:<name>".
+// Other blocks across the project that define a class or variable the user might reference
+// from a template. Each file is its own namespace, its definitions in `bundle common vars`:
+// same file `vars.x` / `name`, another file `<ns>:vars.x` / `<ns>:name`. Mustache paths
+// follow datastate() and always carry the namespace: "vars.<ns>:vars.<name>" / "classes.<ns>:<name>".
 function definitionToken(
   promiseType: string | undefined,
   definedName: string,
@@ -46,7 +36,7 @@ function definitionToken(
 // A gated file's definitions only exist on hosts where that file runs.
 function otherFileGroup(file: PolicyFile): string {
   const gate = describeFileCondition(file.condition);
-  return `Defined in ${file.name}${gate ? ` · only where it ${gate}` : ''}`;
+  return `Defined in ${file.name}${gate ? ` · ${gate}` : ''}`;
 }
 
 // Every entry of a multi-entry block is its own token; `excludeEntryId` drops

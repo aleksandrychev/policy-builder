@@ -1,0 +1,9 @@
+### example
+  # Case 0
+  vars:
+    "case_0_path" slist => { "/var/www/html", "/var/www/uploads" };
+
+  files:
+    "$(case_0_path)/."
+      create => "true",
+      perms => default:mog("755", "www-data", "www-data");

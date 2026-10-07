@@ -20,7 +20,7 @@ export const PALETTE_HEIGHT_MAX = 0.85;
 // Properties needs the room more than the canvas does.
 const DEFAULT_LAYOUT: LayoutSettings = {
   leftSidebarFraction: 0.2,
-  paletteHeightFraction: 0.62,
+  paletteHeightFraction: 0.58,
   rightSidebarFraction: 0.32
 };
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "comment-lines",
+  "version": 1,
+  "name": "Comment Out Lines",
+  "category": "File Contents",
+  "description": "Comments out the lines of a file that match a pattern.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "edit_line": {
+          "bundle": "comment_lines_matching",
+          "args": [
+            "{{pattern}}",
+            "{{comment}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "string",
+      "required": true,
+      "help": "An absolute path.",
+      "path": "absolute"
+    },
+    {
+      "name": "pattern",
+      "label": "Line pattern",
+      "type": "string",
+      "required": true,
+      "help": "A regular expression the whole line must match, e.g. Listen 8.*"
+    },
+    {
+      "name": "comment",
+      "label": "Comment marker",
+      "type": "string",
+      "required": true,
+      "default": "#",
+      "help": "Put in front of each matching line."
+    }
+  ]
+}

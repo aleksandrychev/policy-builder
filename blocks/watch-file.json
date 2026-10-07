@@ -1,0 +1,33 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "watch-file",
+  "version": 1,
+  "name": "Watch File for Changes",
+  "category": "Files",
+  "description": "Reports when a file's content changes (repaired on a change).",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "files",
+      "promiser": "{{path}}",
+      "attributes": {
+        "changes": {
+          "body": "detect_content"
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "path",
+      "label": "File path",
+      "type": "text",
+      "required": true,
+      "allow_list": true,
+      "help": "One absolute path per line. The first run only records the hash, and counts as a change.",
+      "path": "absolute"
+    }
+  ]
+}

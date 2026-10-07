@@ -1,3 +1,4 @@
+import { describeCases } from '../blocks/cases';
 import { entryName, entrySummary } from '../blocks/definitionEntries';
 import { resolveBlockShape } from '../blocks/resolveBlockShape';
 import { type BlockDescriptor, optionLabel, optionValue } from '../blocks/types';
@@ -21,12 +22,18 @@ function paramRows(descriptor: BlockDescriptor, subject: EditableSubject, errorP
     .parameters.map(parameter => {
       const rawValue = subject.params[parameter.name] ?? '';
       const option = rawValue ? parameter.options?.find(candidate => optionValue(candidate) === rawValue) : undefined;
-      const value = option ? optionLabel(option) : parameter.type === 'text' ? rawValue.replace(/\s+/g, ' ').trim() : rawValue;
+      const value = option
+        ? optionLabel(option)
+        : parameter.type === 'cases'
+          ? describeCases(rawValue)
+          : parameter.type === 'text'
+            ? rawValue.replace(/\s+/g, ' ').trim()
+            : rawValue;
       return {
         key: parameter.name,
         label: parameter.label ?? parameter.name,
         value,
-        truncate: parameter.type === 'text',
+        truncate: parameter.type === 'text' || parameter.type === 'cases',
         error: parameter.name === errorParam
       };
     })

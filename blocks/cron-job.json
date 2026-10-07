@@ -1,0 +1,62 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "cron-job",
+  "version": 1,
+  "name": "Cron Job",
+  "category": "Commands",
+  "description": "Adds a line to a user's crontab, and reloads cron when it changes.",
+  "compile_target": "own_bundle",
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "methods",
+      "promiser": "cron job for {{user}}",
+      "attributes": {
+        "usebundle": {
+          "bundle": "cronjob",
+          "args": [
+            "{{command}}",
+            "{{user}}",
+            "{{hours}}",
+            "{{minutes}}"
+          ]
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "command",
+      "label": "Command",
+      "type": "string",
+      "required": true,
+      "help": "Start with an absolute path. Runs with cron's environment, not the agent's."
+    },
+    {
+      "name": "user",
+      "label": "Run as",
+      "type": "string",
+      "required": true,
+      "default": "root"
+    },
+    {
+      "name": "hours",
+      "label": "Hours",
+      "type": "string",
+      "required": true,
+      "default": "*",
+      "allowed_chars": "0-9*,/-",
+      "help": "Cron hour field: * for every hour, 3 or 0,12 or */6."
+    },
+    {
+      "name": "minutes",
+      "label": "Minutes",
+      "type": "string",
+      "required": true,
+      "default": "0",
+      "allowed_chars": "0-9*,/-",
+      "help": "Cron minute field: 0, 15,45 or */10. Runs every day of the month and week. Skipped on Windows."
+    }
+  ]
+}

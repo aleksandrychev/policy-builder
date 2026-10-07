@@ -1,35 +1,106 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { NewProjectDialog } from './components/dialogs/NewProjectDialog';
-import { createNginxDemoProject } from './demo/nginxDemoProject';
+import { Alert, Snackbar } from '@mui/material';
+
+import { NewProjectDialog, useMasterfilesVersions } from './components/dialogs/NewProjectDialog';
+import { ProjectSettingsDialog } from './components/dialogs/ProjectSettingsDialog';
+import { UnsavedChangesDialog } from './components/dialogs/UnsavedChangesDialog';
 import NoProjectScreen from './pages/NoProjectScreen';
 import ProjectView from './pages/ProjectView';
-import { useAppDispatch, useAppSelector } from './store';
-import { selectCurrentProject } from './store/projectSlice/selectors';
+import { useProjectSession } from './project/useProjectSession';
+
+type Session = ReturnType<typeof useProjectSession>;
+
+// A menu's Save while a dialog is up would act behind it.
+const modalOpen = () => Boolean(document.querySelector('[role="dialog"]'));
 
 export default function App() {
-  const dispatch = useAppDispatch();
-  const project = useAppSelector(selectCurrentProject);
-  // Owned here, not by NoProjectScreen, so the native File menu's "New
-  // Project…" (main/index.ts's buildApplicationMenu) can open it regardless
-  // of which screen is currently showing.
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const session = useProjectSession();
+  const { project, dirty, projectDialog, unsavedPrompt } = session;
+  // The native menu (main/index.ts's buildApplicationMenu) outlives renders: it always reaches the latest session.
+  const sessionRef = useRef<Session>(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  });
+  // Bumped when main reports the recent-projects list changed.
+  const [recentsVersion, setRecentsVersion] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const masterfilesVersions = useMasterfilesVersions();
 
   useEffect(
     () =>
-      window.api?.onMenuAction(action => {
-        if (action === 'new-project') setNewProjectOpen(true);
-        else if (action === 'try-demo') createNginxDemoProject(dispatch);
-        // 'open-project' has no renderer behavior yet — mirrors the
-        // still-inert "Open Project…" button on NoProjectScreen.
+      window.api?.onMenuAction((action, path) => {
+        const current = sessionRef.current;
+        if (action === 'new-project') current.newProject();
+        else if (action === 'try-demo') current.startDemo();
+        else if (action === 'save' && !modalOpen()) current.save();
+        else if (action === 'close-requested') current.requestClose();
+        else if (action === 'open-project' && !modalOpen()) current.openProject();
+        else if (action === 'open-recent' && path && !modalOpen()) current.openProject(path);
+        else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
+        else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
       }),
-    [dispatch]
+    []
   );
+
+  // A project folder or cfbs.json dropped anywhere on the window opens it (drops an editor handled are left alone).
+  useEffect(() => {
+    const hasFiles = (event: DragEvent) => Boolean(event.dataTransfer?.types.includes('Files'));
+    const onDragOver = (event: DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = modalOpen() ? 'none' : 'copy';
+    };
+    const onDrop = (event: DragEvent) => {
+      const file = event.dataTransfer?.files[0];
+      if (!file || event.defaultPrevented) return;
+      event.preventDefault();
+      const path = window.api?.getPathForFile(file);
+      if (path && !modalOpen()) sessionRef.current.openProject(path);
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.api?.setDocument({ edited: dirty, title: project?.name ?? null }).catch(() => {});
+  }, [dirty, project?.name]);
 
   return (
     <>
-      {project ? <ProjectView key={project.id} /> : <NoProjectScreen onNewProject={() => setNewProjectOpen(true)} />}
-      <NewProjectDialog open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+      {project ? (
+        <ProjectView key={project.id} dirty={dirty} onSave={session.save} onReload={session.reloadProject} onOpenSettings={() => setSettingsOpen(true)} />
+      ) : (
+        <NoProjectScreen onNewProject={session.newProject} onOpenProject={session.openProject} onTryDemo={session.startDemo} recentsVersion={recentsVersion} />
+      )}
+      {project && settingsOpen && (
+        <ProjectSettingsDialog
+          project={project}
+          latestMasterfiles={masterfilesVersions.latest}
+          onTypeChange={session.changeProjectType}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {projectDialog && (
+        <NewProjectDialog
+          mode={projectDialog}
+          initialName={projectDialog === 'saveAs' ? project?.name : undefined}
+          initialDescription={projectDialog === 'saveAs' ? project?.description || undefined : undefined}
+          initialType={projectDialog === 'saveAs' ? project?.type : undefined}
+          onClose={session.closeProjectDialog}
+          onSubmit={session.submitProjectDialog}
+        />
+      )}
+      {unsavedPrompt && project && <UnsavedChangesDialog projectName={project.name} {...unsavedPrompt} />}
+      <Snackbar open={Boolean(session.error)} onClose={session.dismissError} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity="error" onClose={session.dismissError}>
+          {session.error}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

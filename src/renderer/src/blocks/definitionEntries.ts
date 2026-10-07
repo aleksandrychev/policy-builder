@@ -1,4 +1,5 @@
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
+import { describeCases } from './cases';
 import { resolveBlockShape } from './resolveBlockShape';
 import { type BlockDescriptor, classRefsAttribute } from './types';
 
@@ -31,22 +32,22 @@ export function entrySummary(descriptor: BlockDescriptor, entry: DefinitionEntry
   const nameParam = descriptor.entries?.name_param;
   for (const parameter of source?.parameters ?? []) {
     if (parameter.name === nameParam) continue;
-    const value = (entry.params[parameter.name] ?? '').replace(/\s+/g, ' ').trim();
+    const raw = entry.params[parameter.name] ?? '';
+    const value = (parameter.type === 'cases' ? describeCases(raw) : raw).replace(/\s+/g, ' ').trim();
     if (value) return value;
   }
   return source?.label ?? '';
 }
 
-// Names are per file and per block kind: every Define Variable entry in a
-// file lands in the same compiled `vars` bundle, so two with one name
-// collide; a variable and a class sharing a name don't. Keys are
-// `${blockId}:${name}`.
-export function duplicateDefinitionKeys(instances: BlockInstance[], descriptorsById: Map<string, BlockDescriptor>): Set<string> {
+// Names defined twice, as `${blockId}:${name}` keys, for one file's cards. Variables and
+// classes are per file (its namespace's `vars` bundle); a variable and a class sharing a name don't collide.
+export function duplicateDefinitionKeys(allInstances: BlockInstance[], descriptorsById: Map<string, BlockDescriptor>, fileId: string | null): Set<string> {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
-  for (const instance of instances) {
+  for (const instance of allInstances) {
     const descriptor = descriptorsById.get(instance.blockId);
     if (!descriptor?.entries) continue;
+    if (instance.fileId !== fileId) continue;
     for (const entry of instance.entries ?? []) {
       const name = entryName(descriptor, entry);
       if (!name) continue;

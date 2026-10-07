@@ -1,0 +1,11 @@
+### example
+  # Case 0
+  files:
+    "/etc/app.conf"
+      create => "true",
+      edit_template => "$(this.promise_dirname)/templates/snap_case_0.mustache",
+      template_method => "mustache",
+      perms => default:mog("644", "root", "root");
+
+### file ./templates/snap_case_0.mustache
+host = {{{vars.sys.fqhost}}}

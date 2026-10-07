@@ -5,7 +5,7 @@ import type { ZoomControls } from '../components/FlowCanvas';
 // What each shortcut does. The command handlers return whether they acted,
 // so a key that did nothing keeps its native behaviour.
 export interface ShortcutHandlers {
-  // Bare zoom keys only apply while the canvas tab is showing.
+  // Zoom keys only apply while the canvas tab is showing.
   canvasActive: boolean;
   onCopy: () => boolean;
   onCut: () => boolean;
@@ -14,6 +14,7 @@ export interface ShortcutHandlers {
   onGroup: () => void;
   onPaste: () => boolean;
   onRedo: () => void;
+  onSave: () => void;
   onUndo: () => void;
   onUngroup: () => void;
   zoomControlsRef: RefObject<ZoomControls | null>;
@@ -25,17 +26,23 @@ function isEditableTarget(target: Element | null): boolean {
   return (target as HTMLElement).isContentEditable;
 }
 
-// n8n-style bare zoom keys — Ctrl/Cmd +/-/0 already belong to the View menu's page zoom.
-function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null) {
+// n8n-style bare zoom keys, plus Ctrl/Cmd +/-/0 (the app has no page zoom: they zoom the canvas).
+function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null, withCommand = false) {
   if (!zoom) return;
-  const zoomActions: Record<string, () => void> = { '+': zoom.zoomIn, '=': zoom.zoomIn, '-': zoom.zoomOut, '0': zoom.reset, '1': zoom.fit };
+  const zoomActions: Record<string, () => void> = {
+    '+': zoom.zoomIn,
+    '=': zoom.zoomIn,
+    '-': zoom.zoomOut,
+    '0': zoom.reset,
+    ...(withCommand ? {} : { '1': zoom.fit })
+  };
   const zoomAction = zoomActions[event.key];
   if (!zoomAction) return;
   event.preventDefault();
   zoomAction();
 }
 
-// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, copy/cut/paste.
+// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, copy/cut/paste (⌘S is handled before the text-field check).
 function handleCommandKey(event: KeyboardEvent, handlers: ShortcutHandlers) {
   const key = event.key.toLowerCase();
   const run = (action: () => unknown) => {
@@ -64,9 +71,17 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       // A dialog, menu or popover (all MUI modals) takes priority, even with focus on its own buttons.
       if (document.querySelector('[role="dialog"], .MuiModal-root:not(.MuiModal-hidden)')) return;
       if (event.key === 'Escape') return current.onEscape();
+      // ⌘S saves even while typing in a field.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        return current.onSave();
+      }
       // Never hijack typing, or native copy/paste of actual text (TextFields, CodeMirror…).
       if (isEditableTarget(document.activeElement)) return;
-      if (event.ctrlKey || event.metaKey) return handleCommandKey(event, current);
+      if (event.ctrlKey || event.metaKey) {
+        if (current.canvasActive && !event.altKey) handleZoomKey(event, current.zoomControlsRef.current, true);
+        return event.defaultPrevented ? undefined : handleCommandKey(event, current);
+      }
       if (event.altKey) return;
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (current.onDelete()) event.preventDefault();

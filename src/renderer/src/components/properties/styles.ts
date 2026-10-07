@@ -3,7 +3,12 @@
 // `background.input` exists in the theme for exactly this, but isn't wired
 // to any global component style, so it's applied per-field here instead of
 // in the (shared, do-not-restyle) theme itself.
-export const inputSx = { '& .MuiInputBase-root': { bgcolor: 'background.input' }, '& .MuiFormHelperText-root': { fontSize: '12px' } };
+// Labels default to text.secondary, too dim on the input's background in dark mode.
+export const inputSx = {
+  '& .MuiInputBase-root': { bgcolor: 'background.input' },
+  '& .MuiInputLabel-root:not(.Mui-focused):not(.Mui-error)': { color: 'text.muted' },
+  '& .MuiFormHelperText-root': { fontSize: '12px' }
+};
 
 // The shared theme makes Autocomplete fields borderless except while
 // focused, gives the inner input its own compact padding, and tints it with

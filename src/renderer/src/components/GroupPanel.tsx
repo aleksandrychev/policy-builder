@@ -1,15 +1,20 @@
-import { Box, Button, ButtonBase, Stack, TextField, Typography, useTheme } from '@mui/material';
+import type { ReactNode } from 'react';
+
+import { Box, Button, ButtonBase, Divider, Stack, TextField, Typography, useTheme } from '@mui/material';
 
 import type { BlockInstance } from '../store/canvasSlice/types';
 import { type BlockGroup, GROUP_COLORS, type GroupColor } from '../store/groupsSlice/types';
 
 const inputSx = { '& .MuiInputBase-root': { bgcolor: 'background.input' } };
 
-// Properties panel content for a selected group: name, colour, members, and
-// the ways out (ungroup keeps the blocks; delete takes them too).
+// Properties panel content for a selected group: name, colour, what gates it
+// (its condition and arrows), members, and the ways out (ungroup keeps the
+// blocks; delete takes them too).
 export function GroupPanel({
   group,
   members,
+  condition,
+  runsWhen,
   orderOf,
   autoFocusName,
   onRename,
@@ -20,6 +25,8 @@ export function GroupPanel({
   onFit
 }: {
   autoFocusName: boolean;
+  // The group's Condition and "Runs when" sections.
+  condition: ReactNode;
   group: BlockGroup;
   members: BlockInstance[];
   onColorChange: (color: GroupColor) => void;
@@ -30,6 +37,7 @@ export function GroupPanel({
   onSelectMember: (instanceId: string) => void;
   onUngroup: () => void;
   orderOf: (instanceId: string) => number | undefined;
+  runsWhen: ReactNode;
 }) {
   const theme = useTheme();
   return (
@@ -84,8 +92,14 @@ export function GroupPanel({
         ))}
       </Box>
       <Typography sx={{ fontSize: 12, color: 'text.muted' }}>
-        A group is visual: it doesn’t change what runs or in which order. Move it by its title bar; drag its edges to make room.
+        Its blocks compile into a bundle of their own and run together, as one step. Arrows into and out of the group go from its frame’s dots. Move it by its
+        title bar; drag its edges to make room.
       </Typography>
+      <Divider />
+      {condition}
+      <Divider />
+      {runsWhen}
+      <Divider />
       {group.rect && (
         <Box>
           <Button size="small" onClick={onFit} sx={{ textTransform: 'none', px: 0.5 }}>

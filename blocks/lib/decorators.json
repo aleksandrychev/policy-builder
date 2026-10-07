@@ -5,6 +5,7 @@
     {
       "id": "regex-replace",
       "label": "Extract / replace with regex",
+      "summary": "replace {{pattern}} with \"{{replacement}}\"",
       "badge": "regex_replace()",
       "help": "To extract rather than replace, use a capture group in the pattern and \"$1\" (etc.) as the replacement.",
       "input_type": "string",
@@ -46,6 +47,7 @@
     {
       "id": "string-head",
       "label": "First N characters",
+      "summary": "keep the first {{length}} characters",
       "badge": "string_head()",
       "input_type": "string",
       "output_type": "string",
@@ -73,6 +75,7 @@
     {
       "id": "string-tail",
       "label": "Last N characters",
+      "summary": "keep the last {{length}} characters",
       "badge": "string_tail()",
       "input_type": "string",
       "output_type": "string",
@@ -100,6 +103,7 @@
     {
       "id": "string-trim",
       "label": "Trim whitespace",
+      "summary": "trim surrounding whitespace",
       "badge": "string_trim()",
       "input_type": "string",
       "output_type": "string",
@@ -116,6 +120,7 @@
     {
       "id": "string-downcase",
       "label": "Lowercase",
+      "summary": "lowercase",
       "badge": "string_downcase()",
       "input_type": "string",
       "output_type": "string",
@@ -132,6 +137,7 @@
     {
       "id": "string-upcase",
       "label": "Uppercase",
+      "summary": "uppercase",
       "badge": "string_upcase()",
       "input_type": "string",
       "output_type": "string",
@@ -148,6 +154,7 @@
     {
       "id": "string-reverse",
       "label": "Reverse",
+      "summary": "reverse",
       "badge": "string_reverse()",
       "input_type": "string",
       "output_type": "string",
@@ -164,6 +171,7 @@
     {
       "id": "string-replace",
       "label": "Replace literal text",
+      "summary": "replace \"{{find}}\" with \"{{replacement}}\"",
       "badge": "string_replace()",
       "input_type": "string",
       "output_type": "string",
@@ -195,6 +203,7 @@
     {
       "id": "format",
       "label": "Format into a template string",
+      "summary": "format as \"{{format_string}}\"",
       "badge": "format()",
       "help": "CFEngine format string; %s is replaced with the value from the previous step.",
       "input_type": "string",
@@ -221,6 +230,7 @@
     {
       "id": "lastnode",
       "label": "Last path/link segment",
+      "summary": "keep what follows the last \"{{separator}}\"",
       "badge": "lastnode()",
       "help": "The separator is a regex (escape a literal . as \\.), e.g. lastnode(\"/etc/init.d/nginx\", \"/\") -> \"nginx\". A value ending in the separator gives \"\".",
       "input_type": "string",
@@ -247,6 +257,7 @@
     {
       "id": "split-list",
       "label": "Split into a list",
+      "summary": "split into a list on \"{{delimiter}}\"",
       "badge": "string_split()",
       "input_type": "string",
       "output_type": "slist",
@@ -283,6 +294,7 @@
     {
       "id": "grep",
       "label": "Keep matching entries (grep)",
+      "summary": "keep entries matching {{pattern}}",
       "badge": "grep()",
       "input_type": "slist",
       "output_type": "slist",
@@ -308,6 +320,7 @@
     {
       "id": "filter",
       "label": "Filter entries",
+      "summary": "filter entries on {{pattern}}",
       "badge": "filter()",
       "input_type": "slist",
       "output_type": "slist",
@@ -359,6 +372,7 @@
     {
       "id": "maplist",
       "label": "Transform each entry",
+      "summary": "map each entry to \"{{pattern}}\"",
       "badge": "maplist()",
       "help": "Use $(this) to reference each entry.",
       "input_type": "slist",
@@ -385,6 +399,7 @@
     {
       "id": "sort",
       "label": "Sort",
+      "summary": "sort ({{method}})",
       "badge": "sort()",
       "input_type": "slist",
       "output_type": "slist",
@@ -420,6 +435,7 @@
     {
       "id": "unique",
       "label": "Remove duplicates",
+      "summary": "remove duplicates",
       "badge": "unique()",
       "input_type": "slist",
       "output_type": "slist",
@@ -436,6 +452,7 @@
     {
       "id": "join",
       "label": "Join into a string",
+      "summary": "join with \"{{glue}}\"",
       "badge": "join()",
       "input_type": "slist",
       "output_type": "string",
@@ -461,6 +478,7 @@
     {
       "id": "nth",
       "label": "Pick entry by index",
+      "summary": "take entry {{index}}",
       "badge": "nth()",
       "input_type": "slist",
       "output_type": "string",
@@ -487,6 +505,7 @@
     {
       "id": "length",
       "label": "Count entries",
+      "summary": "count the entries",
       "badge": "length()",
       "input_type": "slist",
       "output_type": "int",
@@ -503,6 +522,7 @@
     {
       "id": "default-if-empty",
       "label": "Default if empty",
+      "summary": "fall back to \"{{fallback}}\" if unset or \"{{trigger}}\"",
       "badge": "isvariable()",
       "help": "Uses the fallback when the value is undefined (e.g. its file is missing) or equals the trigger.",
       "input_type": "string",

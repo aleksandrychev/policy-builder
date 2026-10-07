@@ -1,5 +1,6 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
+import { projectLoaded } from '../projectSlice';
 import { deriveNamespace } from './deriveNamespace';
 import { collectFolderDescendants, sanitizeFileSystemName, uniqueSiblingName } from './fileTree';
 import type { PolicyFile, PolicyFolder } from './types';
@@ -29,13 +30,14 @@ const filesSlice = createSlice({
     // Replaces the whole file list: called once, when a project is created,
     // so a previous project's files can't leak into the new one.
     projectFilesInitialized: {
-      reducer(_state, action: PayloadAction<{ id: string; name: string }>) {
+      reducer(_state, action: PayloadAction<{ id: string; name: string; taken: string[] }>) {
         const name = sanitizeFileSystemName(action.payload.name) || DEFAULT_NAME;
-        const file: PolicyFile = { id: action.payload.id, name, namespace: deriveNamespace(name), parentId: null };
+        const file: PolicyFile = { id: action.payload.id, name, namespace: deriveNamespace(name, action.payload.taken), parentId: null };
         return { files: [file], folders: [], currentFileId: file.id };
       },
-      prepare(name: string) {
-        return { payload: { id: crypto.randomUUID(), name } };
+      // `taken`: names the file's namespace (and so its ./<namespace>.cf) must not have.
+      prepare(name: string, taken: string[] = []) {
+        return { payload: { id: crypto.randomUUID(), name, taken } };
       }
     },
     fileAdded: {
@@ -84,10 +86,16 @@ const filesSlice = createSlice({
       const file = state.files.find(item => item.id === action.payload.fileId);
       if (file?.condition) file.condition.className = action.payload.className;
     },
+    fileDescriptionChanged(state, action: PayloadAction<{ description: string; fileId: string }>) {
+      const file = state.files.find(item => item.id === action.payload.fileId);
+      if (!file) return;
+      if (action.payload.description.trim()) file.description = action.payload.description;
+      else delete file.description;
+    },
     fileSelected(state, action: PayloadAction<{ fileId: string }>) {
       state.currentFileId = action.payload.fileId;
     },
-    // Renaming never touches namespace — see the field comment in types.ts.
+    // Renaming never touches the namespace — see the field comment in types.ts.
     fileRenamed(state, action: PayloadAction<{ fileId: string; name: string }>) {
       const file = state.files.find(item => item.id === action.payload.fileId);
       if (!file) return;
@@ -124,6 +132,9 @@ const filesSlice = createSlice({
         state.currentFileId = state.files[0]?.id ?? null;
       }
     }
+  },
+  extraReducers: builder => {
+    builder.addCase(projectLoaded, (_state, action) => action.payload.content.files);
   }
 });
 
@@ -135,6 +146,7 @@ export const {
   fileConditionRemoved,
   fileConditionModeChanged,
   fileConditionClassNameChanged,
+  fileDescriptionChanged,
   fileSelected,
   fileRenamed,
   folderRenamed,

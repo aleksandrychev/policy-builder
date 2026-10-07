@@ -1,5 +1,10 @@
 # CFEngine Policy Builder
 
+[![CI](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cfengine/policy-builder/actions/workflows/ci.yml)
+[![Electron security](https://github.com/cfengine/policy-builder/actions/workflows/electron-security.yml/badge.svg?branch=main)](SECURITY-CHECKLIST.md)
+[![TypeScript coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=typescript&label=TypeScript%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=typescript)
+[![Python coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=python&label=Python%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=python)
+
 Desktop application for building CFEngine policy.
 
 **Stack:** 
@@ -26,6 +31,11 @@ npm run dev          # launches Electron app
 `npm run dev` needs the sidecar to exist, so `backend:sync` is a one-time
 prerequisite. Without it, the app runs but anything touching the backend
 reports that it cannot be found.
+
+## Security
+
+How the app follows Electron's security recommendations, item by item, and
+how that is checked: [SECURITY-CHECKLIST.md](SECURITY-CHECKLIST.md).
 
 ## Project structure
 

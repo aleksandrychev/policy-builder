@@ -161,3 +161,7 @@ python/build/
 # Playwright (e2e/)
 test-results/
 playwright-report/
+
+# Python coverage (npm run backend:coverage)
+.coverage
+coverage.xml

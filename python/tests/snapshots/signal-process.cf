@@ -1,0 +1,43 @@
+### example
+  # Case 0
+  processes:
+    "nginx: master.*" signals => { "hup" };
+
+### signal = 'term'
+  # Case 1
+  processes:
+    "nginx: master.*" signals => { "term" };
+
+### signal = 'kill'
+  # Case 2
+  processes:
+    "nginx: master.*" signals => { "kill" };
+
+### signal = 'int'
+  # Case 3
+  processes:
+    "nginx: master.*" signals => { "int" };
+
+### signal = 'cont'
+  # Case 4
+  processes:
+    "nginx: master.*" signals => { "cont" };
+
+### signal = 'stop'
+  # Case 5
+  processes:
+    "nginx: master.*" signals => { "stop" };
+
+### run_interval = '60'
+  # Case 6
+  processes:
+    "nginx: master.*"
+      signals => { "hup" },
+      action => default:if_elapsed("60");
+
+### run_interval = '1440'
+  # Case 7
+  processes:
+    "nginx: master.*"
+      signals => { "hup" },
+      action => default:if_elapsed("1440");

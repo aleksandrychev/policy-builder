@@ -60,9 +60,10 @@
             "string",
             "number",
             "boolean",
-            "text"
+            "text",
+            "cases"
           ],
-          "description": "\"text\" is a multiline \"string\". Values are stored as strings; booleans as \"true\"/\"false\"."
+          "description": "\"text\" is a multiline \"string\". \"cases\" is a list of condition + value rows (JSON: [{\"className\", \"mode\", \"value\"}]), read by cases_param. Values are stored as strings; booleans as \"true\"/\"false\"."
         },
         "required": {
           "type": "boolean",
@@ -289,6 +290,70 @@
             },
             "value": {
               "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "choose",
+            "cases"
+          ],
+          "description": "The case for the parameter's value (an options parameter): e.g. a separator per file format.",
+          "properties": {
+            "choose": {
+              "$ref": "#/$defs/identifier"
+            },
+            "cases": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "$ref": "#/$defs/expression"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cases_param",
+            "otherwise"
+          ],
+          "description": "A cases parameter's rows as ifelse(\"<condition>\", \"<value>\", …, <otherwise>): the first row whose condition holds wins.",
+          "properties": {
+            "cases_param": {
+              "$ref": "#/$defs/identifier"
+            },
+            "otherwise": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "array_param"
+          ],
+          "description": "A one-entry-per-line parameter (`key value` or `key=value`) as a local associative array, \"<prefix><param>[key]\" string => \"value\"; compiles to the array's qualified name, as stdlib bundles like set_line_based() take it.",
+          "properties": {
+            "array_param": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "template_file"
+          ],
+          "description": "Attributes only: the parameter's text, written to its own file next to the compiled policy (<block bundle>.mustache), and compiled to that file's path, \"$(this.promise_dirname)/<block bundle>.mustache\". The file is used as-is: no CFEngine escaping, and no $(...) expansion.",
+          "properties": {
+            "template_file": {
+              "$ref": "#/$defs/identifier"
             }
           }
         }

@@ -19,7 +19,7 @@ PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 # Stdlib bodies the compiled policy may reference (as default:<name>). The
 # compiler has to ship masterfiles' lib/ for these; add to the list knowingly.
-STDLIB_BODIES = {"mog", "local_cp", "recurse", "tidy", "in_shell", "if_elapsed"}
+STDLIB_BODIES = {"mog", "local_cp", "recurse", "tidy", "in_shell", "if_elapsed", "ln_s", "days_old", "detect_content"}
 
 
 def _schema(name: str) -> dict:
@@ -72,6 +72,19 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
             problems.append(f"{where}: {expr['body']} takes {len(known[expr['body']]['parameters'])} arguments")
     if "list_param" in expr:
         yield expr["list_param"]
+    if "array_param" in expr:
+        yield expr["array_param"]
+    if "cases_param" in expr:
+        yield expr["cases_param"]
+        yield from _walk(expr["otherwise"], top_level=False, in_decorator=in_decorator, problems=problems, where=where)
+    if "choose" in expr:
+        yield expr["choose"]
+        for case in expr["cases"].values():
+            yield from _walk(case, top_level=False, in_decorator=in_decorator, problems=problems, where=where)
+    if "template_file" in expr:
+        if not top_level:
+            problems.append(f"{where}: template_file is only allowed as a whole attribute value")
+        yield expr["template_file"]
     for key in ("variable", "bundle", "class_expression"):
         if key in expr:
             yield from PLACEHOLDER.findall(expr[key])
@@ -124,6 +137,15 @@ def _check_steps(steps: list[dict], params: list[dict], where: str, problems: li
     return used
 
 
+def _check_summary(item: dict, params: list[dict], where: str, problems: list[str]):
+    """A summary (the generated policy's comment) may only name parameters."""
+    names = {param["name"] for param in params}
+    problems += [
+        f"{where}: summary's {{{{{name}}}}} isn't a parameter"
+        for name in set(PLACEHOLDER.findall(item.get("summary", ""))) - names
+    ]
+
+
 def _check_descriptor(path: Path, problems: list[str]):
     block = json.loads(path.read_text())
     where = path.name
@@ -148,6 +170,7 @@ def _check_descriptor(path: Path, problems: list[str]):
         used = _check_steps(source["steps"], params, at, problems)
         for name in {param["name"] for param in source["parameters"]} - used:
             problems.append(f"{at}: parameter {name} is never used")
+        _check_summary(source, params, at, problems)
         step = source["steps"][0]
         if step["promise_type"] == "vars":
             if list(step.get("attributes", {})) != [source.get("value_type")]:
@@ -205,6 +228,7 @@ def test_decorators_are_consistent():
         names = {param["name"] for param in params}
         problems += [f"{where}: {{{{{name}}}}} isn't a parameter" for name in used - names]
         problems += [f"{where}: parameter {name} is never used" for name in names - used]
+        _check_summary(decorator, params, where, problems)
     assert problems == []
 
 

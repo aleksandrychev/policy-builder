@@ -150,6 +150,11 @@ describe('list functions', () => {
     expect(run('join', { glue: ',' }, [])).toBe('');
   });
 
+  it('an emptied parameter means its default, as the compiler reads it', () => {
+    expect(run('join', { glue: '' }, ['a', 'b'])).toBe('a, b');
+    expect(run('join', {}, ['a', 'b'])).toBe('a, b');
+  });
+
   it('unique keeps first occurrences in order', () => {
     expect(run('unique', {}, ['a', 'b', 'a', 'c', 'b'])).toEqual(['a', 'b', 'c']);
     expect(run('unique', {}, ['b', 'a', 'b'])).toEqual(['b', 'a']);
