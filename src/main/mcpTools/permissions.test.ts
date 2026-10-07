@@ -22,7 +22,8 @@ describe('MCP permissions', () => {
   it('offers everything by default', () => {
     const names = offered(DEFAULT_PERMISSIONS);
     expect(names).toHaveLength(new Set(names).size);
-    for (const name of ['create_project', 'add_file', 'add_block', 'remove_block', 'run_tests', 'get_project_overview']) expect(names).toContain(name);
+    for (const name of ['create_project', 'add_file', 'add_block', 'remove_block', 'run_tests', 'get_project_overview', 'begin_work'])
+      expect(names).toContain(name);
   });
 
   it('always offers reading, and nothing else when every group is off', () => {

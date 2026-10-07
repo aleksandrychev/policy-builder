@@ -32,6 +32,7 @@ beforeEach(() => {
       selectedInstanceId: null,
       fitView: () => undefined,
       nodeHeight: () => undefined,
+      showTests: () => undefined,
       sizeOf: () => ({ width: 200, height: 100 })
     },
     dispatch: store.dispatch,

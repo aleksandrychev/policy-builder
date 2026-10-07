@@ -7,6 +7,8 @@ import type { ZoomControls } from '../components/FlowCanvas';
 export interface ShortcutHandlers {
   // Zoom keys only apply while the canvas tab is showing.
   canvasActive: boolean;
+  // An AI agent is working: no shortcut reaches the editor.
+  locked?: boolean;
   onCopy: () => boolean;
   onCut: () => boolean;
   onDelete: () => boolean;
@@ -68,6 +70,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const current = handlersRef.current;
+      if (current.locked) return;
       // A dialog, menu or popover (all MUI modals) takes priority, even with focus on its own buttons.
       if (document.querySelector('[role="dialog"], .MuiModal-root:not(.MuiModal-hidden)')) return;
       if (event.key === 'Escape') return current.onEscape();

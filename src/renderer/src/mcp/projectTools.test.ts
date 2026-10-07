@@ -20,6 +20,7 @@ function setup(session: Partial<SessionTools> = {}) {
       selectedInstanceId: null,
       fitView: () => undefined,
       nodeHeight: () => undefined,
+      showTests: () => undefined,
       sizeOf: () => ({ width: 200, height: 80 })
     },
     dispatch: store.dispatch,

@@ -22,6 +22,8 @@ export interface CanvasEnv {
   // Shows a file on the canvas (and the Canvas view).
   openFile: (fileId: string) => void;
   selectedInstanceId: string | null;
+  // Switches to Tests & Logs (a test run the agent starts).
+  showTests: () => void;
   sizeOf: SizeOf;
 }
 

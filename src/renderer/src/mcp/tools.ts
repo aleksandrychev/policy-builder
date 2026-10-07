@@ -3,9 +3,10 @@ import { DEFINITION_TOOLS } from './definitionTools';
 import { PROJECT_TOOLS } from './projectTools';
 import type { Input, Tool, ToolEnv } from './shared';
 import { TEST_TOOLS } from './testTools';
+import { WORK_TOOLS } from './workTools';
 
 /** Every MCP tool by name (src/main/mcpTools/ declares them), answered as JSON text. */
-const TOOLS: Record<string, Tool> = { ...PROJECT_TOOLS, ...CANVAS_TOOLS, ...DEFINITION_TOOLS, ...TEST_TOOLS };
+const TOOLS: Record<string, Tool> = { ...WORK_TOOLS, ...PROJECT_TOOLS, ...CANVAS_TOOLS, ...DEFINITION_TOOLS, ...TEST_TOOLS };
 
 export interface ToolAnswer {
   content: string;

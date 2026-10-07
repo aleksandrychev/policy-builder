@@ -19,6 +19,9 @@ type Group = 'edit' | 'files' | 'projects' | 'read' | 'testing';
 export const DEFAULT_PERMISSIONS: McpPermissions = { delete: true, edit: true, files: true, projects: true, testing: true };
 
 const GROUP_OF: Record<string, Group> = {
+  // Locking and unlocking the editor: always allowed.
+  begin_work: 'read',
+  end_work: 'read',
   get_project_status: 'read',
   get_project_overview: 'read',
   get_file: 'read',

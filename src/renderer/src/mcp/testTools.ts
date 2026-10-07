@@ -18,6 +18,7 @@ import {
   newEnvironment
 } from '../store/testEnvironmentsSlice';
 import { PLATFORMS, type TestEnvironment, type TestHost } from '../store/testEnvironmentsSlice/types';
+import { agentActivity } from './activity';
 import { type Input, type Tool, type ToolEnv, ToolError, optionalStr, str } from './shared';
 
 /**
@@ -488,6 +489,11 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function waitIdle(environmentId: string, seconds: number): Promise<boolean> {
   const deadline = Date.now() + seconds * 1000;
   while (runtimeOf(environmentId).action) {
+    // The user pressed Stop in the app: the run is cancelled with the agent.
+    if (agentActivity().paused) {
+      testRuns.cancelAction(environmentId);
+      throw new ToolError('Stopped by the user in Policy Builder; the test run was cancelled');
+    }
     if (Date.now() >= deadline) return false;
     await sleep(POLL_MS.value);
   }
@@ -508,6 +514,7 @@ async function start(env: ToolEnv, input: Input, action: Action) {
 async function runTests(env: ToolEnv, input: Input) {
   const seconds = input.timeoutSeconds ?? RUN_WAIT_S;
   if (!Number.isInteger(seconds) || (seconds as number) < 1 || (seconds as number) > RUN_WAIT_S) throw new ToolError(`timeoutSeconds is 1 to ${RUN_WAIT_S}`);
+  env.canvas?.showTests();
   const environment = await start(env, input, 'test');
   if (input.wait === false) return { started: true, environmentId: environment.id, note: 'Poll get_test_results until status isn’t "running"' };
   const finished = await waitIdle(environment.id, seconds as number);

@@ -32,6 +32,7 @@ import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
 import { TestResultsView } from '../components/TestResultsView';
 import { PROJECT_TABS, TopBar } from '../components/TopBar';
+import { AgentLock } from '../components/agent/AgentLock';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
@@ -267,6 +268,8 @@ function DragPreviewCard({ badge, label }: DragPreview) {
 interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
+  // An AI agent is working: the editor is locked (viewing only).
+  locked: boolean;
   // Opens Connect an AI agent (the MCP server).
   onConnectAgent: () => void;
   onOpenSettings: () => void;
@@ -277,7 +280,7 @@ interface ProjectViewProps {
 }
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -740,10 +743,12 @@ export default function ProjectView({ dirty, onConnectAgent, onOpenSettings, onR
     openFile: fileId => {
       dispatch(fileSelected({ fileId }));
       setActiveTab(0);
-    }
+    },
+    showTests: () => setActiveTab(2)
   });
 
   useKeyboardShortcuts({
+    locked,
     canvasActive: activeTab === 0,
     zoomControlsRef,
     onEscape: handleEscape,
@@ -940,7 +945,7 @@ export default function ProjectView({ dirty, onConnectAgent, onOpenSettings, onR
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setDragPreview(null)}>
-      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
         <TopBar
           projectName={project.name}
           dirty={dirty}
@@ -954,11 +959,13 @@ export default function ProjectView({ dirty, onConnectAgent, onOpenSettings, onR
           onSave={onSave}
           onOpenSettings={onOpenSettings}
           onConnectAgent={onConnectAgent}
+          locked={locked}
           savedToDisk={Boolean(project.path)}
           type={project.type}
         />
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+          {locked && <AgentLock />}
           {showSidebars && (
             <>
               <Box
