@@ -120,10 +120,32 @@ function blockType(blockTypeId: string) {
   };
 }
 
-function warnings(state: RootState) {
+// What the compiler left out ("# Skipped …: why." in the policy), by the block whose lines hold it.
+async function skippedParts(state: RootState): Promise<Map<string, string[]>> {
+  const skipped = new Map<string, string[]>();
+  if (!state.project) return skipped;
+  const compiled = await window.api?.compilePolicy(compiledPart(toCfbsProject({ ...state, testEnvironments: [] }, state.project).project));
+  for (const [path, policy] of Object.entries(compiled?.files ?? {})) {
+    const ranges = Object.entries(compiled?.sourceMap[path] ?? {});
+    policy.split('\n').forEach((line, index) => {
+      const reason = /^\s*# (Skipped .*)\.$/.exec(line)?.[1];
+      const at = index + 1;
+      const owner = ranges
+        .flatMap(([id, spans]) => spans.filter(([first, last]) => first <= at && at <= last).map(([first, last]) => ({ id, size: last - first })))
+        .sort((a, b) => a.size - b.size)[0]?.id;
+      if (reason && owner) skipped.set(owner, [...(skipped.get(owner) ?? []), reason]);
+    });
+  }
+  return skipped;
+}
+
+async function warnings(state: RootState) {
+  const skipped = await skippedParts(state);
   const missing = state.canvas.flatMap(block => {
     const descriptor = blockDescriptorsById.get(block.blockId);
-    if (!descriptor || block.entries) return [];
+    if (!descriptor) return [];
+    const notCompiled = skipped.get(block.instanceId);
+    if (block.entries) return notCompiled ? [{ blockId: block.instanceId, label: block.label, fileId: block.fileId, notCompiled }] : [];
     const parameters = resolveBlockShape(descriptor, block.valueSourceId).parameters.filter(param => !block.paramBindings?.[param.name]);
     const empty = parameters.filter(param => param.required && !block.params[param.name]?.trim()).map(param => param.label ?? param.name);
     const invalid = parameters.flatMap(param => {
@@ -131,14 +153,15 @@ function warnings(state: RootState) {
       const problem = param.type === 'cases' || !value ? undefined : valueProblem(param, value);
       return problem ? [`${param.name} ${problem}`] : [];
     });
-    return empty.length || invalid.length
+    return empty.length || invalid.length || notCompiled
       ? [
           {
             blockId: block.instanceId,
             label: block.label,
             fileId: block.fileId,
             ...(empty.length ? { missing: empty } : {}),
-            ...(invalid.length ? { invalid } : {})
+            ...(invalid.length ? { invalid } : {}),
+            ...(notCompiled ? { notCompiled } : {})
           }
         ]
       : [];

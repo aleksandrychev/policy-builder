@@ -63,7 +63,7 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
     {
       inputSchema: {},
       description:
-        'What the editor flags in the project: blocks with required parameters left empty, or values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters).',
+        'What the editor flags in the project: blocks with required parameters left empty, values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters), and blocks or entries the generated policy leaves out (notCompiled, with why: e.g. an invalid class expression). Run it after editing, before saving.',
       annotations: READ_ONLY
     },
     answer('get_warnings')
