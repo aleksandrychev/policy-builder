@@ -133,6 +133,32 @@ function folderPaths(folders: PolicyFolder[]): Map<string, string> {
   return paths;
 }
 
+// A policy file's name on disk, from its name: renaming a file renames its .cf (the save removes the old one).
+const fileSlug = (name: string) => {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60)
+      .replace(/_+$/, '') || 'file';
+  return /^[a-z]/.test(base) ? base : `file_${base}`;
+};
+
+// File id → its .cf path; files in one folder whose slugs clash get _2, _3….
+function filePaths(files: PolicyFile[], folders: Map<string, string>): Map<string, string> {
+  const paths = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const file of files) {
+    const base = `${(file.parentId && folders.get(file.parentId)) || ROOT}${fileSlug(file.name)}`;
+    let path = `${base}.cf`;
+    for (let suffix = 2; taken.has(path); suffix += 1) path = `${base}_${suffix}.cf`;
+    taken.add(path);
+    paths.set(file.id, path);
+  }
+  return paths;
+}
+
 function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta {
   const prefix = `${file.id}|`;
   const instances = data.canvas.filter(block => block.fileId === file.id);
@@ -217,7 +243,8 @@ function toProvided(names: Map<string, string[]>, identity: Identity): ProvidedM
 
 export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjectContent {
   const paths = folderPaths(data.files.folders);
-  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.namespace}.cf`;
+  const policyPaths = filePaths(data.files.files, paths);
+  const pathOf = (file: PolicyFile) => policyPaths.get(file.id)!;
   const callsBlocks = (file: PolicyFile) => data.canvas.some(block => block.fileId === file.id && isSequenced(blockDescriptorsById.get(block.blockId)));
   // Modules in the order their first file appears; a folder's bundles in file order.
   const modules = new Map<string, string[]>();

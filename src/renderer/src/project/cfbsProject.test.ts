@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createNginxDemoProject } from '../demo/nginxDemoProject';
 import { derivedNodeMoved } from '../store/derivedNodesSlice';
-import { fileAdded, fileConditionClassNameChanged, fileConditionEnabled, folderAdded } from '../store/filesSlice';
+import { fileAdded, fileConditionClassNameChanged, fileConditionEnabled, fileRenamed, folderAdded } from '../store/filesSlice';
 import { groupCreated } from '../store/groupsSlice';
 import { addBlock, makeStore } from '../store/test/storeTestUtils';
 import { SCHEMA_VERSION, fromBuilderProject, loadCfbsProject, toCfbsProject } from './cfbsProject';
@@ -86,6 +86,31 @@ describe('cfbsProject', () => {
     expect(modules[0].steps.at(-1)).toBe('bundles cron:main postgres:main');
     expect(project.files.map(file => file.path)).toEqual(['./services/cron.cf', './services/db/postgres.cf', './services/only_vars.cf']);
     expect(project.folders.find(folder => folder.id === empty)?.path).toBe('./empty/');
+  });
+
+  it('names a policy file after the file: a renamed file moves, its namespace stays', () => {
+    const store = makeStore();
+    const fileId = store.dispatch(fileAdded('MCP Trial', null)).payload.id;
+    addBlock(store, fileId);
+    store.dispatch(fileRenamed({ fileId, name: 'Common' }));
+
+    const { project, modules } = toCfbsProject(store.getState(), IDENTITY);
+
+    expect(project.files[0]).toMatchObject({ path: './common.cf', namespace: 'mcp_trial' });
+    expect(modules[0].steps).toEqual(['copy ./common.cf services/cfbs/common.cf', 'policy_files services/cfbs/common.cf', 'bundles mcp_trial:main']);
+  });
+
+  it('gives files whose names slug alike their own paths, starting with a letter', () => {
+    const store = makeStore();
+    store.dispatch(fileAdded('Web Server', null));
+    store.dispatch(fileAdded('web-server', null));
+    store.dispatch(fileAdded('2024 plan', null));
+
+    expect(toCfbsProject(store.getState(), IDENTITY).project.files.map(file => file.path)).toEqual([
+      './web_server.cf',
+      './web_server_2.cf',
+      './file_2024_plan.cf'
+    ]);
   });
 
   it('gives a file of only variables and classes no bundles step: it has no entry bundle', () => {
