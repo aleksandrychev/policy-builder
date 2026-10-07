@@ -19,9 +19,6 @@ updates:
         versions: [8.x]
       - dependency-name: '@vitejs/plugin-react'
         versions: [6.x]
-      # @northern.tech/eslint-config plugin stack doesn't support eslint 10 yet
-      - dependency-name: eslint
-        versions: [10.x]
       # ts-api-utils/typescript-eslint don't support the TS 7 native port yet
       - dependency-name: typescript
         versions: [7.x]

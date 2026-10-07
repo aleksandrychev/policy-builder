@@ -82,7 +82,7 @@ function useProjectState(git: GitStatus | null) {
   );
   const content = useMemo(() => (saved ? contentKey(saved) : ''), [saved]);
   const changes = useMemo(() => {
-    let head: ProjectData | null = null;
+    let head: ProjectData | null;
     try {
       head = git?.headBuilder ? fromBuilderProject(git.headBuilder) : null;
     } catch {
