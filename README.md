@@ -23,7 +23,7 @@ Desktop application for building CFEngine policy.
 ## Getting started
 
 ```sh
-npm install
+npm ci               # install exactly the versions package-lock.json pins
 npm run backend:sync # create python/.venv with the CFEngine toolchain
 npm run dev          # launches Electron app
 ```
