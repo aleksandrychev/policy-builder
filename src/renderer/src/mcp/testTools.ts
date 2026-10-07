@@ -217,7 +217,9 @@ function resultsOf(state: RootState, environment: TestEnvironment, logLines: num
   };
   const names = new Map(environment.hosts.map(host => [host.id, host.name]));
   const { lastRun } = runtime;
-  const status = runtime.action ? 'running' : !lastRun ? 'not run' : lastRun.passed ? 'passed' : 'failed';
+  // Still repairing after the last run: something changes the host every time (the view's "Still repairing").
+  const settled = environment.hosts.every(host => runtime.hosts[host.id]?.converged !== false);
+  const status = runtime.action ? 'running' : !lastRun ? 'not run' : !lastRun.passed ? 'failed' : settled ? 'passed' : 'not converged';
   const project = state.project;
   return {
     environmentId: environment.id,
@@ -239,10 +241,14 @@ function resultsOf(state: RootState, environment: TestEnvironment, logLines: num
         converged: known?.converged,
         agentRuns: runs.length || undefined,
         compliance: last && { kept: last.kept, repaired: last.repaired, notKept: last.notKept, exit: last.exit },
+        // The first run does most of the work: its repairs and failures don't show in the last one.
+        complianceByRun:
+          runs.length > 1 ? runs.map(run => ({ run: run.run, kept: run.kept, repaired: run.repaired, notKept: run.notKept, exit: run.exit })) : undefined,
         problems: (runtime.problems[host.id] ?? []).map(problem => ({
           message: problem.message,
           cause: problem.cause.length ? problem.cause : undefined,
           count: problem.count,
+          runs: problem.runs,
           block: problem.block ? describe(problem.block) : null,
           bundle: problem.bundle,
           file: problem.file,

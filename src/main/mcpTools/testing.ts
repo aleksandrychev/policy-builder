@@ -111,7 +111,7 @@ export function registerTestTools(server: McpServer, answer: Answer) {
     'get_test_results',
     {
       description:
-        'The latest run of an environment (whether it is still running, passed or failed, and whether the policy changed since) in the shape run_tests returns, with the end of its log.',
+        'The latest run of an environment (running, passed, failed, or not converged: a host still repaired something in its last run, so a promise changes the host every time; and whether the policy changed since) in the shape run_tests returns, with the end of its log.',
       inputSchema: { environmentId, logLines: z.number().int().min(0).max(1000).optional().describe('Log lines to include (default 100)') },
       annotations: READ_ONLY
     },

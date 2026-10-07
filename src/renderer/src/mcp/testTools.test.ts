@@ -233,6 +233,8 @@ describe('runs', () => {
       lines: ['a', 'b', 'c'].map(text => ({ kind: 'step', text, time: 0 }))
     });
     expect(await call('get_test_results', { logLines: 2 })).toMatchObject({ status: 'passed', policyChangedSince: true, log: ['b', 'c'] });
+    runtimes.set(environment.id, { ...(runtimes.get(environment.id) as object), hosts: { [environment.hosts[0].id]: { state: 'done', converged: false } } });
+    expect((await call('get_test_results')).status).toBe('not converged');
   });
 
   it('stops or destroys the containers', async () => {
