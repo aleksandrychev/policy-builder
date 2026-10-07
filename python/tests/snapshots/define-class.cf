@@ -8,11 +8,11 @@
 
 ### source combine-and
     # Case 2
-    "combine_and" and => { "linux", "!debian" };
+    "combine_and" and => { "default:linux", "!default:debian" };
 
 ### source combine-or
     # Case 3
-    "combine_or" or => { "linux", "!debian" };
+    "combine_or" or => { "default:linux", "!default:debian" };
 
 ### source check-file-exists
     # Case 4
@@ -24,7 +24,7 @@
 
 ### source check-variable-defined
     # Case 6
-    "check_variable_defined" expression => isvariable("snap_vars.literal");
+    "check_variable_defined" expression => isvariable("snap:vars.literal");
 
 ### source check-matches-pattern
     # Case 7
@@ -50,4 +50,4 @@
 
 ### source custom
     # Case 12
-    "custom" expression => "linux";
+    "custom" expression => "default:linux";

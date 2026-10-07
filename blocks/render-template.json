@@ -44,7 +44,7 @@
       "type": "text",
       "required": true,
       "mustache": true,
-      "help": "Mustache: {{{vars.<bundle>_vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<class>}}…{{/classes.<class>}} keeps a section only while the class is set. It's saved as its own .mustache file next to the policy, used as written: $(name) isn't expanded there, use {{{vars.…}}}."
+      "help": "Mustache: {{{vars.<namespace>:vars.<name>}}} inserts a variable (triple braces: not HTML-escaped), {{#classes.<namespace>:<class>}}…{{/classes.<namespace>:<class>}} keeps a section only while the class is set. It's saved as its own .mustache file next to the policy, used as written: $(name) isn't expanded there, use {{{vars.…}}}."
     },
     {
       "name": "mode",

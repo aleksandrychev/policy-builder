@@ -25,7 +25,7 @@ const POLICY = [
   'bundle agent web_group',
   '{',
   '  reports:',
-  '    "$(common_vars.port)";',
+  '    "$(common:vars.port)";',
   '}'
 ].join('\n');
 
@@ -44,7 +44,7 @@ const report = region('report', [
   [20, 21]
 ]);
 const group = region('group', [[18, 22]], true);
-const references: PolicyReference[] = [{ fileId: 'common', id: 'vars-block', name: 'common_vars.port' }];
+const references: PolicyReference[] = [{ fileId: 'common', id: 'vars-block', name: 'common:vars.port' }];
 
 describe('lineRegions', () => {
   it('maps each line to its block, and the banner to none', () => {
@@ -115,7 +115,7 @@ describe('policyBlocks', () => {
   });
 
   it('follows a reference instead of selecting', () => {
-    const link = view.dom.querySelector('[data-ref="common_vars.port"]');
+    const link = view.dom.querySelector('[data-ref="common:vars.port"]');
     expect(link).not.toBeNull();
     clickAt(lineStart(21) + 6, link!);
     expect(onFollow).toHaveBeenCalledWith(references[0]);

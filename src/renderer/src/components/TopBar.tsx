@@ -63,13 +63,13 @@ function ViewSwitch({ active, badges, onChange }: { active: number; badges?: Par
 interface TopBarProps {
   activeTab: number;
   blockCount: number;
-  // The open file's entry bundle.
-  bundle: string;
   // Unsaved changes since the last save.
   dirty: boolean;
   // "runs only if linux", when the open file is gated.
   fileGate?: string;
   masterfiles: string | null;
+  // The open file's namespace.
+  namespace: string;
   onOpenSettings: () => void;
   // Saving writes cfbs.json, the builder's data and the generated policy.
   onSave: () => void;
@@ -97,7 +97,7 @@ const chipSx = {
   textOverflow: 'ellipsis',
   maxWidth: 200,
   flexShrink: 0,
-  // No room beside the view switch on a narrow window: hidden rather than squeezed (the status bar names the bundle).
+  // No room beside the view switch on a narrow window: hidden rather than squeezed (the status bar names the namespace).
   '@media (max-width: 1600px)': { display: 'none' }
 } as const;
 
@@ -105,7 +105,7 @@ export function TopBar({
   projectName,
   dirty,
   masterfiles,
-  bundle,
+  namespace,
   fileGate,
   blockCount,
   activeTab,
@@ -155,7 +155,7 @@ export function TopBar({
             </Typography>
           )}
           {masterfiles && <Typography sx={chipSx}>masterfiles {masterfiles}</Typography>}
-          <Typography sx={chipSx}>bundle: {bundle}</Typography>
+          <Typography sx={chipSx}>namespace: {namespace}</Typography>
           {fileGate && (
             <Typography title="The whole file is gated by this condition" sx={chipSx}>
               {fileGate}

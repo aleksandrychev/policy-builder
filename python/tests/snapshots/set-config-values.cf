@@ -6,8 +6,8 @@
 
   files:
     "/etc/ssh/sshd_config"
-      edit_line => set_line_based(
-        "snap.case_0_settings", " ", "\s+", ".*", "\s*#\s*"
+      edit_line => default:set_line_based(
+        "snap:main.case_0_settings", " ", "\s+", ".*", "\s*#\s*"
       );
 
 ### format = 'equals'
@@ -18,6 +18,6 @@
 
   files:
     "/etc/ssh/sshd_config"
-      edit_line => set_line_based(
-        "snap.case_1_settings", "=", "\s*=\s*", ".*", "\s*#\s*"
+      edit_line => default:set_line_based(
+        "snap:main.case_1_settings", "=", "\s*=\s*", ".*", "\s*#\s*"
       );

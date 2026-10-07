@@ -124,7 +124,7 @@ test('drag a block in, edit it, save and reopen', async ({ window, scratchDir, c
     await expect(window.getByLabel('Service name')).toHaveValue('sshd');
   });
 
-  // The policy file is named after the file's bundle.
+  // The policy file is named after the file's namespace.
   expect(readFileSync(join(scratchDir, 'projects/build-e2e/build_e2e.cf'), 'utf-8')).toContain('"sshd"');
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
@@ -165,8 +165,8 @@ test('conditions, arrows and undo/redo', async ({ window, consoleErrors }) => {
   const after = await chip.innerText();
 
   const policy = await generatedPolicy(window);
-  expect(policy).toContain('classes => results("bundle", "flow_e2e_start_web")');
-  expect(policy).toContain('if => "linux.(flow_e2e_start_web_kept|flow_e2e_start_web_not_kept)"');
+  expect(policy).toContain('classes => default:results("bundle", "start_web")');
+  expect(policy).toContain('if => "default:linux.(start_web_kept|start_web_not_kept)"');
   await showCanvas(window);
 
   await test.step('undo takes back the outcome, then the arrow; redo re-applies both', async () => {
@@ -251,8 +251,8 @@ test('groups: group two blocks and name the group', async ({ window, consoleErro
   await window.getByLabel('Group name').fill('Web stack');
 
   const policy = await generatedPolicy(window);
-  expect(policy).toContain('usebundle => groups_e2e_web_stack');
-  expect(policy).toContain('bundle agent groups_e2e_web_stack');
+  expect(policy).toContain('usebundle => web_stack');
+  expect(policy).toContain('bundle agent web_stack');
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 

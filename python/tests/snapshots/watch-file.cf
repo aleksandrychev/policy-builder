@@ -4,4 +4,4 @@
     "case_0_path" slist => { "/etc/passwd", "/etc/group" };
 
   files:
-    "$(case_0_path)" changes => detect_content;
+    "$(case_0_path)" changes => default:detect_content;

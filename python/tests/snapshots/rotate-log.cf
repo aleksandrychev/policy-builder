@@ -5,4 +5,4 @@
 
   methods:
     "rotate $(case_0_path)"
-      usebundle => logrotate("$(case_0_path)", "50M", "5");
+      usebundle => default:logrotate("$(case_0_path)", "50M", "5");

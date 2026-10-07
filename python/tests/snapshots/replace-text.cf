@@ -2,4 +2,4 @@
   # Case 0
   files:
     "/etc/nginx/nginx.conf"
-      edit_line => regex_replace("example\.com", "demo.local");
+      edit_line => default:regex_replace("example\.com", "demo.local");

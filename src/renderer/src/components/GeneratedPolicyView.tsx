@@ -30,13 +30,13 @@ const barColor = (palette: Palette, promiseType: string | undefined) =>
     users: palette.success.dark
   })[promiseType ?? ''] ?? palette.text.disabled;
 
-// The classes and variables the project defines: Define Class entries are global names, Define
-// Variable entries live in their file's `<bundle>_vars`.
-function useProjectReferences(): PolicyReference[] {
+// The classes and variables the project defines, as the open file's policy names them: its own
+// bare (`vars.x`, `name`) or qualified, another file's as `<ns>:vars.x` / `<ns>:name`.
+function useProjectReferences(currentFileId: string | null): PolicyReference[] {
   const canvas = useAppSelector(state => state.canvas);
   const files = useAppSelector(state => state.files.files);
   return useMemo(() => {
-    const bundles = new Map(files.map(file => [file.id, file.bundle]));
+    const namespaces = new Map(files.map(file => [file.id, file.namespace]));
     return canvas.flatMap(instance => {
       const descriptor = blockDescriptorsById.get(instance.blockId);
       const kind = descriptor && primaryPromiseType(descriptor);
@@ -44,11 +44,12 @@ function useProjectReferences(): PolicyReference[] {
       return (instance.entries ?? []).flatMap(entry => {
         const name = entryName(descriptor, entry);
         if (!name) return [];
-        const qualified = kind === 'vars' ? `${bundles.get(instance.fileId)}_vars.${name}` : name;
-        return [{ name: qualified, id: instance.instanceId, fileId: instance.fileId }];
+        const local = kind === 'vars' ? `vars.${name}` : name;
+        const names = [`${namespaces.get(instance.fileId)}:${local}`, ...(instance.fileId === currentFileId ? [local] : [])];
+        return names.map(qualified => ({ name: qualified, id: instance.instanceId, fileId: instance.fileId }));
       });
     });
-  }, [canvas, files]);
+  }, [canvas, files, currentFileId]);
 }
 
 const selectedLine = Decoration.line({ class: 'cm-selected-block' });
@@ -94,7 +95,7 @@ export function GeneratedPolicyView({
   const ranges = useMemo(() => (policyPath && selectedId ? (result?.sourceMap[policyPath]?.[selectedId] ?? []) : []), [policyPath, selectedId, result]);
   const canvas = useAppSelector(state => state.canvas);
   const groups = useAppSelector(state => state.groups);
-  const references = useProjectReferences();
+  const references = useProjectReferences(currentFileId);
   const regions = useMemo((): PolicyRegion[] => {
     const map = (policyPath && result?.sourceMap[policyPath]) || {};
     return Object.entries(map).flatMap(([id, ranges]) => {

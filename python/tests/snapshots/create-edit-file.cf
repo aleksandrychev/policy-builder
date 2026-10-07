@@ -6,4 +6,4 @@
       content => "name = \"app\"
 port = 8080
 ",
-      perms => mog("644", "root", "root");
+      perms => default:mog("644", "root", "root");

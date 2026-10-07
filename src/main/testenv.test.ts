@@ -26,7 +26,7 @@ const invoke = invoker(state.handlers);
 const stream = vi.mocked(startSidecarStream);
 const query = vi.mocked(testEnvQuery);
 const environment = { id: 'env1', hosts: [] };
-const policyModule = { name: './web.cf', steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web'] };
+const policyModule = { name: './web.cf', steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web:main'] };
 const content = { project: { files: [] }, modules: [policyModule, { name: './lib/', steps: ['directory ./ services/cfbs/lib/'] }] };
 
 beforeEach(() => {

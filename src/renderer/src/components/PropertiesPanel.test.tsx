@@ -285,8 +285,8 @@ describe('PropertiesPanel', () => {
         expect(within(listbox).getByText('Defined in this file')).toBeInTheDocument();
         expect(within(listbox).getByText('Defined in Detect · runs only if linux')).toBeInTheDocument();
         expect(within(listbox).getByText('Hard classes')).toBeInTheDocument();
-        fireEvent.click(within(listbox).getByText('is_web'));
-        expect(blockOf(store, id)?.condition?.className).toBe('is_web');
+        fireEvent.click(within(listbox).getByText('detect:is_web'));
+        expect(blockOf(store, id)?.condition?.className).toBe('detect:is_web');
       });
 
       it('notes a condition the file already requires', () => {

@@ -4,7 +4,7 @@ import { hardClasses } from '../editor/hardClasses';
 import { specialVariables } from '../editor/specialVariables';
 import { buildClassNameOptions, buildTemplateTokens } from './classOptions';
 
-const file = (id: string, name: string, extra: Partial<PolicyFile> = {}): PolicyFile => ({ id, name, bundle: id, parentId: null, ...extra });
+const file = (id: string, name: string, extra: Partial<PolicyFile> = {}): PolicyFile => ({ id, name, namespace: id, parentId: null, ...extra });
 
 const definitions = (instanceId: string, fileId: string, blockId: 'define-class' | 'define-variable', names: string[]): BlockInstance => ({
   instanceId,
@@ -42,8 +42,8 @@ describe('buildClassNameOptions', () => {
     expect(project).toEqual([
       { name: 'ready', label: 'main-classes label', group: 'Defined in this file' },
       { name: 'tuned', label: 'main-classes label', group: 'Defined in this file' },
-      { name: 'hardened', label: 'base-classes label', group: 'Defined in Base · skipped if windows' },
-      { name: 'nginx_ok', label: 'web-classes label', group: 'Defined in Web · runs only if linux' }
+      { name: 'base:hardened', label: 'base-classes label', group: 'Defined in Base · skipped if windows' },
+      { name: 'web:nginx_ok', label: 'web-classes label', group: 'Defined in Web · runs only if linux' }
     ]);
     expect(options.slice(project.length).every(option => option.group === 'Hard classes')).toBe(true);
     expect(options.slice(project.length).map(option => option.name)).toEqual(hardClasses.map(hardClass => hardClass.name));
@@ -72,29 +72,35 @@ describe('buildClassNameOptions', () => {
 });
 
 describe('buildTemplateTokens', () => {
-  it('offers classes and the variables of each file’s _vars bundle', () => {
+  it('offers this file’s classes and variables bare, another file’s qualified with its namespace', () => {
     const tokens = buildTemplateTokens(instances, files, 'main');
     const project = tokens.slice(0, tokens.length - specialVariables.length - hardClasses.length);
 
     expect(project).toEqual([
       {
-        name: 'nginx_ok',
-        mustachePath: 'classes.nginx_ok',
+        name: 'web:nginx_ok',
+        mustachePath: 'classes.web:nginx_ok',
         label: 'web-classes label',
         group: 'Defined in Web · runs only if linux',
         kind: 'class'
       },
-      { name: 'ready', mustachePath: 'classes.ready', label: 'main-classes label', group: 'Defined in this file', kind: 'class' },
-      { name: 'tuned', mustachePath: 'classes.tuned', label: 'main-classes label', group: 'Defined in this file', kind: 'class' },
-      { name: 'main_vars.port', mustachePath: 'vars.main_vars.port', label: 'main-vars label', group: 'Defined in this file', kind: 'variable' },
+      { name: 'ready', mustachePath: 'classes.main:ready', label: 'main-classes label', group: 'Defined in this file', kind: 'class' },
+      { name: 'tuned', mustachePath: 'classes.main:tuned', label: 'main-classes label', group: 'Defined in this file', kind: 'class' },
+      { name: 'vars.port', mustachePath: 'vars.main:vars.port', label: 'main-vars label', group: 'Defined in this file', kind: 'variable' },
       {
-        name: 'hardened',
-        mustachePath: 'classes.hardened',
+        name: 'base:hardened',
+        mustachePath: 'classes.base:hardened',
         label: 'base-classes label',
         group: 'Defined in Base · skipped if windows',
         kind: 'class'
       }
     ]);
+  });
+
+  it('qualifies another file’s variable with its namespace, in Mustache paths too', () => {
+    const tokens = buildTemplateTokens(instances, files, 'web');
+    expect(tokens.find(token => token.kind === 'variable')).toMatchObject({ name: 'main:vars.port', mustachePath: 'vars.main:vars.port' });
+    expect(tokens.find(token => token.label === 'web-classes label')).toMatchObject({ name: 'nginx_ok', mustachePath: 'classes.web:nginx_ok' });
   });
 
   it('ends with the special variables, then the hard classes', () => {
@@ -106,6 +112,6 @@ describe('buildTemplateTokens', () => {
 
   it('leaves out the entry being edited', () => {
     const names = buildTemplateTokens(instances, files, 'main', 'main-vars-e0').map(token => token.name);
-    expect(names).not.toContain('main_vars.port');
+    expect(names).not.toContain('vars.port');
   });
 });

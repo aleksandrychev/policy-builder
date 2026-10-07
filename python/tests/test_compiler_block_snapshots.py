@@ -123,7 +123,7 @@ def _render(name: str) -> str:
     """Each case's compiled lines, under a `### <case>` heading."""
     cases = _cases(name)
     blocks = [block for _case, block in cases]
-    file = {"id": "f", "name": "Snapshot", "bundle": "snap", "path": "./snap.cf", "blocks": blocks}
+    file = {"id": "f", "name": "Snapshot", "namespace": "snap", "path": "./snap.cf", "blocks": blocks}
     meta = {"files": [{**file, "order": [b["instanceId"] for b in blocks]}]}
     source_map: dict = {}
     files = compile_project(meta, source_map=source_map)

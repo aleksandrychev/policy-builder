@@ -1,5 +1,6 @@
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { primaryPromiseType } from '../blocks/resolveBlockShape';
+import type { BlockDescriptor } from '../blocks/types';
 import { GRID_SIZE, nextStackPosition } from '../canvas/layout';
 import { useAppDispatch, useAppSelector } from '../store';
 import { blockAdded, blockRemoved } from '../store/canvasSlice';
@@ -7,7 +8,8 @@ import { selectCanvasBlocks } from '../store/canvasSlice/selectors';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { clipboardCopied, clipboardCut, clipboardDowngradedToCopy } from '../store/clipboardSlice';
 import { selectClipboard } from '../store/clipboardSlice/selectors';
-import { copyParamBindings, copySubjectFields, definedNames, uniqueParamValue } from './pasteCopies';
+import { selectFiles } from '../store/filesSlice/selectors';
+import { type PasteOrigin, copyParamBindings, copySubjectFields, definedNames, requalifyParams, uniqueParamValue } from './pasteCopies';
 
 interface ClipboardDeps {
   announce: (message: string) => void;
@@ -24,6 +26,21 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, instan
   const dispatch = useAppDispatch();
   const clipboard = useAppSelector(selectClipboard);
   const allInstances = useAppSelector(selectCanvasBlocks);
+  const files = useAppSelector(selectFiles);
+
+  // What the snapshot's bare references meant in its own file (see PasteOrigin).
+  const pasteOrigin = (snapshot: BlockInstance, descriptor: BlockDescriptor | undefined): PasteOrigin | undefined => {
+    const namespace = files.find(file => file.id === snapshot.fileId)?.namespace;
+    if (!namespace) return undefined;
+    const classes = new Set<string>();
+    for (const item of allInstances) {
+      const definer = blockDescriptorsById.get(item.blockId);
+      if (item.fileId !== snapshot.fileId || item.instanceId === snapshot.instanceId || !definer?.entries) continue;
+      if (primaryPromiseType(definer) === 'classes') definedNames([item], item.blockId, definer).forEach(name => classes.add(name));
+    }
+    const ownVariables = descriptor && primaryPromiseType(descriptor) === 'vars' ? definedNames([snapshot], snapshot.blockId, descriptor) : new Set<string>();
+    return { namespace, classes, ownVariables };
+  };
 
   const handleCopyBlock = (instanceId: string) => {
     const instance = instances.find(item => item.instanceId === instanceId);
@@ -45,23 +62,22 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, instan
     if (!snapshot || !currentFileId) return;
     const crossFile = snapshot.fileId !== currentFileId;
     const descriptor = blockDescriptorsById.get(snapshot.blockId);
+    const origin = crossFile ? pasteOrigin(snapshot, descriptor) : undefined;
 
     // Same-file paste immediately collides with the block it was copied
     // from; cross-file paste only sometimes does. Either way, only fix up
     // what this paste just created — not a repo-wide uniqueness pass.
-    // Variables are per file; classes are project-wide names. A cut's own
-    // original goes away, so it doesn't count.
+    // A cut's own original goes away, so it doesn't count.
     const nameParam = descriptor?.entries?.name_param;
-    const scope = descriptor && primaryPromiseType(descriptor) === 'classes' ? allInstances : instances;
-    const others = scope.filter(item => clipboard.mode !== 'cut' || item.instanceId !== snapshot.instanceId);
+    const others = instances.filter(item => clipboard.mode !== 'cut' || item.instanceId !== snapshot.instanceId);
     const taken = descriptor ? definedNames(others, snapshot.blockId, descriptor) : new Set<string>();
     const entries: DefinitionEntry[] | undefined = snapshot.entries?.map(entry => {
-      const params = { ...entry.params };
+      const params = requalifyParams(entry.params, descriptor, origin);
       if (nameParam && params[nameParam]) {
         params[nameParam] = uniqueParamValue(params[nameParam], taken);
         taken.add(params[nameParam]);
       }
-      return { ...entry, ...copySubjectFields(entry), id: crypto.randomUUID(), params };
+      return { ...entry, ...copySubjectFields(entry, origin), id: crypto.randomUUID(), params };
     });
 
     let pastedId = '';
@@ -71,7 +87,7 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, instan
           blockId: snapshot.blockId,
           fileId: currentFileId,
           label: snapshot.label,
-          params: { ...snapshot.params },
+          params: requalifyParams(snapshot.params, descriptor, origin),
           // Same file: next to the original. Another file: under its lowest
           // block. Arrows don't travel with a pasted block.
           position:
@@ -79,10 +95,10 @@ export function useClipboardActions({ announce, asOneStep, currentFileId, instan
               ? { x: snapshot.position.x + 2 * GRID_SIZE, y: snapshot.position.y + 2 * GRID_SIZE }
               : nextStackPosition(instances, sizeOf),
           valueSourceId: snapshot.valueSourceId,
-          ...copySubjectFields(snapshot),
+          ...copySubjectFields(snapshot, origin),
           entries,
           incomingMode: snapshot.incomingMode,
-          paramBindings: copyParamBindings(snapshot.paramBindings)
+          paramBindings: copyParamBindings(snapshot.paramBindings, origin)
         })
       );
       pastedId = pasteAction.payload.instanceId;

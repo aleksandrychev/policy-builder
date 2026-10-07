@@ -4,4 +4,4 @@
     "case_0_path" slist => { "/tmp/build", "/tmp/cache" };
 
   methods:
-    "remove $(case_0_path)" usebundle => rm_rf("$(case_0_path)");
+    "remove $(case_0_path)" usebundle => default:rm_rf("$(case_0_path)");

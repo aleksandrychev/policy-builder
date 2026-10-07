@@ -59,10 +59,10 @@ function buildCommonBlocks(): DemoBlock[] {
 }
 
 const NGINX_CONF_TEMPLATE = `user www-data;
-worker_processes {{{vars.common_vars.worker_processes}}};
+worker_processes {{{vars.common:vars.worker_processes}}};
 
 events {
-    worker_connections {{{vars.common_vars.worker_connections}}};
+    worker_connections {{{vars.common:vars.worker_connections}}};
 }
 
 http {
@@ -84,14 +84,14 @@ function buildWebserverBlocksBeforeTemplate(): DemoBlock[] {
     {
       blockId: 'install-package',
       label: 'Install web server package',
-      params: { package_name: '$(common_vars.webserver_package)' },
-      condition: { mode: 'if', kind: 'class', className: 'webserver_role' }
+      params: { package_name: '$(common:vars.webserver_package)' },
+      condition: { mode: 'if', kind: 'class', className: 'common:webserver_role' }
     },
     {
       blockId: 'remove-package',
       label: 'Remove conflicting Apache',
       params: { package_name: 'apache2' },
-      condition: { mode: 'if', kind: 'class', className: 'webserver_role' }
+      condition: { mode: 'if', kind: 'class', className: 'common:webserver_role' }
     }
   ];
 }
@@ -142,13 +142,13 @@ const LANDING_PAGE_TEMPLATE = `<!DOCTYPE html>
 </head>
 <body>
   <main>
-    {{#classes.webserver_role}}<span class="badge">Web server role</span>{{/classes.webserver_role}}
+    {{#classes.common:webserver_role}}<span class="badge">Web server role</span>{{/classes.common:webserver_role}}
     <h1>CFEngine Policy Builder demo project</h1>
     <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>
     <dl>
       <dt>Host</dt><dd>{{{vars.sys.fqhost}}}</dd>
       <dt>Operating system</dt><dd>{{{vars.sys.flavor}}}</dd>
-      <dt>nginx workers</dt><dd>{{{vars.common_vars.worker_processes}}}</dd>
+      <dt>nginx workers</dt><dd>{{{vars.common:vars.worker_processes}}}</dd>
       <dt>CFEngine</dt><dd>{{{vars.sys.cf_version}}}</dd>
     </dl>
     <footer>Rendered by cf-agent from a Mustache template.</footer>
@@ -367,7 +367,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   securityGroup('SSH hardening', 'info', [security.sshdPresent, security.hardenSsh, security.restartSsh]);
   securityGroup('Account protection', 'warning', [security.accountFiles, security.passwordHashes, security.watchAccounts, security.reportAccounts]);
   // The "webserver_role" condition pill, off to the side of the blocks it gates.
-  dispatch(derivedNodeMoved({ key: `${webserverFileId}|if|webserver_role`, position: { x: 60, y: -20 } }));
+  dispatch(derivedNodeMoved({ key: `${webserverFileId}|if|common:webserver_role`, position: { x: 60, y: -20 } }));
   // One Ubuntu host serving the landing page on http://localhost:8080/. Fixed ids: every demo
   // session finds the same container again (Docker labels carry them) instead of orphaning it.
   const demoEnvironment = newEnvironment('Demo web server', { id: 'demo-web', name: 'web', ports: [{ host: 8080, container: 80 }] });

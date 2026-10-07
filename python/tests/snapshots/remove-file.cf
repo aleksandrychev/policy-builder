@@ -2,5 +2,5 @@
   # Case 0
   files:
     "/etc/nginx/sites-enabled/default"
-      delete => tidy,
+      delete => default:tidy,
       pathtype => "literal";

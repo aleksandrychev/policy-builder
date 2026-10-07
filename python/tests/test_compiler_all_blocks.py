@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -143,7 +144,7 @@ def _project() -> dict:
         if LIBRARY.descriptors[block["blockId"]]["compile_target"] == "own_bundle"
     ]
     return {
-        "files": [{"id": "f", "name": "All", "bundle": "all", "path": "./all.cf", "blocks": blocks, "order": order}]
+        "files": [{"id": "f", "name": "All", "namespace": "all", "path": "./all.cf", "blocks": blocks, "order": order}]
     }
 
 
@@ -156,7 +157,28 @@ def test_every_block_source_and_decorator_compiles_without_a_skip():
             assert f"\n  # {descriptor['name']}\n" in policy, block_id
     assert '"install_package_package_name"\n      slist => string_split(' in policy
     assert '"report_message_message" string => readfile(' in policy
-    assert 'set_line_based(\n        "all.set_config_values_settings__array",' in policy
+    assert 'default:set_line_based(\n        "all:main.set_config_values_settings__array",' in policy
+
+
+# Attributes whose value is a function call, not a body or bundle.
+VALUE_ATTRIBUTES = {"string", "slist", "data", "int", "real", "expression", "and", "or", "if", "unless", "with"}
+
+
+def test_stdlib_bodies_and_bundles_are_named_in_the_default_namespace():
+    """cf-promises accepts an unqualified stdlib body inside a namespace; cf-agent aborts on it."""
+    policy = compile_project(_project())["./all.cf"]
+    stub = (FIXTURES / "stdlib-stub.cf").read_text()
+    names = set(re.findall(r"^(?:body|bundle) \w+ (\w+)", stub, re.M))
+
+    unqualified = {
+        name
+        for name in names
+        for attribute in re.findall(rf"(\w+)\s*=>\s*{name}\b", policy)
+        if attribute not in VALUE_ATTRIBUTES
+    }
+
+    assert "default:mog(" in policy
+    assert not unqualified
 
 
 @pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine 3.27+")
@@ -166,7 +188,7 @@ def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: 
         (tmp_path / path).write_text(text)
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
-        'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all" }; }\n'
+        'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all:main" }; }\n'
         "bundle agent some_bundle { }\n"
     )
 

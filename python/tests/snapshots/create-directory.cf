@@ -6,4 +6,4 @@
   files:
     "$(case_0_path)/."
       create => "true",
-      perms => mog("755", "www-data", "www-data");
+      perms => default:mog("755", "www-data", "www-data");

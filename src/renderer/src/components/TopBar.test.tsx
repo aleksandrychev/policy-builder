@@ -11,7 +11,7 @@ function renderTopBar(overrides: Partial<Props> = {}) {
   const props: Props = {
     activeTab: 0,
     blockCount: 3,
-    bundle: 'main',
+    namespace: 'main',
     dirty: false,
     masterfiles: null,
     onOpenSettings: vi.fn(),

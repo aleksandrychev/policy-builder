@@ -9,7 +9,9 @@
 ### source per-condition
     # Case 2
     "per_condition"
-      string => ifelse("debian", "www-data", "redhat", "nginx", "nobody");
+      string => ifelse(
+        "default:debian", "www-data", "default:redhat", "nginx", "nobody"
+      );
 
 ### source structured-data-literal
     # Case 3
@@ -17,11 +19,11 @@
 
 ### source variable
     # Case 4
-    "variable" string => "$(snap_vars.literal)";
+    "variable" string => "$(snap:vars.literal)";
 
 ### source list-variable
     # Case 5
-    "list_variable" slist => { @(snap_vars.list) };
+    "list_variable" slist => { @(snap:vars.list) };
 
 ### source command-output
     # Case 6

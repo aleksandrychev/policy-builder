@@ -5,7 +5,7 @@ import type { RootState } from '../store';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
 import filesReducer, { projectFilesInitialized } from '../store/filesSlice';
-import { deriveBundle } from '../store/filesSlice/deriveBundle';
+import { deriveNamespace } from '../store/filesSlice/deriveNamespace';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
@@ -45,8 +45,6 @@ export interface ProjectMeta {
 
 export interface FileMeta {
   blocks: Omit<BlockInstance, 'fileId' | 'position'>[];
-  // The entry bundle, and the prefix of the file's other bundles.
-  bundle: string;
   condition?: Condition;
   description?: string;
   edges: Omit<BlockEdge, 'fileId'>[];
@@ -62,6 +60,8 @@ export interface FileMeta {
   };
   // The display name; the path is a slug.
   name: string;
+  // The file's CFEngine namespace; its entry bundle is `<namespace>:main`.
+  namespace: string;
   // The methods: call order, resolved here so a compiler needs no canvas.
   order: string[];
   // The generated policy file, e.g. "./services/db/postgres.cf".
@@ -147,7 +147,7 @@ function toFileMeta(file: PolicyFile, path: string, data: ProjectData): FileMeta
   return {
     id: file.id,
     name: file.name,
-    bundle: file.bundle,
+    namespace: file.namespace,
     path,
     ...(file.condition ? { condition: file.condition } : {}),
     ...(file.description ? { description: file.description } : {}),
@@ -189,8 +189,8 @@ function bundlesSteps(bundles: string[]): string[] {
 }
 
 // Exactly what `cfbs add` writes for a file or a directory, except the `bundles`
-// step: it lists every file's entry bundle (cfbs would pick one), and a file of
-// only variables and classes has none to list.
+// step: it lists every file's `<ns>:main` (cfbs would pick one); a file of only
+// variables and classes has none to list.
 function toModule(name: string, entryBundles: string[]): PolicyModule {
   const output = `${OUTPUT_DIR}${name.slice(ROOT.length)}`;
   const isDirectory = name.endsWith('/');
@@ -217,13 +217,13 @@ function toProvided(names: Map<string, string[]>, identity: Identity): ProvidedM
 
 export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjectContent {
   const paths = folderPaths(data.files.folders);
-  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.bundle}.cf`;
+  const pathOf = (file: PolicyFile) => `${(file.parentId && paths.get(file.parentId)) || ROOT}${file.namespace}.cf`;
   const callsBlocks = (file: PolicyFile) => data.canvas.some(block => block.fileId === file.id && isSequenced(blockDescriptorsById.get(block.blockId)));
   // Modules in the order their first file appears; a folder's bundles in file order.
   const modules = new Map<string, string[]>();
   for (const file of data.files.files) {
     const name = moduleNameOf(pathOf(file));
-    modules.set(name, [...(modules.get(name) ?? []), ...(callsBlocks(file) ? [file.bundle] : [])]);
+    modules.set(name, [...(modules.get(name) ?? []), ...(callsBlocks(file) ? [`${file.namespace}:main`] : [])]);
   }
   return {
     project: {
@@ -277,8 +277,11 @@ function readBuilderProject(project: ProjectMeta): ProjectData {
 
   // A file's folder is the one whose directory holds it.
   const folderOf = (path: string) => folders.find(folder => typeof folder.path === 'string' && path === `${folder.path}${path.split('/').pop()}`);
-  const files: PolicyFile[] = modules.map(({ file: { bundle, condition, description, id, name }, path }) => ({
-    bundle: typeof bundle === 'string' && bundle ? bundle : deriveBundle(typeof name === 'string' ? name : ''),
+  const files: PolicyFile[] = modules.map(({ file: { condition, description, id, name, namespace, ...rest }, path }) => ({
+    // Projects saved between Oct 1 and the return of namespaces have `bundle` instead.
+    namespace:
+      [namespace, (rest as { bundle?: unknown }).bundle].find((value): value is string => typeof value === 'string' && value !== '') ??
+      deriveNamespace(typeof name === 'string' ? name : ''),
     ...(condition ? { condition } : {}),
     ...(typeof description === 'string' && description ? { description } : {}),
     id,

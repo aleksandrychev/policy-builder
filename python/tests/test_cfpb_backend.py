@@ -178,7 +178,7 @@ CONTENT = {
     "project": {
         "schema_version": 1,
         "folders": [],
-        "files": [{"id": "f1", "name": "Web", "bundle": "web", "path": "./web.cf", "blocks": []}],
+        "files": [{"id": "f1", "name": "Web", "namespace": "web", "path": "./web.cf", "blocks": []}],
     },
     "modules": [{"name": "./web.cf", "added_by": "cfbs add", "steps": ["policy_files services/cfbs/web.cf"]}],
 }
@@ -379,7 +379,7 @@ def test_compile_reports_bad_input_in_one_line(monkeypatch: pytest.MonkeyPatch):
 
     assert code == 1
     assert stdout == ""
-    assert stderr.strip().splitlines() == ["Couldn't generate the policy: Every file needs a path and a bundle"]
+    assert stderr.strip().splitlines() == ["Couldn't generate the policy: Every file needs a path and a namespace"]
 
 
 # --- init: a module project ---

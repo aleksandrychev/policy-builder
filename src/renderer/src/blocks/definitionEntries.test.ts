@@ -15,10 +15,13 @@ const definitions = (fileId: string, blockId: 'define-class' | 'define-variable'
 };
 
 describe('duplicateDefinitionKeys', () => {
-  it('flags a class name defined in another file too: classes are project-wide', () => {
+  it('keeps classes per file: each file is its own namespace', () => {
     const all = [definitions('a', 'define-class', ['web_role']), definitions('b', 'define-class', ['web_role'])];
 
-    expect(duplicateDefinitionKeys(all, blockDescriptorsById, 'a')).toEqual(new Set(['define-class:web_role']));
+    expect(duplicateDefinitionKeys(all, blockDescriptorsById, 'a').size).toBe(0);
+    expect(duplicateDefinitionKeys([definitions('a', 'define-class', ['web_role', 'web_role'])], blockDescriptorsById, 'a')).toEqual(
+      new Set(['define-class:web_role'])
+    );
   });
 
   it('keeps variables per file: each file has its own vars bundle', () => {

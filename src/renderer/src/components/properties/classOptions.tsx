@@ -12,19 +12,23 @@ import { hardClasses } from '../editor/hardClasses';
 import { specialVariables } from '../editor/specialVariables';
 import type { TemplateToken } from '../editor/templateTokens';
 
-// Other blocks across the project that define a class or variable the user
-// might reference from a template. The policy is in the default namespace:
-// a class (defined in a common bundle) is one name for the whole project,
-// and a variable lives in its file's `<bundle>_vars` bundle, so every
-// reference names that bundle — blocks compile to bundles of their own.
-// Mustache paths follow datastate(): "vars.<bundle>_vars.<name>" /
-// "classes.<name>".
-function definitionToken(promiseType: string | undefined, definedName: string, bundle: string, label: string, group: string): TemplateToken | undefined {
+// Other blocks across the project that define a class or variable the user might reference
+// from a template. Each file is its own namespace, its definitions in `bundle common vars`:
+// same file `vars.x` / `name`, another file `<ns>:vars.x` / `<ns>:name`. Mustache paths
+// follow datastate() and always carry the namespace: "vars.<ns>:vars.<name>" / "classes.<ns>:<name>".
+function definitionToken(
+  promiseType: string | undefined,
+  definedName: string,
+  file: { namespace: string; sameFile: boolean },
+  label: string,
+  group: string
+): TemplateToken | undefined {
+  const prefix = file.sameFile ? '' : `${file.namespace}:`;
   if (promiseType === 'classes') {
-    return { name: definedName, mustachePath: `classes.${definedName}`, label, group, kind: 'class' };
+    return { name: `${prefix}${definedName}`, mustachePath: `classes.${file.namespace}:${definedName}`, label, group, kind: 'class' };
   }
   if (promiseType === 'vars') {
-    return { name: `${bundle}_vars.${definedName}`, mustachePath: `vars.${bundle}_vars.${definedName}`, label, group, kind: 'variable' };
+    return { name: `${prefix}vars.${definedName}`, mustachePath: `vars.${file.namespace}:vars.${definedName}`, label, group, kind: 'variable' };
   }
   return undefined;
 }
@@ -55,7 +59,7 @@ function projectDefinedTokens(
     for (const entry of instance.entries ?? []) {
       const definedName = entryName(descriptor, entry);
       if (!definedName || entry.id === excludeEntryId) continue;
-      const token = definitionToken(promiseType, definedName, definingFile.bundle, instance.label, group);
+      const token = definitionToken(promiseType, definedName, { namespace: definingFile.namespace, sameFile }, instance.label, group);
       if (token) tokens.push(token);
     }
   }

@@ -65,7 +65,7 @@ const exists = (path: string) =>
   );
 
 const project = () => join(temp, 'web-demo');
-const renamed: FileSpec = { ...mainFile, name: 'Hello', bundle: 'hello', path: './hello.cf' };
+const renamed: FileSpec = { ...mainFile, name: 'Hello', namespace: 'hello', path: './hello.cf' };
 
 async function create(gitRepo = true) {
   const result = (await invoke('project:create', {

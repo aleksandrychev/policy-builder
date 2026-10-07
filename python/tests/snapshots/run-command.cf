@@ -2,17 +2,17 @@
   # Case 0
   commands:
     "/usr/sbin/update-ca-certificates"
-      contain => in_shell,
-      action => if_elapsed("1440");
+      contain => default:in_shell,
+      action => default:if_elapsed("1440");
 
 ### run_interval = ''
   # Case 1
   commands:
-    "/usr/sbin/update-ca-certificates" contain => in_shell;
+    "/usr/sbin/update-ca-certificates" contain => default:in_shell;
 
 ### run_interval = '60'
   # Case 2
   commands:
     "/usr/sbin/update-ca-certificates"
-      contain => in_shell,
-      action => if_elapsed("60");
+      contain => default:in_shell,
+      action => default:if_elapsed("60");

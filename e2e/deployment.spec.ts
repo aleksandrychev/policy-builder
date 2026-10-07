@@ -43,7 +43,7 @@ function writeProject(scratchDir: string, folder: string, withGit: boolean): str
         description: 'Local policy file added using cfbs command line',
         tags: ['local'],
         added_by: 'cfbs add',
-        steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web']
+        steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web:main']
       }
     ]
   };
@@ -54,7 +54,7 @@ function writeProject(scratchDir: string, folder: string, withGit: boolean): str
       {
         id: 'file-1',
         name: 'Web',
-        bundle: 'web',
+        namespace: 'web',
         path: './web.cf',
         blocks: [],
         edges: [],
@@ -66,7 +66,7 @@ function writeProject(scratchDir: string, folder: string, withGit: boolean): str
   };
   writeFileSync(join(path, 'cfbs.json'), JSON.stringify(cfbs, null, 2));
   writeFileSync(join(path, '.policy-builder/project.json'), JSON.stringify(builder, null, 2));
-  writeFileSync(join(path, 'web.cf'), 'bundle agent web\n{\n  reports:\n      "hello";\n}\n');
+  writeFileSync(join(path, 'web.cf'), 'body file control\n{\n  namespace => "web";\n}\n\nbundle agent main\n{\n  reports:\n      "hello";\n}\n');
   writeFileSync(join(path, '.gitignore'), 'out/\n');
   if (withGit) {
     git(path, 'init', '--quiet');

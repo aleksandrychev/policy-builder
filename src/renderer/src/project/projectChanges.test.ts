@@ -5,7 +5,7 @@ import type { BlockGroup } from '../store/groupsSlice/types';
 import type { ProjectData } from './cfbsProject';
 import { type ProjectChange, commitMessage, projectChanges } from './projectChanges';
 
-const file = (id: string, parts: Partial<PolicyFile> = {}): PolicyFile => ({ bundle: id, id, name: id, parentId: null, ...parts });
+const file = (id: string, parts: Partial<PolicyFile> = {}): PolicyFile => ({ id, name: id, namespace: id, parentId: null, ...parts });
 const block = (instanceId: string, parts: Partial<BlockInstance> = {}): BlockInstance => ({
   blockId: 'install-package',
   fileId: 'main',

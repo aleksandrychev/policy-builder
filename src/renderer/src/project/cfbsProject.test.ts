@@ -53,19 +53,19 @@ describe('cfbsProject', () => {
       description: 'Local policy file added using cfbs command line',
       tags: ['local'],
       added_by: 'cfbs add',
-      steps: ['copy ./webserver.cf services/cfbs/webserver.cf', 'policy_files services/cfbs/webserver.cf', 'bundles webserver']
+      steps: ['copy ./webserver.cf services/cfbs/webserver.cf', 'policy_files services/cfbs/webserver.cf', 'bundles webserver:main']
     });
     expect(modules[3]).toEqual({
       name: './services/',
       description: 'Local subdirectory added using cfbs command line',
       tags: ['local'],
       added_by: 'cfbs add',
-      steps: ['directory ./ services/cfbs/services/', 'policy_files services/cfbs/services/', `bundles ${file.bundle}`]
+      steps: ['directory ./ services/cfbs/services/', 'policy_files services/cfbs/services/', `bundles ${file.namespace}:main`]
     });
     expect(project).toMatchObject({ schema_version: SCHEMA_VERSION, folders: [{ id: folderId, name: 'Services', path: './services/' }] });
     expect(project.files.find(item => item.id === fileId)).toMatchObject({
       name: 'Cron jobs',
-      bundle: 'cron_jobs',
+      namespace: 'cron_jobs',
       path: './services/cron_jobs.cf',
       condition: { className: 'linux' }
     });
@@ -83,7 +83,7 @@ describe('cfbsProject', () => {
     const { project, modules } = toCfbsProject(store.getState(), IDENTITY);
 
     expect(modules.map(module => module.name)).toEqual(['./services/']);
-    expect(modules[0].steps.at(-1)).toBe('bundles cron postgres');
+    expect(modules[0].steps.at(-1)).toBe('bundles cron:main postgres:main');
     expect(project.files.map(file => file.path)).toEqual(['./services/cron.cf', './services/db/postgres.cf', './services/only_vars.cf']);
     expect(project.folders.find(folder => folder.id === empty)?.path).toBe('./empty/');
   });
@@ -94,7 +94,7 @@ describe('cfbsProject', () => {
     const [common, webserver] = toCfbsProject(store.getState(), IDENTITY).modules;
 
     expect(common.steps).toEqual(['copy ./common.cf services/cfbs/common.cf', 'policy_files services/cfbs/common.cf']);
-    expect(webserver.steps.at(-1)).toBe('bundles webserver');
+    expect(webserver.steps.at(-1)).toBe('bundles webserver:main');
   });
 
   it('keeps editor-only data in layout, and resolves the execution order', () => {
@@ -136,7 +136,7 @@ describe('cfbsProject', () => {
         'copy ./security.cf services/cfbs/web-demo/security.cf',
         'copy ./services/ services/cfbs/web-demo/services/',
         'policy_files services/cfbs/web-demo/',
-        `bundles webserver security ${state.files.files.find(file => file.name === 'Cron jobs')!.bundle}`
+        `bundles webserver:main security:main ${state.files.files.find(file => file.name === 'Cron jobs')!.namespace}:main`
       ]
     });
   });
@@ -181,7 +181,7 @@ describe('loadCfbsProject', () => {
       { name: 'local', steps: ['copy ./plain_2.cf services/cfbs/plain_2.cf'] }
     ];
     const { data } = loadCfbsProject({ name: 'Plain', type: 'policy-set', build }, null, 'plain');
-    expect(data.files.files[0]).toMatchObject({ name: 'Plain', bundle: 'plain_3' });
+    expect(data.files.files[0]).toMatchObject({ name: 'Plain', namespace: 'plain_3' });
   });
 
   it('loads a module project: its type, module name and display name', () => {
@@ -246,9 +246,19 @@ describe('loadCfbsProject', () => {
   });
 
   it('tolerates corrupt per-file lists', () => {
-    const file = { id: 'f1', name: 'A', bundle: 'a', path: './a.cf', blocks: 'oops', layout: 'oops' };
+    const file = { id: 'f1', name: 'A', namespace: 'a', path: './a.cf', blocks: 'oops', layout: 'oops' };
     const { data } = loadCfbsProject({ build: [] }, { schema_version: SCHEMA_VERSION, files: [file] }, 'x');
     expect(data.canvas).toEqual([]);
-    expect(data.files.files).toEqual([{ bundle: 'a', id: 'f1', name: 'A', parentId: null }]);
+    expect(data.files.files).toEqual([{ id: 'f1', name: 'A', namespace: 'a', parentId: null }]);
+  });
+
+  it('reads a namespace from the `bundle` field of projects saved without namespaces, else from the name', () => {
+    const files = [
+      { id: 'f1', name: 'Web', bundle: 'web_2', path: './web_2.cf' },
+      { id: 'f2', name: 'Both', namespace: 'both', bundle: 'other', path: './both.cf' },
+      { id: 'f3', name: 'Cron Jobs', path: './cron_jobs.cf' }
+    ];
+    const { data } = loadCfbsProject({ build: [] }, { schema_version: SCHEMA_VERSION, files }, 'x');
+    expect(data.files.files.map(file => file.namespace)).toEqual(['web_2', 'both', 'cron_jobs']);
   });
 });

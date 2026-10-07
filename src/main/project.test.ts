@@ -140,7 +140,7 @@ describe('checkedContent', () => {
       'copy ./main.cf services/cfbs/main.cf',
       'directory ./ services/cfbs/templates/',
       'policy_files services/cfbs/main.cf',
-      'bundles main main_vars ns:other'
+      'bundles main:main web:main'
     ];
     expect(() => checkedContent(content({ modules: [{ name: './main.cf', steps }], provided: { steps } }))).not.toThrow();
     for (const step of [

@@ -1,4 +1,4 @@
 ### example
   # Case 0
   methods:
-    "Run site checks" usebundle => site_checks;
+    "Run site checks" usebundle => default:site_checks;

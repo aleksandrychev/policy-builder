@@ -17,7 +17,7 @@ export interface PolicyRegion {
 export interface PolicyReference {
   fileId: string;
   id: string;
-  // A class name ("sshd_installed") or a qualified variable ("security_vars.port").
+  // As the policy writes it: "sshd_installed", "vars.port", "security:vars.port".
   name: string;
 }
 
@@ -74,7 +74,7 @@ const hovered = StateField.define<string | null>({
   update: (value, transaction) => transaction.effects.find(effect => effect.is(setHovered))?.value ?? (transaction.docChanged ? null : value)
 });
 
-const WORD = /[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?/g;
+const WORD = /(?:[A-Za-z0-9_]+:)?[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?/g;
 
 /**
  * The generated file's structure: a coloured bar per block in the gutter, its type after its first

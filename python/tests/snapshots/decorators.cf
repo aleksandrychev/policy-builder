@@ -7,18 +7,18 @@
       if => "agent";
 
     "via_0"
-      string => "$(snap_vars.via_0__in)",
+      string => "$(snap:vars.via_0__in)",
       if => and(
         "agent",
         and(
-          isvariable("snap_vars.via_0__in"),
-          not(strcmp("$(snap_vars.via_0__in)", "x"))
+          isvariable("snap:vars.via_0__in"),
+          not(strcmp("$(snap:vars.via_0__in)", "x"))
         )
       );
 
     "via_0"
       string => "none",
-      if => and("agent", not(isvariable("snap_vars.via_0")));
+      if => and("agent", not(isvariable("snap:vars.via_0")));
 
 ### decorator filter
     # Case 1

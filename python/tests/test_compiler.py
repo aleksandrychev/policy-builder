@@ -17,7 +17,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
 DEMO = json.loads((FIXTURES / "demo-project.json").read_text())
 COMMON, WEBSERVER = "./common.cf", "./webserver.cf"
 TEMPLATE = "./templates/webserver_render_nginx_config.mustache"
-TOP_DOWN = 'body file control\n{\n  evaluation_order => "top_down";\n}'
+
+
+def _file_control(namespace: str) -> str:
+    return f'body file control\n{{\n  namespace => "{namespace}";\n  evaluation_order => "top_down";\n}}'
 
 
 def _demo() -> dict:
@@ -25,7 +28,7 @@ def _demo() -> dict:
 
 
 def _webserver(meta: dict) -> dict:
-    return next(file for file in meta["files"] if file["bundle"] == "webserver")
+    return next(file for file in meta["files"] if file["namespace"] == "webserver")
 
 
 def _block(policy: str, label: str) -> str:
@@ -43,20 +46,19 @@ def test_compiles_every_file_to_its_path_and_templates_into_templates():
     ]
 
 
-def test_every_file_evaluates_top_down():
+def test_every_file_is_its_own_namespace_evaluated_top_down():
     files = compile_project(DEMO)
 
-    assert TOP_DOWN in files[COMMON]
-    assert TOP_DOWN in files[WEBSERVER]
+    assert _file_control("common") in files[COMMON]
+    assert _file_control("webserver") in files[WEBSERVER]
 
 
 def test_every_block_is_a_promise_of_the_entry_bundle_in_canvas_order():
     policy = compile_project(DEMO)[WEBSERVER]
     labels = [line[4:] for line in policy.splitlines() if line.startswith("  # ")]
 
-    assert "namespace" not in policy
     assert policy.count("bundle agent ") == 1
-    assert "bundle agent webserver\n" in policy
+    assert "bundle agent main\n" in policy
     assert "methods:" not in policy
     assert labels == [
         "Install web server package",
@@ -75,22 +77,38 @@ def test_every_block_is_a_promise_of_the_entry_bundle_in_canvas_order():
 def test_arrows_and_conditions_gate_the_promises():
     policy = compile_project(DEMO)[WEBSERVER]
 
-    assert 'classes => results("bundle", "webserver_render_nginx_config");' in policy
+    assert 'classes => default:results("bundle", "render_nginx_config");' in policy
     restart = _block(policy, "Restart nginx on config change")
-    assert (
-        '"nginx"\n      service_policy => "restart",\n      if => "webserver_render_nginx_config_repaired";' in restart
-    )
-    assert policy.count('if => "webserver_role"') == 2
+    assert '"nginx"\n      service_policy => "restart",\n      if => "render_nginx_config_repaired";' in restart
+    assert policy.count('if => "common:webserver_role"') == 2
     # Whatever touches nginx's files waits for its package.
-    installed = 'if => "webserver_install_web_server_package_kept|webserver_install_web_server_package_repaired"'
+    installed = 'if => "install_web_server_package_kept|install_web_server_package_repaired"'
     assert policy.count(installed) == 3
 
 
-def test_references_name_the_defining_files_vars_bundle():
+def test_references_name_the_defining_files_namespace():
     files = compile_project(DEMO)
 
-    assert "bundle common common_vars\n" in files[COMMON]
-    assert '"$(common_vars.webserver_package)"' in files[WEBSERVER]
+    assert "bundle common vars\n" in files[COMMON]
+    assert '"$(common:vars.webserver_package)"' in files[WEBSERVER]
+
+
+def test_classes_the_file_doesnt_define_are_the_default_namespaces():
+    meta = _demo()
+    _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}
+
+    policy = compile_project(meta)[WEBSERVER]
+
+    assert "    default:linux.!default:policy_server::\n" in policy
+    assert 'if => "common:webserver_role"' in policy
+
+
+def test_a_class_the_file_defines_stays_bare():
+    meta = _demo()
+    common = meta["files"][0]
+    common["condition"] = {"kind": "class", "className": "webserver_role", "mode": "if"}
+
+    assert "    webserver_role::\n" in compile_project(meta)[COMMON]
 
 
 def test_a_template_is_its_own_file_used_as_written():
@@ -131,10 +149,10 @@ def test_a_template_gets_only_the_data_it_reads_named_after_its_block():
     render = _block(compile_project(DEMO)[WEBSERVER], "Render nginx config")
 
     assert (
-        '"render_nginx_config_tpl_worker_processes"\n      string => "$(common_vars.worker_processes)",\n'
-        '      if => isvariable("common_vars.worker_processes");'
+        '"render_nginx_config_tpl_worker_processes"\n      string => "$(common:vars.worker_processes)",\n'
+        '      if => isvariable("common:vars.worker_processes");'
     ) in render
-    assert """'{ "vars": { "common_vars": { "worker_processes": render_nginx_config_tpl_worker_processes, \
+    assert """'{ "vars": { "common:vars": { "worker_processes": render_nginx_config_tpl_worker_processes, \
 "worker_connections": render_nginx_config_tpl_worker_connections } } }'""" in render
     assert "template_data => @(render_nginx_config_template_data)," in render
 
@@ -147,22 +165,22 @@ def _render_template(template: str) -> str:
 
 
 def test_template_classes_become_true_or_false():
-    render = _render_template("{{#classes.webserver_role}}on{{/classes.webserver_role}}")
+    render = _render_template("{{#classes.common:webserver_role}}on{{/classes.common:webserver_role}}")
 
-    assert """'{ "classes": { "webserver_role": %s } }',""" in render
-    assert 'ifelse("webserver_role", "true", "false")' in render
+    assert """'{ "classes": { "common:webserver_role": %s } }',""" in render
+    assert 'ifelse("common:webserver_role", "true", "false")' in render
 
 
 def test_a_template_falls_back_to_datastate_while_any_variable_it_reads_is_unset():
-    render = _render_template("{{{vars.common_vars.worker_connections}}}")
+    render = _render_template("{{{vars.common:vars.worker_connections}}}")
 
-    assert 'if => isvariable("common_vars.worker_connections");' in render
+    assert 'if => isvariable("common:vars.worker_connections");' in render
     assert 'data => datastate(),\n      unless => isvariable("render_nginx_config_template_data");' in render
 
 
 def test_a_template_reading_variables_the_project_doesnt_define_keeps_datastate():
     render = _render_template(
-        "{{{vars.common_vars.worker_connections}}} {{#vars.sys.interfaces}}{{.}}{{/vars.sys.interfaces}}"
+        "{{{vars.common:vars.worker_connections}}} {{#vars.sys.interfaces}}{{.}}{{/vars.sys.interfaces}}"
     )
 
     assert "template_data" not in render
@@ -194,7 +212,7 @@ def test_a_template_computed_from_data_renders_inline():
     "source, rows",
     [
         ("command-output", 'mergedata(string_split("$(set_settings)", "\\n", "100000"))'),
-        ("file-lines", 'mergedata("t.set_settings")'),
+        ("file-lines", 'mergedata("t:main.set_settings")'),
     ],
 )
 def test_key_value_settings_computed_from_data_are_split_at_run_time(source: str, rows: str):
@@ -206,19 +224,19 @@ def test_key_value_settings_computed_from_data_are_split_at_run_time(source: str
         "params": {"path": "/etc/ssh/sshd_config"},
         "paramBindings": {"settings": {"valueSourceId": source, "params": params}},
     }
-    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+    meta = {"files": [{"id": "f", "name": "T", "namespace": "t", "path": "./t.cf", "blocks": [block]}]}
 
     policy = compile_project(meta)["./t.cf"]
 
     assert f"data => {rows};" in policy
     assert '"set_settings__array[$(set_settings__kv_$(set_settings__i)[key])]"' in policy
-    assert '"t.set_settings__array",' in policy
+    assert '"t:main.set_settings__array",' in policy
 
 
 def test_template_copies_keep_clear_of_parameters_computed_from_data():
     meta = _demo()
     block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "render-template")
-    block["params"]["template_content"] = "{{{vars.common_vars.owner}}}"
+    block["params"]["template_content"] = "{{{vars.common:vars.owner}}}"
     meta["files"][0]["blocks"][0]["entries"].append(
         {"id": "o", "valueSourceId": "literal", "params": {"variable_name": "owner", "value": "www"}}
     )
@@ -227,15 +245,15 @@ def test_template_copies_keep_clear_of_parameters_computed_from_data():
     render = _block(compile_project(meta)[WEBSERVER], "Render nginx config")
 
     assert '"render_nginx_config_owner"\n      string => execresult(' in render
-    assert '"render_nginx_config_tpl_owner"\n      string => "$(common_vars.owner)",' in render
+    assert '"render_nginx_config_tpl_owner"\n      string => "$(common:vars.owner)",' in render
 
 
 def test_default_if_empty_splits_into_an_intermediate_and_two_promises():
     policy = compile_project(DEMO)[COMMON]
 
     assert '"worker_processes__in"\n      int => length(' in policy
-    assert 'not(strcmp("$(common_vars.worker_processes__in)", "0"))' in policy
-    assert 'string => "auto",\n      if => not(isvariable("common_vars.worker_processes"));' in policy
+    assert 'not(strcmp("$(common:vars.worker_processes__in)", "0"))' in policy
+    assert 'string => "auto",\n      if => not(isvariable("common:vars.worker_processes"));' in policy
 
 
 def test_a_chain_is_explained_step_by_step_from_its_summary_patterns():
@@ -274,7 +292,7 @@ def test_a_literal_list_in_a_chain_is_inline_json_that_reads_back_as_written():
     entry = {"id": "l", "valueSourceId": "list", "params": {"variable_name": "l", "items": "\n".join(items)}}
     entry["decorators"] = [{"id": "d", "decoratorId": "sort", "params": {}}]
     block = {"instanceId": "v", "blockId": "define-variable", "label": "V", "params": {}, "entries": [entry]}
-    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+    meta = {"files": [{"id": "f", "name": "T", "namespace": "t", "path": "./t.cf", "blocks": [block]}]}
 
     policy = compile_project(meta)["./t.cf"]
 
@@ -297,7 +315,7 @@ def test_a_file_of_only_variables_and_classes_has_no_entry_bundle():
     assert "bundle agent" not in compile_project(DEMO)[COMMON]
 
 
-def test_builder_bodies_are_defined_once_per_project():
+def test_every_file_defines_the_builder_bodies_it_uses_in_its_namespace():
     meta = _demo()
     common = meta["files"][0]
     common["blocks"].append(
@@ -313,7 +331,7 @@ def test_builder_bodies_are_defined_once_per_project():
     files = compile_project(meta)
 
     assert files[COMMON].count("body perms mog_dirs(mode, user, group)") == 1
-    assert "body perms mog_dirs" not in files[WEBSERVER]
+    assert files[WEBSERVER].count("body perms mog_dirs(mode, user, group)") == 1
     assert "perms => mog_dirs(" in files[WEBSERVER]
 
 
@@ -323,13 +341,31 @@ def test_block_names_never_clash():
         if block["blockId"] in ("install-package", "remove-package"):
             block["label"] = "Same"
             block.setdefault("condition", None)
-    meta["files"].append({"id": "f3", "name": "Other", "bundle": "webserver_same", "path": "./webserver_same.cf"})
+        if block["blockId"] == "render-template":
+            block["label"] = "Main"
 
-    policy = compile_project(meta)[WEBSERVER]
+    files = compile_project(meta)
 
-    # webserver_same is another file's entry bundle: the blocks' results classes keep clear of it.
-    assert '"webserver_same"' not in policy
-    assert 'results("bundle", "webserver_same_2")' in policy
+    assert 'results("bundle", "same")' in files[WEBSERVER]
+    # main is the entry bundle: a block named Main gets main_2 (its template too).
+    assert 'results("bundle", "main_2")' in files[WEBSERVER]
+    assert "./templates/webserver_main_2.mustache" in files
+
+
+def test_two_files_sharing_a_namespace_fail_the_compile():
+    meta = _demo()
+    meta["files"][0]["namespace"] = "webserver"
+
+    with pytest.raises(CompileError, match="share the namespace 'webserver'"):
+        compile_project(meta)
+
+
+def test_a_project_saved_with_bundle_names_compiles_them_as_namespaces():
+    meta = _demo()
+    for file in meta["files"]:
+        file["bundle"] = file.pop("namespace")
+
+    assert compile_project(meta) == compile_project(DEMO)
 
 
 def test_a_block_missing_a_required_parameter_is_skipped_with_a_note():
@@ -348,8 +384,8 @@ def test_the_file_condition_guards_every_promise():
 
     policy = compile_project(meta)[WEBSERVER]
 
-    assert "  packages:\n    linux::\n" in policy
-    assert "  reports:\n    linux::\n" in policy
+    assert "  packages:\n    default:linux::\n" in policy
+    assert "  reports:\n    default:linux::\n" in policy
 
 
 def test_line_breaks_in_labels_stay_inside_their_comments():
@@ -382,21 +418,21 @@ def test_names_with_characters_they_cant_hold_are_skipped_with_a_note():
             ],
         },
     ]
-    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": blocks}]}
+    meta = {"files": [{"id": "f", "name": "T", "namespace": "t", "path": "./t.cf", "blocks": blocks}]}
 
     policy = compile_project(meta)["./t.cf"]
 
     assert '# Skipped "Call": Bundle name not valid.' in policy
     assert "# Skipped a b: Variable name not valid." in policy
-    assert "# Skipped copy: 't_vars.x) }; evil' isn't a variable name." in policy
-    assert "evil" not in policy.replace("# Skipped copy: 't_vars.x) }; evil'", "")
+    assert "# Skipped copy: 't:vars.x) }; evil' isn't a variable name." in policy
+    assert "evil" not in policy.replace("# Skipped copy: 't:vars.x) }; evil'", "")
 
 
-def test_a_file_bundle_that_isnt_a_name_fails_the_compile():
+def test_a_file_namespace_that_isnt_a_name_fails_the_compile():
     meta = _demo()
-    _webserver(meta)["bundle"] = "webserver {}\nbundle agent evil"
+    _webserver(meta)["namespace"] = "webserver {}\nbundle agent evil"
 
-    with pytest.raises(CompileError, match="isn't a valid bundle name"):
+    with pytest.raises(CompileError, match="isn't a valid namespace"):
         compile_project(meta)
 
 
@@ -408,7 +444,9 @@ def test_a_condition_that_isnt_a_class_expression_fails_the_compile():
         compile_project(meta)
 
 
-@pytest.mark.parametrize("name, expected", [("linux", "!linux"), ("linux|darwin", "!(linux|darwin)")])
+@pytest.mark.parametrize(
+    "name, expected", [("linux", "!default:linux"), ("linux|darwin", "!(default:linux|default:darwin)")]
+)
 def test_unless_negates_the_whole_expression(name: str, expected: str):
     meta = _demo()
     block = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "manage-users")
@@ -432,11 +470,11 @@ def test_entries_that_run_commands_run_them_only_in_cf_agent():
         {"instanceId": "v", "blockId": "define-variable", "label": "V", "params": {}, "entries": [variable]},
         {"instanceId": "c", "blockId": "define-class", "label": "C", "params": {}, "entries": [check]},
     ]
-    meta = {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": blocks}]}
+    meta = {"files": [{"id": "f", "name": "T", "namespace": "t", "path": "./t.cf", "blocks": blocks}]}
 
     policy = compile_project(meta)["./t.cf"]
 
-    assert 'execresult("/bin/hostname", "noshell", "stdout"),\n      if => "agent.linux";' in policy
+    assert 'execresult("/bin/hostname", "noshell", "stdout"),\n      if => "agent.default:linux";' in policy
     assert 'expression => returnszero("/bin/true", "noshell"),\n      if => "agent";' in policy
     assert policy.count('"agent') == 2
 
@@ -444,19 +482,19 @@ def test_entries_that_run_commands_run_them_only_in_cf_agent():
 def _custom_class(expression: str) -> dict:
     entry = {"id": "e", "valueSourceId": "custom", "params": {"class_name": "custom", "condition": expression}}
     block = {"instanceId": "c", "blockId": "define-class", "label": "Classes", "params": {}, "entries": [entry]}
-    return {"files": [{"id": "f", "name": "T", "bundle": "t", "path": "./t.cf", "blocks": [block]}]}
+    return {"files": [{"id": "f", "name": "T", "namespace": "t", "path": "./t.cf", "blocks": [block]}]}
 
 
 @pytest.mark.parametrize(
     "expression, compiled",
     [
-        ("linux.!(debian|redhat)", '"linux.!(debian|redhat)"'),
+        ("linux.!(debian|redhat)", '"default:linux.!(default:debian|default:redhat)"'),
         ("role_$(sys.uqhost)", '"role_$(sys.uqhost)"'),
         ('not(fileexists("/x"))', 'not(fileexists("/x"))'),
         ('and(linux, isvariable("sys.fqhost"))', 'and(linux, isvariable("sys.fqhost"))'),
     ],
 )
-def test_a_custom_class_expression_is_written_as_is(expression: str, compiled: str):
+def test_a_custom_class_expression_is_written_in_the_files_namespace(expression: str, compiled: str):
     assert f'"custom" expression => {compiled};' in compile_project(_custom_class(expression))["./t.cf"]
 
 
@@ -502,7 +540,7 @@ def test_compiled_demo_passes_cf_promises(tmp_path: Path):
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "common.cf", "webserver.cf" };'
-        ' bundlesequence => { "webserver" }; }\n'
+        ' bundlesequence => { "webserver:main" }; }\n'
     )
 
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)
@@ -532,23 +570,20 @@ def _grouped_demo() -> dict:
 
 def test_a_group_is_its_own_bundle_called_as_one_step():
     policy = compile_project(_grouped_demo())[WEBSERVER]
-    group = policy.split("bundle agent webserver_configure_nginx\n")[1]
-    entry = policy.split("bundle agent webserver\n")[1].split("\n}")[0]
+    group = policy.split("bundle agent configure_nginx\n")[1]
+    entry = policy.split("bundle agent main\n")[1].split("\n}")[0]
 
     assert '  # Group: Configure nginx\n  methods:\n    "Configure nginx"\n' in entry
     call = _block(policy, "Group: Configure nginx")
-    assert "usebundle => webserver_configure_nginx," in call
-    assert (
-        'if => "linux.(webserver_install_web_server_package_kept|webserver_install_web_server_package_repaired)"'
-        in call
-    )
-    assert 'classes => results("bundle", "webserver_configure_nginx");' in call
+    assert "usebundle => configure_nginx," in call
+    assert 'if => "default:linux.(install_web_server_package_kept|install_web_server_package_repaired)"' in call
+    assert 'classes => default:results("bundle", "configure_nginx");' in call
     keep = _block(policy, "Keep nginx running")
-    assert keep.endswith('.(webserver_configure_nginx_kept|webserver_configure_nginx_repaired)";\n')
+    assert keep.endswith('.(configure_nginx_kept|configure_nginx_repaired)";\n')
     # Arrows inside the group stay inside its bundle.
     assert "# Render nginx config" not in entry
-    assert 'classes => results("bundle", "webserver_render_nginx_config");' in group
-    assert 'if => "webserver_render_nginx_config_repaired"' in group
+    assert 'classes => default:results("bundle", "render_nginx_config");' in group
+    assert 'if => "render_nginx_config_repaired"' in group
 
 
 @pytest.mark.skipif(shutil.which("cf-promises") is None, reason="needs a local CFEngine 3.27+")
@@ -559,7 +594,7 @@ def test_compiled_groups_pass_cf_promises(tmp_path: Path):
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "common.cf", "webserver.cf" };'
-        ' bundlesequence => { "webserver" }; }\n'
+        ' bundlesequence => { "webserver:main" }; }\n'
     )
 
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)
@@ -579,5 +614,5 @@ def test_the_source_map_points_at_each_block_and_group():
     assert lines[last - 1].endswith('";')
     call, bundle = where["g1"]
     assert lines[call[0] - 1] == "  # Group: Configure nginx"
-    assert lines[bundle[0] : bundle[1]][0] == "bundle agent webserver_configure_nginx"
+    assert lines[bundle[0] : bundle[1]][0] == "bundle agent configure_nginx"
     assert lines[bundle[1] - 1] == "}"

@@ -931,7 +931,7 @@ export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }:
           projectName={project.name}
           dirty={dirty}
           masterfiles={project.masterfiles}
-          bundle={currentFile?.bundle ?? ''}
+          namespace={currentFile?.namespace ?? ''}
           fileGate={describeFileCondition(currentFile?.condition)}
           blockCount={instances.length}
           activeTab={activeTab}
@@ -1201,7 +1201,7 @@ export default function ProjectView({ dirty, onOpenSettings, onReload, onSave }:
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>File: {currentFile ? `${currentFile.name}.cf` : '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Bundle: {currentFile?.bundle ?? '—'}</Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Namespace: {currentFile?.namespace ?? '—'}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{PROJECT_TABS[activeTab]}</Typography>
             </Stack>

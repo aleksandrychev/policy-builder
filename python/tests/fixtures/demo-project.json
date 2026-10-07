@@ -5,7 +5,7 @@
     {
       "id": "beec3314-181e-4d23-b4b7-e05946f6fe9e",
       "name": "Common",
-      "bundle": "common",
+      "namespace": "common",
       "path": "./common.cf",
       "blocks": [
         {
@@ -103,19 +103,19 @@
     {
       "id": "60701a34-ee55-4f15-95c6-f5d52fc5e6f6",
       "name": "Webserver",
-      "bundle": "webserver",
+      "namespace": "webserver",
       "path": "./webserver.cf",
       "blocks": [
         {
           "blockId": "install-package",
           "label": "Install web server package",
           "params": {
-            "package_name": "$(common_vars.webserver_package)"
+            "package_name": "$(common:vars.webserver_package)"
           },
           "condition": {
             "mode": "if",
             "kind": "class",
-            "className": "webserver_role"
+            "className": "common:webserver_role"
           },
           "instanceId": "c19ceb8e-2859-47b8-b339-1ae392168737"
         },
@@ -128,7 +128,7 @@
           "condition": {
             "mode": "if",
             "kind": "class",
-            "className": "webserver_role"
+            "className": "common:webserver_role"
           },
           "instanceId": "dd5360cc-df24-456c-97eb-b6790dec7c00"
         },
@@ -137,7 +137,7 @@
           "label": "Render nginx config",
           "params": {
             "destination": "/etc/nginx/nginx.conf",
-            "template_content": "user www-data;\nworker_processes {{{vars.common_vars.worker_processes}}};\n\nevents {\n    worker_connections {{{vars.common_vars.worker_connections}}};\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n\n    server {\n        listen 80;\n        server_name example.com;\n        root /var/www/html;\n    }\n}\n",
+            "template_content": "user www-data;\nworker_processes {{{vars.common:vars.worker_processes}}};\n\nevents {\n    worker_connections {{{vars.common:vars.worker_connections}}};\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n\n    server {\n        listen 80;\n        server_name example.com;\n        root /var/www/html;\n    }\n}\n",
             "mode": "644",
             "owner": "root",
             "group": "root"
@@ -167,7 +167,7 @@
           "label": "Publish the demo landing page",
           "params": {
             "destination": "/var/www/html/index.html",
-            "template_content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>CFEngine Policy Builder demo project</title>\n  <style>\n    :root { color-scheme: light dark; --accent: #0b7ad1; --ink: #1f2933; --muted: #5f6c7b; --card: #ffffff; --page: #eef2f7; }\n    @media (prefers-color-scheme: dark) { :root { --ink: #e6edf3; --muted: #9aa7b4; --card: #161b22; --page: #0d1117; } }\n    * { box-sizing: border-box; }\n    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;\n           font: 16px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--ink); background: var(--page); }\n    main { width: min(640px, 100%); background: var(--card); border-radius: 16px; padding: 40px;\n           box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12); border-top: 6px solid var(--accent); }\n    h1 { margin: 0 0 8px; font-size: 28px; }\n    p { margin: 0 0 24px; color: var(--muted); }\n    dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }\n    dt { color: var(--muted); }\n    dd { margin: 0; font-family: ui-monospace, \"SF Mono\", Menlo, monospace; }\n    .badge { display: inline-block; margin-bottom: 16px; padding: 2px 10px; border-radius: 999px;\n             background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; }\n    footer { margin-top: 32px; font-size: 13px; color: var(--muted); }\n  </style>\n</head>\n<body>\n  <main>\n    {{#classes.webserver_role}}<span class=\"badge\">Web server role</span>{{/classes.webserver_role}}\n    <h1>CFEngine Policy Builder demo project</h1>\n    <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>\n    <dl>\n      <dt>Host</dt><dd>{{{vars.sys.fqhost}}}</dd>\n      <dt>Operating system</dt><dd>{{{vars.sys.flavor}}}</dd>\n      <dt>nginx workers</dt><dd>{{{vars.common_vars.worker_processes}}}</dd>\n      <dt>CFEngine</dt><dd>{{{vars.sys.cf_version}}}</dd>\n    </dl>\n    <footer>Rendered by cf-agent from a Mustache template.</footer>\n  </main>\n</body>\n</html>\n",
+            "template_content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n  <title>CFEngine Policy Builder demo project</title>\n  <style>\n    :root { color-scheme: light dark; --accent: #0b7ad1; --ink: #1f2933; --muted: #5f6c7b; --card: #ffffff; --page: #eef2f7; }\n    @media (prefers-color-scheme: dark) { :root { --ink: #e6edf3; --muted: #9aa7b4; --card: #161b22; --page: #0d1117; } }\n    * { box-sizing: border-box; }\n    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;\n           font: 16px/1.5 system-ui, -apple-system, \"Segoe UI\", sans-serif; color: var(--ink); background: var(--page); }\n    main { width: min(640px, 100%); background: var(--card); border-radius: 16px; padding: 40px;\n           box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12); border-top: 6px solid var(--accent); }\n    h1 { margin: 0 0 8px; font-size: 28px; }\n    p { margin: 0 0 24px; color: var(--muted); }\n    dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }\n    dt { color: var(--muted); }\n    dd { margin: 0; font-family: ui-monospace, \"SF Mono\", Menlo, monospace; }\n    .badge { display: inline-block; margin-bottom: 16px; padding: 2px 10px; border-radius: 999px;\n             background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; }\n    footer { margin-top: 32px; font-size: 13px; color: var(--muted); }\n  </style>\n</head>\n<body>\n  <main>\n    {{#classes.common:webserver_role}}<span class=\"badge\">Web server role</span>{{/classes.common:webserver_role}}\n    <h1>CFEngine Policy Builder demo project</h1>\n    <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>\n    <dl>\n      <dt>Host</dt><dd>{{{vars.sys.fqhost}}}</dd>\n      <dt>Operating system</dt><dd>{{{vars.sys.flavor}}}</dd>\n      <dt>nginx workers</dt><dd>{{{vars.common:vars.worker_processes}}}</dd>\n      <dt>CFEngine</dt><dd>{{{vars.sys.cf_version}}}</dd>\n    </dl>\n    <footer>Rendered by cf-agent from a Mustache template.</footer>\n  </main>\n</body>\n</html>\n",
             "mode": "644",
             "owner": "root",
             "group": "root"

@@ -6,23 +6,23 @@ import type { ProjectContent } from '../../preload/api';
  */
 
 export interface FileSpec {
-  bundle: string;
   description?: string;
   // Each a Report Message block printing it.
   messages: string[];
   name: string;
+  namespace: string;
   path: string;
 }
 
 const OUTPUT_DIR = 'services/cfbs/';
 const layout = { positions: {}, groups: [], derived_positions: {} };
 
-export const fileMeta = ({ bundle, description, messages, name, path }: FileSpec) => {
-  const blocks = messages.map((message, index) => ({ blockId: 'report-message', instanceId: `${bundle}-${index}`, label: message, params: { message } }));
+export const fileMeta = ({ description, messages, name, namespace, path }: FileSpec) => {
+  const blocks = messages.map((message, index) => ({ blockId: 'report-message', instanceId: `${namespace}-${index}`, label: message, params: { message } }));
   return {
-    id: `file-${bundle}`,
+    id: `file-${namespace}`,
     name,
-    bundle,
+    namespace,
     path,
     ...(description ? { description } : {}),
     blocks,
@@ -45,7 +45,7 @@ export function builderContent(
   moduleName = 'web-demo'
 ): ProjectContent & { project: { [key: string]: unknown; files: object[] } } {
   const modules = new Map<string, string[]>();
-  for (const file of files) modules.set(moduleNameOf(file.path), [...(modules.get(moduleNameOf(file.path)) ?? []), file.bundle]);
+  for (const file of files) modules.set(moduleNameOf(file.path), [...(modules.get(moduleNameOf(file.path)) ?? []), `${file.namespace}:main`]);
   const folders = [...new Set(files.map(file => moduleNameOf(file.path)).filter(name => name.endsWith('/')))];
   const output = `${OUTPUT_DIR}${moduleName}/`;
   return {
@@ -55,7 +55,7 @@ export function builderContent(
       module_name: moduleName,
       folders: folders.map(path => ({ id: `folder-${path}`, name: path.slice(2, -1), parentId: null, path })),
       files: files.map(fileMeta),
-      current_file_id: files.length ? `file-${files[0].bundle}` : null
+      current_file_id: files.length ? `file-${files[0].namespace}` : null
     },
     modules: [...modules].map(([name, bundles]) => {
       const isDirectory = name.endsWith('/');
@@ -84,8 +84,8 @@ export function builderContent(
   };
 }
 
-export const mainFile: FileSpec = { name: 'Main', bundle: 'main', path: './main.cf', description: 'Says hello on every host.', messages: ['hello'] };
-export const webFile: FileSpec = { name: 'Web', bundle: 'web', path: './services/web.cf', messages: ['web', 'server'] };
+export const mainFile: FileSpec = { name: 'Main', namespace: 'main', path: './main.cf', description: 'Says hello on every host.', messages: ['hello'] };
+export const webFile: FileSpec = { name: 'Web', namespace: 'web', path: './services/web.cf', messages: ['web', 'server'] };
 
 // What the renderer's environmentsFrom keeps.
 export const debianEnvironment = {

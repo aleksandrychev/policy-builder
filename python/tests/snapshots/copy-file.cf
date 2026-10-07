@@ -2,5 +2,5 @@
   # Case 0
   files:
     "/etc/motd"
-      copy_from => local_cp("/srv/files/motd"),
-      perms => mog("644", "root", "root");
+      copy_from => default:local_cp("/srv/files/motd"),
+      perms => default:mog("644", "root", "root");

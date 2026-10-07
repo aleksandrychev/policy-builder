@@ -33,11 +33,11 @@
   processes:
     "nginx: master.*"
       signals => { "hup" },
-      action => if_elapsed("60");
+      action => default:if_elapsed("60");
 
 ### run_interval = '1440'
   # Case 7
   processes:
     "nginx: master.*"
       signals => { "hup" },
-      action => if_elapsed("1440");
+      action => default:if_elapsed("1440");

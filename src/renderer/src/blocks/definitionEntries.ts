@@ -1,6 +1,6 @@
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { describeCases } from './cases';
-import { primaryPromiseType, resolveBlockShape } from './resolveBlockShape';
+import { resolveBlockShape } from './resolveBlockShape';
 import { type BlockDescriptor, classRefsAttribute } from './types';
 
 // Shared by every consumer of multi-entry blocks (see block-descriptor.v1.json's
@@ -39,18 +39,15 @@ export function entrySummary(descriptor: BlockDescriptor, entry: DefinitionEntry
   return source?.label ?? '';
 }
 
-// Names defined twice, as `${blockId}:${name}` keys, for one file's cards.
-// Every Define Variable entry in a file lands in its `<bundle>_vars`, so
-// variables collide per file; classes are project-wide names (default
-// namespace), so they collide across files. A variable and a class sharing
-// a name don't.
+// Names defined twice, as `${blockId}:${name}` keys, for one file's cards. Variables and
+// classes are per file (its namespace's `vars` bundle); a variable and a class sharing a name don't collide.
 export function duplicateDefinitionKeys(allInstances: BlockInstance[], descriptorsById: Map<string, BlockDescriptor>, fileId: string | null): Set<string> {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
   for (const instance of allInstances) {
     const descriptor = descriptorsById.get(instance.blockId);
     if (!descriptor?.entries) continue;
-    if (instance.fileId !== fileId && primaryPromiseType(descriptor) !== 'classes') continue;
+    if (instance.fileId !== fileId) continue;
     for (const entry of instance.entries ?? []) {
       const name = entryName(descriptor, entry);
       if (!name) continue;

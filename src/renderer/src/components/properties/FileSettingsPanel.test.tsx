@@ -57,10 +57,10 @@ describe('FileSettingsPanel', () => {
     fileId = addFile(store, 'Web');
   });
 
-  it('shows the file name and bundle', () => {
+  it('shows the file name and namespace', () => {
     renderWithProviders(<ConnectedFileSettings />, { store });
     expect(screen.getByText('Web')).toBeInTheDocument();
-    expect(screen.getByText(`bundle: ${fileOf(store, fileId)?.bundle}`)).toBeInTheDocument();
+    expect(screen.getByText(`namespace: ${fileOf(store, fileId)?.namespace}`)).toBeInTheDocument();
   });
 
   it('writes the description', () => {
@@ -120,11 +120,11 @@ describe('FileSettingsPanel', () => {
     fireEvent.mouseDown(screen.getByPlaceholderText('Search class names…'));
     const listbox = screen.getByRole('listbox');
     expect(within(listbox).getByText('Defined in Detect')).toBeInTheDocument();
-    expect(within(listbox).getByText('is_web')).toBeInTheDocument();
+    expect(within(listbox).getByText('detect:is_web')).toBeInTheDocument();
     expect(within(listbox).queryByText('own_class')).not.toBeInTheDocument();
 
-    fireEvent.click(within(listbox).getByText('is_web'));
-    expect(fileOf(store, fileId)?.condition?.className).toBe('is_web');
+    fireEvent.click(within(listbox).getByText('detect:is_web'));
+    expect(fileOf(store, fileId)?.condition?.className).toBe('detect:is_web');
   });
 
   it('offers no New class button', () => {

@@ -2,12 +2,12 @@
   # Case 0
   files:
     "/etc/nginx/sites-enabled/app"
-      link_from => ln_s("/etc/nginx/sites-available/app"),
+      link_from => default:ln_s("/etc/nginx/sites-available/app"),
       move_obstructions => "false";
 
 ### replace = 'true'
   # Case 1
   files:
     "/etc/nginx/sites-enabled/app"
-      link_from => ln_s("/etc/nginx/sites-available/app"),
+      link_from => default:ln_s("/etc/nginx/sites-available/app"),
       move_obstructions => "true";

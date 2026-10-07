@@ -153,7 +153,7 @@
           "type": "string",
           "required": true,
           "references": "variable",
-          "help": "E.g. common_vars.myvar: a file's variables live in its <bundle>_vars bundle."
+          "help": "E.g. vars.myvar (this file) or common:vars.myvar (another file's, by its namespace)."
         }
       ],
       "steps": [
@@ -182,7 +182,7 @@
           "type": "string",
           "required": true,
           "references": "variable",
-          "help": "E.g. common_vars.myvar: a file's variables live in its <bundle>_vars bundle."
+          "help": "E.g. vars.myvar (this file) or common:vars.myvar (another file's, by its namespace)."
         }
       ],
       "steps": [

@@ -39,7 +39,7 @@ const builderProject = {
       description: 'Local policy file added using cfbs command line',
       tags: ['local'],
       added_by: 'cfbs add',
-      steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web']
+      steps: ['copy ./web.cf services/cfbs/web.cf', 'policy_files services/cfbs/web.cf', 'bundles web:main']
     }
   ]
 };
@@ -52,7 +52,7 @@ const builderData = {
     {
       id: 'file-1',
       name: 'Web',
-      bundle: 'web',
+      namespace: 'web',
       path: './web.cf',
       blocks: [block('block-1', 'Say hello'), block('block-2', 'Say goodbye')],
       edges: [{ id: 'edge-1', source: 'block-1', target: 'block-2', outcomes: ['kept'] }],
@@ -97,7 +97,7 @@ test('opens a builder project with its blocks and arrows, clean, and saves it ba
     expect(builderJson(path).files[0].blocks).toHaveLength(3);
     expect(builderJson(path).files[0].edges).toHaveLength(1);
     const policy = readFileSync(join(path, 'web.cf'), 'utf-8');
-    expect(policy).toContain('bundle agent web\n');
+    expect(policy).toContain('bundle agent main\n');
     expect(policy).toContain('  # Say goodbye\n');
   });
 
@@ -172,7 +172,7 @@ test('Project Settings converts a policy set to a module and back', async ({ app
   // A module's cfbs.json name is its module name, derived from the project name.
   expect(module.name).toBe('web-hardening');
   expect(Object.keys(module.provides)).toEqual(['web-hardening']);
-  expect(module.provides['web-hardening'].steps).toContain('bundles web');
+  expect(module.provides['web-hardening'].steps).toContain('bundles web:main');
   // Masterfiles (not ours) is kept; our own build module isn't.
   expect(module.build).toEqual([builderProject.build[0]]);
   await expect(window.locator('header').getByText('module', { exact: true })).toBeVisible();

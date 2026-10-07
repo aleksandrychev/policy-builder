@@ -56,7 +56,7 @@ def _project(block_id: str) -> dict:
         {"instanceId": f"{block_id}-{i}", "blockId": block_id, "label": f"Variant {i}", "params": params}
         for i, (_name, params) in enumerate(variants(block_id))
     ]
-    file = {"id": "f", "name": "Variants", "bundle": "variants", "path": "./variants.cf", "blocks": blocks}
+    file = {"id": "f", "name": "Variants", "namespace": "variants", "path": "./variants.cf", "blocks": blocks}
     return {"files": [{**file, "order": [b["instanceId"] for b in blocks]}]}
 
 
@@ -77,7 +77,7 @@ def test_every_variant_passes_cf_promises(block_id: str, tmp_path: Path):
         (tmp_path / path).write_text(text)
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
-        'body common control { inputs => { "stdlib.cf", "variants.cf" }; bundlesequence => { "variants" }; }\n'
+        'body common control { inputs => { "stdlib.cf", "variants.cf" }; bundlesequence => { "variants:main" }; }\n'
         "bundle agent some_bundle { }\n"
     )
 

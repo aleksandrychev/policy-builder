@@ -5,7 +5,7 @@ builder bodies (blocks/lib/). Input is the project's .policy-builder/project.jso
 output is {file path: contents} — each .cf, plus the template files its
 blocks render (in ./templates/, one cfbs directory module). Targets CFEngine
 3.27+: every file evaluates top-down, all of its blocks in its one entry
-bundle. Default namespace, next to masterfiles.
+bundle. Each file is a namespace of its own: `<ns>:vars` and `<ns>:main`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import json
 import re
 import sys
 import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from cfengine_cli.format import format_policy_fin_fout
@@ -26,8 +26,8 @@ FUNCTION_CALL = re.compile(r"^\s*[A-Za-z_]\w*\s*\(")
 OUTCOME_SUFFIX = {"kept": "kept", "repaired": "repaired", "not_kept": "not_kept"}
 # A Mustache tag: {{name}}, {{{name}}}, {{&name}}, {{#name}}, {{^name}}, {{/name}}, {{!comment}}.
 MUSTACHE_TAG = re.compile(r"\{\{(\{?)\s*([#^/&!>]?)\s*(.*?)\s*\}?\}\}", re.S)
-MUSTACHE_VAR = re.compile(r"vars\.([A-Za-z_]\w*)\.([A-Za-z_]\w*)(\..+)?")
-MUSTACHE_CLASS = re.compile(r"classes\.([A-Za-z_]\w*)")
+MUSTACHE_VAR = re.compile(r"vars\.((?:[A-Za-z_]\w*:)?[A-Za-z_]\w*)\.([A-Za-z_]\w*)(\..+)?")
+MUSTACHE_CLASS = re.compile(r"classes\.((?:[A-Za-z_]\w*:)?[A-Za-z_]\w*)")
 LINE_LENGTH = 80
 # Where templates go: one directory module, so they ship whatever kind of module uses them.
 TEMPLATES_DIR = "./templates/"
@@ -52,8 +52,6 @@ class Library:
     descriptors: dict[str, dict]
     decorators: dict[str, dict]
     bodies: dict[str, dict]
-    # Bundle names masterfiles already uses in the default namespace.
-    reserved_bundles: set[str] = field(default_factory=set)
 
     @classmethod
     def load(cls, directory: Path | None = None) -> Library:
@@ -64,8 +62,7 @@ class Library:
             descriptors[descriptor["id"]] = descriptor
         decorators = json.loads((directory / "lib/decorators.json").read_text(encoding="utf-8"))["decorators"]
         bodies = json.loads((directory / "lib/bodies.json").read_text(encoding="utf-8"))["bodies"]
-        reserved = json.loads((directory / "lib/reserved-bundles.json").read_text(encoding="utf-8"))["bundles"]
-        return cls(descriptors, {d["id"]: d for d in decorators}, {b["name"]: b for b in bodies}, set(reserved))
+        return cls(descriptors, {d["id"]: d for d in decorators}, {b["name"]: b for b in bodies})
 
 
 # --- values ---------------------------------------------------------------
@@ -106,12 +103,26 @@ def negated(expression: str) -> str:
     return f"!({expression})" if re.search(r"[|.&!()]", expression) else f"!{expression}"
 
 
-def class_expression(condition: dict) -> str:
+def class_expression(condition: dict, local: set[str]) -> str:
     name = condition["className"].strip()
     # A file's condition is a `name::` guard: anything else in it would be policy.
     if not valid_class_expression(name):
         raise CompileError(f"{name!r} isn't a valid class expression")
+    name = in_namespace(name, local)
     return negated(name) if condition.get("mode") == "unless" else name
+
+
+def in_namespace(expression: str, local: set[str]) -> str:
+    """A bare class the file doesn't define is the default namespace's (hard, augments or
+    masterfiles classes), which a namespaced file only sees as `default:name`."""
+
+    def qualified(match: re.Match) -> str:
+        token = match.group()
+        if not re.fullmatch(r"[A-Za-z_]\w*", token) or token in local or token == "any":
+            return token
+        return f"default:{token}"
+
+    return CLASS_TOKEN.sub(qualified, expression)
 
 
 def combined(expressions: list[str]) -> str:
@@ -184,7 +195,7 @@ def valid_function_call(text: str) -> bool:
 class Context:
     """What an expression compiles against: one block's (or entry's) parameters."""
 
-    # The file's `<bundle>_vars`, which `vars.x` references mean.
+    # The file's `<ns>:vars`, which `vars.x` references mean.
     vars_bundle: str
     params: dict[str, str]
     bodies: set[str]
@@ -203,6 +214,8 @@ class Context:
     locals: list[str] = field(default_factory=list)
     # Parameters computed from data -> their CFEngine type.
     computed: dict[str, str] = field(default_factory=dict)
+    # Classes the file defines: everything else bare is `default:`.
+    local_classes: set[str] = field(default_factory=set)
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -220,6 +233,8 @@ def compile_value(expr, ctx: Context) -> str:
         name = expr["body"]
         if expr.get("lib") == "builder":
             ctx.bodies.add(name)
+        else:
+            name = f"default:{name}"
         args = expr.get("args")
         return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
     if "list" in expr:
@@ -227,7 +242,11 @@ def compile_value(expr, ctx: Context) -> str:
     if "list_param" in expr:
         return list_value([quote(item) for item in lines_of(ctx.params.get(expr["list_param"], ""))], ctx)
     if "class_refs" in expr:
-        refs = [("!" if ref.get("negate") else "") + ref["name"] for ref in ctx.class_refs if ref.get("name")]
+        refs = [
+            ("!" if ref.get("negate") else "") + in_namespace(ref["name"], ctx.local_classes)
+            for ref in ctx.class_refs
+            if ref.get("name")
+        ]
         return "{ " + ", ".join(quote(ref) for ref in refs) + " }"
     if "class_expression" in expr:
         text = ctx.substitute(expr["class_expression"]).strip()
@@ -235,10 +254,12 @@ def compile_value(expr, ctx: Context) -> str:
             if valid_function_call(text):
                 return text
         elif valid_class_expression(text):
-            return quote(text)
+            return quote(in_namespace(text, ctx.local_classes))
         raise Skip("not a valid class expression or function call")
     if "bundle" in expr:
         name = ctx.substitute(expr["bundle"])
+        # The stdlib, or another module's: anything unqualified is in the default namespace.
+        name = name if ":" in name else f"default:{name}"
         args = expr.get("args")
         return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
     if "variable" in expr:
@@ -265,7 +286,7 @@ def compile_value(expr, ctx: Context) -> str:
         # ifelse(class, value, …, otherwise): the first row whose condition holds.
         args = []
         for row in cases_of(ctx.params.get(expr["cases_param"], "")):
-            name = row["className"]
+            name = in_namespace(row["className"], ctx.local_classes)
             condition = negated(name) if row.get("mode") == "unless" else name
             args += [quote(condition), quote(row.get("value", ""))]
         otherwise = compile_value(expr["otherwise"], ctx)
@@ -443,13 +464,12 @@ def template_refs(template: str) -> TemplateRefs | None:
 class FileCompiler:
     library: Library
     file: dict
-    # "<bundle>_vars.name" -> its CFEngine type, for every variable the project defines.
+    # "<ns>:vars.name" -> its CFEngine type, for every variable the project defines.
     types: dict[str, str] = field(default_factory=dict)
-    # Bundle names taken project-wide (the default namespace is shared); grows as blocks are named.
-    taken: set[str] = field(default_factory=set)
-    # Builder bodies an earlier file already defines: a body may only be defined once.
-    written_bodies: set[str] = field(default_factory=set)
+    # Names taken in the file's namespace; grows as blocks and groups are named.
+    taken: set[str] = field(default_factory=lambda: {"main", "vars"})
     bodies: set[str] = field(default_factory=set)
+    local_classes: set[str] = field(default_factory=set)
     # The file's templates, by name in ./templates/.
     companions: dict[str, str] = field(default_factory=dict)
     # (block or group id, its `# ...` comment) in output order, for source_map.
@@ -458,15 +478,16 @@ class FileCompiler:
     source_map: dict[str, list[list[int]]] = field(default_factory=dict)
 
     @property
-    def bundle(self) -> str:
-        return self.file["bundle"]
+    def ns(self) -> str:
+        return self.file["namespace"]
 
     @property
     def vars_name(self) -> str:
-        return f"{self.bundle}_vars"
+        return f"{self.ns}:vars"
 
     def compile(self) -> str:
         blocks = self.file.get("blocks") or []
+        self.local_classes = defined_classes(self.file, self.library)
         definitions = [b for b in blocks if self.descriptor(b).get("compile_target") == "file_vars"]
         sequenced = self.sequenced_blocks(blocks)
         names = self.block_names(sequenced)
@@ -475,7 +496,7 @@ class FileCompiler:
 
         sections = [self.header()]
         # Promises run in the order written, not by promise type (CFEngine 3.27+): canvas order.
-        sections.append('body file control\n{\n  evaluation_order => "top_down";\n}')
+        sections.append(f'body file control\n{{\n  namespace => "{self.ns}";\n  evaluation_order => "top_down";\n}}')
         vars_bundle = self.vars_bundle(definitions)
         if vars_bundle:
             sections.append(vars_bundle)
@@ -483,9 +504,7 @@ class FileCompiler:
         if sequenced:
             sections.append(self.entry_bundle(sequenced, names, groups))
             sections.extend(self.group_bundle(group, sequenced, names) for group in groups.values())
-        new_bodies = sorted(self.bodies - self.written_bodies)
-        sections.extend(self.builder_body(name) for name in new_bodies)
-        self.written_bodies.update(new_bodies)
+        sections.extend(self.builder_body(name) for name in sorted(self.bodies))
         policy = format_policy("\n\n".join(sections) + "\n")
         self.source_map = locate_chunks(policy, self.chunks)
         return policy
@@ -500,7 +519,7 @@ class FileCompiler:
                 wrapped = textwrap.wrap(paragraph, 77)
                 lines += [f"# {line}" for line in wrapped] or ["#"]
             lines.append("#")
-        name = self.file.get("name", self.bundle)
+        name = self.file.get("name", self.ns)
         lines += [
             f'# Generated by CFEngine Policy Builder from "{name}".',
             "# Edits here are overwritten when the project is saved.",
@@ -521,11 +540,11 @@ class FileCompiler:
         return order + [b for b in own.values() if b not in order]
 
     def block_names(self, blocks: list[dict]) -> dict[str, str]:
-        """`<file bundle>_<label>`, e.g. webserver_render_nginx_config, unique project-wide (_2, _3…):
-        what a block's results() classes and template file are named after."""
+        """The label slugged, e.g. render_nginx_config, unique in the file (_2, _3…):
+        what a block's results() classes, locals and template file are named after."""
         names = {}
         for block in blocks:
-            base = f"{self.bundle}_{slug(block.get('label') or self.descriptor(block)['name'])}"
+            base = slug(block.get("label") or self.descriptor(block)["name"])
             name, suffix = base, 2
             while name in self.taken:
                 name, suffix = f"{base}_{suffix}", suffix + 1
@@ -548,10 +567,10 @@ class FileCompiler:
         return groups
 
     def group_names(self, groups: dict[str, dict]) -> dict[str, str]:
-        """`<file bundle>_<group name>`: the group's bundle, and what its call's results() classes are named after."""
+        """The group's bundle, named after it, and what its call's results() classes are named after."""
         names = {}
         for group in groups.values():
-            base = f"{self.bundle}_{slug(group.get('name') or 'group')}"
+            base = slug(group.get("name") or "group")
             name, suffix = base, 2
             while name in self.taken:
                 name, suffix = f"{base}_{suffix}", suffix + 1
@@ -561,9 +580,13 @@ class FileCompiler:
 
     def file_guard(self) -> str | None:
         condition = self.file.get("condition")
-        return class_expression(condition) if condition and condition.get("className", "").strip() else None
+        return (
+            class_expression(condition, self.local_classes)
+            if condition and condition.get("className", "").strip()
+            else None
+        )
 
-    # bundle common <bundle>_vars: every Define Variable / Define Class entry.
+    # bundle common vars: every Define Variable / Define Class entry.
     def vars_bundle(self, blocks: list[dict]) -> str | None:
         sections: dict[str, list[str]] = {"vars": [], "classes": []}
         chunks: dict[str, list[tuple[str, str]]] = {kind: [] for kind in sections}
@@ -586,7 +609,7 @@ class FileCompiler:
         for kind, lines in sections.items():
             if lines:
                 body += [f"  {kind}:", *([f"    {guard}::"] if guard else []), *[f"      {line}" for line in lines]]
-        return f"bundle common {self.vars_name}\n{{\n" + "\n".join(body) + "\n}"
+        return "bundle common vars\n{\n" + "\n".join(body) + "\n}"
 
     def entry_promises(self, block: dict, descriptor: dict, entry: dict) -> tuple[str, list[str]]:
         try:
@@ -610,14 +633,20 @@ class FileCompiler:
             raise Skip(f"{', '.join(invalid)} not valid")
 
         conditions = [
-            class_expression(c)
+            class_expression(c, self.local_classes)
             for c in (block.get("condition"), entry.get("condition"))
             if c and c.get("className", "").strip()
         ]
         # Every component (cf-promises, cf-serverd…) evaluates a common bundle: commands run in cf-agent only.
         if runs_command(step):
             conditions.insert(0, "agent")
-        ctx = Context(self.vars_name, params, self.bodies, class_refs=entry.get("classRefs") or [])
+        ctx = Context(
+            self.vars_name,
+            params,
+            self.bodies,
+            class_refs=entry.get("classRefs") or [],
+            local_classes=self.local_classes,
+        )
         extra = []
         if entry.get("inventory", {}).get("attributeName", "").strip():
             extra.append(
@@ -678,7 +707,15 @@ class FileCompiler:
         value_type = source.get("value_type", "string")
         # Chained values are function arguments, where lists are written differently.
         expression = compile_value(
-            value, Context(ctx.vars_bundle, ctx.params, ctx.bodies, ctx.class_refs, as_argument=bool(decorators))
+            value,
+            Context(
+                ctx.vars_bundle,
+                ctx.params,
+                ctx.bodies,
+                ctx.class_refs,
+                as_argument=bool(decorators),
+                local_classes=ctx.local_classes,
+            ),
         )
         lines = []
         for index, instance in enumerate(decorators):
@@ -717,11 +754,15 @@ class FileCompiler:
         and the `results()` classes its own outgoing arrows read. `edges`: the arrows in its bundle."""
         gate = self.arrow_gate(node, edges, names)
         condition = node.get("condition")
-        expressions = [class_expression(condition)] if condition and condition.get("className", "").strip() else []
+        expressions = (
+            [class_expression(condition, self.local_classes)]
+            if condition and condition.get("className", "").strip()
+            else []
+        )
         expression = combined([*expressions, *([gate] if gate else [])])
         attributes = [f"if => {quote(expression)}"] if expression else []
         if any(edge["source"] == node["instanceId"] for edge in edges):
-            attributes.append(f'classes => results("bundle", "{names[node["instanceId"]]}")')
+            attributes.append(f'classes => default:results("bundle", "{names[node["instanceId"]]}")')
         return attributes
 
     def scoped_edges(self, ids: set[str]) -> list[dict]:
@@ -733,7 +774,7 @@ class FileCompiler:
         label = one_line(block.get("label") or self.descriptor(block)["name"])
         # Locals are prefixed with the block's own name: blocks share a bundle.
         try:
-            parts = self.block_parts(block, name, prefix=f"{name[len(self.bundle) + 1:]}_", owner=owner)
+            parts = self.block_parts(block, name, prefix=f"{name}_", owner=owner)
         except Skip as skip:
             parts = f'Skipped "{label}": {skip}.'
         if isinstance(parts, str):
@@ -747,7 +788,7 @@ class FileCompiler:
         lines = promise(promiser, [*attributes, *self.gating(block, names, edges)])
         return [*body, f"  {promise_type}:", *guarded, *[f"      {line}" for line in lines], ""]
 
-    # bundle agent <bundle>: every ungrouped block's own promise and every group's call, in order (top_down).
+    # bundle agent main: every ungrouped block's own promise and every group's call, in order (top_down).
     def entry_bundle(self, blocks: list[dict], names: dict[str, str], groups: dict[str, dict]) -> str:
         guard = self.file_guard()
         guarded = [f"    {guard}::"] if guard else []
@@ -757,7 +798,7 @@ class FileCompiler:
         for block in blocks:
             group = groups.get(block.get("groupId"))
             if group is None:
-                body += self.block_lines(block, names, edges, self.bundle, guarded)
+                body += self.block_lines(block, names, edges, f"{self.ns}:main", guarded)
             elif group["id"] not in called:
                 called.add(group["id"])
                 node = {**group, "instanceId": group["id"]}
@@ -768,16 +809,16 @@ class FileCompiler:
                 self.chunks.append((group["id"], f"Group: {one_line(group.get('name') or 'group')}"))
                 body += [f"  # Group: {one_line(group.get('name') or 'group')}", "  methods:", *guarded]
                 body += [*[f"      {line}" for line in lines], ""]
-        return f"bundle agent {self.bundle}\n{{\n" + "\n".join(body).rstrip() + "\n}"
+        return "bundle agent main\n{\n" + "\n".join(body).rstrip() + "\n}"
 
-    # bundle agent <bundle>_<group>: a group's blocks, called from the entry bundle as one step.
+    # bundle agent <group>: a group's blocks, called from the entry bundle as one step.
     def group_bundle(self, group: dict, blocks: list[dict], names: dict[str, str]) -> str:
         name = names[group["id"]]
         members = [b for b in blocks if b.get("groupId") == group["id"]]
         edges = self.scoped_edges({b["instanceId"] for b in members})
-        comment = f'# Group "{one_line(group.get("name") or "group")}", run as one step of {self.bundle}.'
+        comment = f'# Group "{one_line(group.get("name") or "group")}", run as one step of main.'
         self.chunks.append((group["id"], comment[2:]))
-        body = [line for block in members for line in self.block_lines(block, names, edges, name, [])]
+        body = [line for block in members for line in self.block_lines(block, names, edges, f"{self.ns}:{name}", [])]
         return f"{comment}\nbundle agent {name}\n{{\n" + "\n".join(body).rstrip() + "\n}"
 
     def arrow_gate(self, node: dict, edges: list[dict], names: dict[str, str]) -> str | None:
@@ -799,7 +840,7 @@ class FileCompiler:
         self, block: dict, name: str, prefix: str, owner: str
     ) -> tuple[list[str], str, str, list[str]] | str:
         """A block's local variables, promise type, promiser and attributes — or why it's skipped.
-        Locals are named `<prefix><param>` in bundle `owner`."""
+        Locals are named `<prefix><param>` in bundle `owner` (namespace-qualified)."""
         descriptor = self.descriptor(block)
         declared = descriptor.get("parameters", [])
         params = params_with_defaults(declared, block.get("params") or {})
@@ -823,12 +864,14 @@ class FileCompiler:
             self.vars_name,
             params,
             self.bodies,
-            block_name=name,
+            # Templates share ./templates/: their names carry the namespace.
+            block_name=f"{self.ns}_{name}",
             files=self.companions,
             to_root=to_root,
             prefix=prefix,
             owner=owner,
             computed={param: kind for param, (_lines, kind) in computed.items()},
+            local_classes=self.local_classes,
         )
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
         variables, promiser_params = [line for lines, _kind in computed.values() for line in lines], dict(params)
@@ -880,7 +923,7 @@ class FileCompiler:
                 continue
             [(_kind, value)] = source["steps"][0]["attributes"].items()
             decorators = [d for d in binding.get("decorators") or [] if d.get("decoratorId") in self.library.decorators]
-            ctx = Context(self.vars_name, params, self.bodies)
+            ctx = Context(self.vars_name, params, self.bodies, local_classes=self.local_classes)
             lines = self.chain(f"{prefix}{param}", bundle, source, value, decorators, ctx, [], [])
             computed[param] = lines, chain_type(source, decorators, self.library)
         return computed, missing
@@ -923,7 +966,9 @@ class FileCompiler:
             parts.append(f"'{{ \"vars\": {{ {inner} }} }}'")
         if refs.classes:
             json_classes = ", ".join(f'"{cls}": %s' for cls in refs.classes)
-            flags = ", ".join(f'ifelse({quote(cls)}, "true", "false")' for cls in refs.classes)
+            flags = ", ".join(
+                f'ifelse({quote(in_namespace(cls, self.local_classes))}, "true", "false")' for cls in refs.classes
+            )
             parts.append(f"parsejson(format('{{ \"classes\": {{ {json_classes} }} }}', {flags}))")
         if not parts:
             data = "mergedata('{}')"
@@ -1028,24 +1073,25 @@ def compile_files(
     files = meta.get("files")
     if not isinstance(files, list):
         raise CompileError('"files" must be a list')
+    # Projects saved before files had namespaces again name it `bundle`.
+    files = [{**f, "namespace": f.get("namespace", f.get("bundle"))} if isinstance(f, dict) else f for f in files]
     for file in files:
         if (
             not isinstance(file, dict)
             or not isinstance(file.get("path"), str)
-            or not isinstance(file.get("bundle"), str)
+            or not isinstance(file.get("namespace"), str)
         ):
-            raise CompileError("Every file needs a path and a bundle")
-        if not re.fullmatch(r"[A-Za-z_]\w*", file["bundle"], re.ASCII):
-            raise CompileError(f"{file['bundle']!r} isn't a valid bundle name")
+            raise CompileError("Every file needs a path and a namespace")
+        if not re.fullmatch(r"[A-Za-z_]\w*", file["namespace"], re.ASCII) or file["namespace"] == "default":
+            raise CompileError(f"{file['namespace']!r} isn't a valid namespace")
+    namespaces = [file["namespace"] for file in files]
+    duplicate = next((ns for ns in namespaces if namespaces.count(ns) > 1), None)
+    if duplicate:
+        raise CompileError(f"Two files share the namespace {duplicate!r}")
     types = variable_types(files, library)
-    # Everything shares the default namespace: masterfiles' bundles and every file's own two.
-    taken = set(library.reserved_bundles) | {
-        name for file in files for name in (file["bundle"], f"{file['bundle']}_vars")
-    }
-    written_bodies: set[str] = set()
     result = {}
     for file in files:
-        compiler = FileCompiler(library, file, types, taken, written_bodies)
+        compiler = FileCompiler(library, file, types)
         policy = compiler.compile()
         templates = {f"{TEMPLATES_DIR}{name}": text for name, text in compiler.companions.items()}
         result[file["path"]] = {file["path"]: policy, **templates}
@@ -1069,7 +1115,7 @@ def templates_module(files: dict[str, str]) -> dict | None:
 
 
 def variable_types(files: list[dict], library: Library) -> dict[str, str]:
-    """ "<bundle>_vars.name" -> CFEngine type of every Define Variable entry in the project."""
+    """ "<ns>:vars.name" -> CFEngine type of every Define Variable entry in the project."""
     types = {}
     for file in files:
         for block in file.get("blocks") or []:
@@ -1082,8 +1128,24 @@ def variable_types(files: list[dict], library: Library) -> dict[str, str]:
                 name = (entry.get("params") or {}).get(descriptor["entries"]["name_param"], "")
                 if not source or not name or source["steps"][0]["promise_type"] != "vars":
                     continue
-                types[f"{file['bundle']}_vars.{name}"] = chain_type(source, entry.get("decorators") or [], library)
+                types[f"{file['namespace']}:vars.{name}"] = chain_type(source, entry.get("decorators") or [], library)
     return types
+
+
+def defined_classes(file: dict, library: Library) -> set[str]:
+    """The classes a file's Define Class entries define, in its namespace."""
+    names = set()
+    for block in file.get("blocks") or []:
+        descriptor = library.descriptors.get(block.get("blockId"), {})
+        if descriptor.get("compile_target") != "file_vars" or "entries" not in descriptor:
+            continue
+        sources = {source["id"]: source for source in descriptor.get("value_sources", [])}
+        for entry in block.get("entries") or []:
+            source = sources.get(entry.get("valueSourceId")) or next(iter(sources.values()), None)
+            name = (entry.get("params") or {}).get(descriptor["entries"]["name_param"], "")
+            if source and name and source["steps"][0]["promise_type"] == "classes":
+                names.add(name)
+    return names
 
 
 def chain_type(source: dict, decorators: list[dict], library: Library) -> str:

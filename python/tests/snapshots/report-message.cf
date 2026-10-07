@@ -6,9 +6,9 @@
 ### run_interval = '60'
   # Case 1
   reports:
-    "Provisioned $(sys.fqhost)" action => if_elapsed("60");
+    "Provisioned $(sys.fqhost)" action => default:if_elapsed("60");
 
 ### run_interval = '1440'
   # Case 2
   reports:
-    "Provisioned $(sys.fqhost)" action => if_elapsed("1440");
+    "Provisioned $(sys.fqhost)" action => default:if_elapsed("1440");

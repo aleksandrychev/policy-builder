@@ -75,19 +75,22 @@ export interface DataChainCallbacks {
 
 export type NodeSizes = Record<string, { height: number; width: number }>;
 
-// Where a condition's class is defined: a Define Class entry on this canvas,
-// or in another file (classes are project-wide names). Hard classes and
-// unknown names have no source.
+// Where a condition's class is defined: a Define Class entry here (bare, or qualified with this
+// file's namespace), or in the file whose namespace qualifies it. Hard and unknown classes have none.
 function conditionSourceOf(className: string, allInstances: BlockInstance[], files: PolicyFile[], currentFileId: string | null): ConditionSource | undefined {
   if (!className) return undefined;
-  const definers = allInstances.filter(instance => {
+  const separator = className.indexOf(':');
+  const namespace = separator === -1 ? null : className.slice(0, separator);
+  const bareName = className.slice(separator + 1);
+  const fileId = namespace === null ? currentFileId : files.find(candidate => candidate.namespace === namespace)?.id;
+  const definer = allInstances.find(instance => {
     const descriptor = blockDescriptorsById.get(instance.blockId);
-    if (!descriptor?.entries || primaryPromiseType(descriptor) !== 'classes') return false;
-    return (instance.entries ?? []).some(entry => entryName(descriptor, entry) === className);
+    if (instance.fileId !== fileId || !descriptor?.entries || primaryPromiseType(descriptor) !== 'classes') return false;
+    return (instance.entries ?? []).some(entry => entryName(descriptor, entry) === bareName);
   });
-  const here = definers.find(instance => instance.fileId === currentFileId);
-  if (here) return { instanceId: here.instanceId };
-  const file = files.find(candidate => candidate.id === definers[0]?.fileId);
+  if (!definer) return undefined;
+  if (definer.fileId === currentFileId) return { instanceId: definer.instanceId };
+  const file = files.find(candidate => candidate.id === definer.fileId);
   return file ? { fileLabel: `${file.name}.cf` } : undefined;
 }
 

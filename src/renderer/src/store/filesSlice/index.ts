@@ -1,7 +1,7 @@
 import { type PayloadAction, createSlice } from '@reduxjs/toolkit';
 
 import { projectLoaded } from '../projectSlice';
-import { deriveBundle } from './deriveBundle';
+import { deriveNamespace } from './deriveNamespace';
 import { collectFolderDescendants, sanitizeFileSystemName, uniqueSiblingName } from './fileTree';
 import type { PolicyFile, PolicyFolder } from './types';
 
@@ -32,10 +32,10 @@ const filesSlice = createSlice({
     projectFilesInitialized: {
       reducer(_state, action: PayloadAction<{ id: string; name: string; taken: string[] }>) {
         const name = sanitizeFileSystemName(action.payload.name) || DEFAULT_NAME;
-        const file: PolicyFile = { id: action.payload.id, name, bundle: deriveBundle(name, action.payload.taken), parentId: null };
+        const file: PolicyFile = { id: action.payload.id, name, namespace: deriveNamespace(name, action.payload.taken), parentId: null };
         return { files: [file], folders: [], currentFileId: file.id };
       },
-      // `taken`: names the file's bundle (and so its ./<bundle>.cf) must not have.
+      // `taken`: names the file's namespace (and so its ./<namespace>.cf) must not have.
       prepare(name: string, taken: string[] = []) {
         return { payload: { id: crypto.randomUUID(), name, taken } };
       }
@@ -47,9 +47,9 @@ const filesSlice = createSlice({
         const file: PolicyFile = {
           id: action.payload.id,
           name,
-          bundle: deriveBundle(
+          namespace: deriveNamespace(
             name,
-            state.files.map(item => item.bundle)
+            state.files.map(item => item.namespace)
           ),
           parentId: action.payload.parentId
         };
@@ -95,7 +95,7 @@ const filesSlice = createSlice({
     fileSelected(state, action: PayloadAction<{ fileId: string }>) {
       state.currentFileId = action.payload.fileId;
     },
-    // Renaming never touches the bundle name — see the field comment in types.ts.
+    // Renaming never touches the namespace — see the field comment in types.ts.
     fileRenamed(state, action: PayloadAction<{ fileId: string; name: string }>) {
       const file = state.files.find(item => item.id === action.payload.fileId);
       if (!file) return;

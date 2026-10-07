@@ -3,8 +3,8 @@
   files:
     "/opt/app/static/."
       create => "true",
-      copy_from => local_cp("/srv/build/static"),
-      depth_search => recurse("inf"),
+      copy_from => default:local_cp("/srv/build/static"),
+      depth_search => default:recurse("inf"),
       perms => mog_dirs("644", "root", "root");
 
 ### body perms mog_dirs(mode, user, group)
