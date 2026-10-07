@@ -331,4 +331,15 @@ describe('IPC handlers', () => {
     expect(() => invoke('deploy:reveal', project, 'out/masterfiles.tgz')).toThrow('Invalid file');
     expect(() => invoke('deploy:reveal', project, join(project, 'out', 'masterfiles.tgz'))).not.toThrow();
   });
+
+  it('reports a failed push by git’s fatal: line, not the advice after it', async () => {
+    await fs.writeFile(join(project, 'cfbs.json'), '{}');
+    git(project, 'add', '--all');
+    git(project, 'commit', '--quiet', '-m', 'First');
+    git(project, 'remote', 'add', 'origin', join(temp, 'missing.git'));
+    expect(await invoke('git:push', project)).toMatchObject({
+      ok: false,
+      message: 'git push failed: fatal: Could not read from remote repository.'
+    });
+  });
 });
