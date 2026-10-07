@@ -163,6 +163,35 @@ def test_errors_are_traced_back_to_the_block_that_made_them():
     assert problem["cause"] == ["Could not get GID for group 'shadow', (getgrnam: not found)"]
 
 
+def test_a_failed_command_is_traced_by_its_promiser():
+    # cf-agent names only the expanded command, without a "belongs to" line.
+    lines = [
+        "    info: Executing 'no timeout' ... '/usr/bin/freshclam --datadir=/var/lib/clamav'",
+        "   error: Finished command related to promiser '/usr/bin/freshclam --datadir=/var/lib/clamav' -- an error occurred, returned 1",
+    ]
+    policy = "\n".join(
+        [
+            "bundle agent main",
+            "{",
+            "  # Update signatures",
+            "  commands:",
+            '      "/usr/bin/freshclam --datadir=$(clamav:vars.db)"',
+            "        contain => in_shell;",
+            "}",
+        ]
+    )
+    source_map = {"./clamav.cf": {"freshclam-block": [[3, 6]]}}
+
+    [problem] = cfpb_testenv.find_problems(lines, source_map, {"freshclam-block": "file-1"}, {"./clamav.cf": policy})
+
+    assert (problem["block"], problem["fileId"], problem["file"], problem["line"]) == (
+        "freshclam-block",
+        "file-1",
+        "./clamav.cf",
+        5,
+    )
+
+
 def test_errors_outside_the_project_keep_their_own_location():
     lines = [
         "    info: Promise belongs to bundle 'cfe_internal_update' in file '/var/cfengine/inputs/update.cf' near line 9",
