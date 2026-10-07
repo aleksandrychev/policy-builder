@@ -95,6 +95,8 @@ export interface TestProblem {
   fileId: string | null;
   line: number | null;
   message: string;
+  // The runs of the test it came up in (a failure of the first run may not come up again).
+  runs?: number[];
 }
 
 // One event of a streaming test-environment run; `exit` always comes last.

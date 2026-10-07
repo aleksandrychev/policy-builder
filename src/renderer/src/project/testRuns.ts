@@ -257,7 +257,7 @@ export function markTestActivitySeen(): void {
   for (const listener of listeners) listener();
 }
 
-// Block id -> the host names its promises failed on in the last run, across environments.
+// Block id -> the host names its promises failed on in the last test, across environments.
 let blockProblems: Record<string, string[]> = {};
 let blockProblemsKey = '';
 function currentBlockProblems(hostNames: Map<string, string>) {
