@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import type { IpcMainInvokeEvent } from 'electron';
 import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -7,7 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { BuildResult, GitStatus } from '../preload/api';
 import { buildPolicySet, deployPolicySet } from './backend';
 import { registerDeployHandlers, status } from './deploy';
-import { type Handler, invoker, ipcEvent, isTrustedFrame } from './test/ipc';
+import { type Handler, invoker, ipcEvent, isTrustedFrame, trustedFrame } from './test/ipc';
 
 const state = vi.hoisted(() => ({ handlers: new Map<string, Handler>(), known: new Set<string>() }));
 
@@ -332,6 +333,16 @@ describe('IPC handlers', () => {
     expect(() => invoke('deploy:reveal', project, join(project, 'out', 'masterfiles.tgz'))).not.toThrow();
   });
 
+  it('says when git isn’t installed', async () => {
+    const path = process.env.PATH;
+    vi.stubEnv('PATH', join(temp, 'no-git'));
+    try {
+      expect(await invoke('git:status', project)).toMatchObject({ ok: false, message: 'Git isn’t installed (or not on PATH).' });
+    } finally {
+      vi.stubEnv('PATH', path);
+    }
+  });
+
   it('reports a failed push by git’s fatal: line, not the advice after it', async () => {
     await fs.writeFile(join(project, 'cfbs.json'), '{}');
     git(project, 'add', '--all');
@@ -341,5 +352,23 @@ describe('IPC handlers', () => {
       ok: false,
       message: 'git push failed: fatal: Could not read from remote repository.'
     });
+  });
+
+  it('sends build stages to the window that asked, not once it closed', async () => {
+    const sent: unknown[] = [];
+    let closed = false;
+    const sender = { isDestroyed: () => closed, send: (channel: string, stage: unknown) => void sent.push([channel, stage]) };
+    const event = { senderFrame: trustedFrame, sender } as unknown as IpcMainInvokeEvent;
+    build.mockImplementation(async (_path, onStage) => {
+      onStage?.('build');
+      closed = true;
+      onStage?.('lint');
+      return built;
+    });
+    expect(await state.handlers.get('deploy:build')?.(event, project)).toEqual({ ok: true, build: built });
+    expect(sent).toEqual([['deploy:progress', 'build']]);
+
+    build.mockRejectedValue(Object.assign(new Error('cfbs build failed'), { details: 'Traceback…' }));
+    expect(await invoke('deploy:build', project)).toEqual({ ok: false, message: 'cfbs build failed', details: 'Traceback…' });
   });
 });
