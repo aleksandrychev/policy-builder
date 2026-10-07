@@ -140,7 +140,7 @@ export async function status(path: string): Promise<GitStatus> {
     ahead = Number((await git(path, ['rev-list', '--count', 'HEAD', '--not', '--remotes=origin'])).stdout.trim()) || 0;
   }
   const [hash, subject, date] = last.code === 0 ? last.stdout.trim().split('\0') : [];
-  let headBuilder: unknown = null;
+  let headBuilder: unknown;
   try {
     headBuilder = head.code === 0 ? JSON.parse(head.stdout) : null;
   } catch {

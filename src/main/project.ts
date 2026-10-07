@@ -258,7 +258,7 @@ async function checkTarget(parent: string, folderName: string): Promise<TargetCh
       () => false
     );
   const target = join(parent, folderName);
-  let targetState: TargetCheck['targetState'] = 'new';
+  let targetState: TargetCheck['targetState'];
   try {
     const stats = await fs.stat(target);
     targetState = stats.isDirectory() && (await fs.readdir(target)).length === 0 ? 'empty' : 'nonEmpty';
