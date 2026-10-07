@@ -17,7 +17,7 @@ export interface ProblemsPanelProps {
   problems: Record<string, TestProblem[]>;
 }
 
-/** What failed in the last run, per host and block, and why — above the log. Hidden when nothing did. */
+/** What failed in this test's runs, per host and block, and why — above the log. Hidden when nothing did. */
 export function ProblemsPanel({ describe, hosts, onShowBlock, onShowInLog, problems }: ProblemsPanelProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(true);
@@ -29,7 +29,7 @@ export function ProblemsPanel({ describe, hosts, onShowBlock, onShowInLog, probl
       <Stack direction="row" spacing={1} onClick={() => setOpen(value => !value)} sx={{ alignItems: 'center', px: 1.5, py: 0.75, cursor: 'pointer' }}>
         <ErrorOutlineIcon sx={{ fontSize: 18, color: 'error.main' }} />
         <Typography sx={{ fontSize: 14, fontWeight: 700, color: 'error.main', flex: 1 }}>
-          {items.length} {items.length === 1 ? 'problem' : 'problems'} in the last run
+          {items.length} {items.length === 1 ? 'problem' : 'problems'} in this test
         </Typography>
         <ExpandMoreIcon sx={{ fontSize: 18, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
       </Stack>
@@ -56,6 +56,11 @@ export function ProblemsPanel({ describe, hosts, onShowBlock, onShowInLog, probl
                       : [problem.file, problem.line && `line ${problem.line}`].filter(Boolean).join(', ')}
                   </Typography>
                   {problem.count > 1 && <Typography sx={{ fontSize: 12, color: 'text.muted' }}>×{problem.count}</Typography>}
+                  {problem.runs && problem.runs.length > 0 && (
+                    <Typography sx={{ fontSize: 12, color: 'text.muted' }}>
+                      {problem.runs.length === 1 ? 'run' : 'runs'} {problem.runs.join(', ')}
+                    </Typography>
+                  )}
                 </Stack>
                 <Typography sx={{ fontSize: 13, color: 'error.main', mt: 0.25, wordBreak: 'break-word' }}>{problem.message}</Typography>
                 {problem.cause.length > 0 && (

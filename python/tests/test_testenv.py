@@ -389,3 +389,20 @@ def test_sweep_removes_only_the_throwaway_containers_of_dead_sidecars():
     assert queries == [{"label": cfpb_testenv.LABEL_OWNER}]
     assert (dead.removed, alive.removed, elsewhere.removed, host_container.removed) == (True, False, False, False)
     assert cfpb_testenv.owner_labels() == {cfpb_testenv.LABEL_OWNER: f"{host}:{os.getpid()}"}
+
+
+def test_a_test_reports_every_runs_problems_with_the_runs_they_came_up_in():
+    problems: dict = {}
+    failed_restart = {
+        "block": "b1",
+        "file": "./web.cf",
+        "line": 9,
+        "message": "restart failed",
+        "count": 1,
+        "cause": [],
+    }
+    cfpb_testenv.add_problems(problems, [failed_restart], 1)
+    cfpb_testenv.add_problems(problems, [], 2)
+    cfpb_testenv.add_problems(problems, [{**failed_restart}], 3)
+
+    assert list(problems.values()) == [{**failed_restart, "count": 2, "runs": [1, 3]}]

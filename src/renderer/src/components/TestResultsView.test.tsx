@@ -242,7 +242,7 @@ describe('TestResultsView', () => {
     emit({ t: 'log', host: 'h1', line: 'error: Could not install nginx', stream: 'agent' });
     emit({ t: 'log', host: 'h2', line: 'R: unrelated', stream: 'agent' });
     emit({ t: 'problems', host: 'h1', problems: [problem] });
-    expect(screen.getByText('1 problem in the last run')).toBeInTheDocument();
+    expect(screen.getByText('1 problem in this test')).toBeInTheDocument();
     expect(screen.getByText('Bundle main')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show block' }));

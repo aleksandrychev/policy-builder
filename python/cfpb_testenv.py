@@ -834,8 +834,15 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
                 emit("step", host=host["id"], step="bootstrap", message=f"Bootstrapping to {hub_ip}")
                 environment = host_env(env, host, dotenv)
                 _check(
+                    # Without the run bootstrapping does on its own: the test's counted runs do that work,
+                    # so what it repairs or fails shows in their results.
                     run_in(
-                        engine, container, f"{CFENGINE}/cf-agent --bootstrap {hub_ip}", host["id"], "setup", environment
+                        engine,
+                        container,
+                        f"{CFENGINE}/cf-agent --bootstrap {hub_ip} --skip-bootstrap-policy-run",
+                        host["id"],
+                        "setup",
+                        environment,
                     ),
                     "Bootstrap",
                 )
@@ -877,6 +884,17 @@ INPUTS = "/var/cfengine/inputs/services/cfbs/"
 def _where(file: str) -> str | None:
     """A deployed policy file's path in the project ("./security.cf"), if it's one of ours."""
     return "./" + file[len(INPUTS) :] if file.startswith(INPUTS) else None
+
+
+def add_problems(problems: dict[tuple, dict], found: list[dict], run: int) -> None:
+    """One run's problems into a test's, the same problem counted once with the runs it came up in."""
+    for problem in found:
+        key = (problem["block"], problem["file"], problem["line"], problem["message"])
+        if key in problems:
+            problems[key]["count"] += problem["count"]
+            problems[key]["runs"].append(run)
+        else:
+            problems[key] = {**problem, "runs": [run]}
 
 
 def find_problems(lines: list[str], source_map: dict, block_files: dict) -> list[dict]:
@@ -976,6 +994,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         container, environment = containers[host["id"]], host_env(env, host, dotenv)
         emit("host", host=host["id"], state="running")
         result = None
+        problems: dict[tuple, dict] = {}
         for number in range(1, max_runs + 1):
             emit("step", host=host["id"], step="run", message=f"Run {number} of {max_runs}")
             # update.cf's errors are problems too (its compliance isn't in the summary we read).
@@ -987,17 +1006,13 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
             code = run_in(engine, container, f"{CFENGINE}/cf-agent -KI", host["id"], "agent", environment, output)
             result = {**(_compliance(engine, container) or {}), "exit": code, "run": number}
             emit("result", host=host["id"], **result)
+            found = [*find_problems(updating, source_map, block_files), *find_problems(output, source_map, block_files)]
+            add_problems(problems, found, number)
             if code != 0 or result.get("repaired", 0) == 0:
                 break
-        # What went wrong in the last pass (earlier passes may have been fixed by later ones).
-        emit(
-            "problems",
-            host=host["id"],
-            problems=[
-                *find_problems(updating if result else [], source_map, block_files),
-                *find_problems(output if result else [], source_map, block_files),
-            ],
-        )
+        # Every run's: a promise that failed in the first run isn't always tried again (a restart
+        # behind a change that's done by then), and a later run then looks clean.
+        emit("problems", host=host["id"], problems=list(problems.values()))
         # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
         # Enterprise hub repairs a little on every run).
         converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0
