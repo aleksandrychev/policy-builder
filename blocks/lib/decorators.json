@@ -21,7 +21,9 @@
           "name": "replacement",
           "label": "Replacement",
           "type": "string",
-          "required": true
+          "required": false,
+          "default": "",
+          "help": "Empty removes what matches."
         },
         {
           "name": "options",
@@ -186,7 +188,9 @@
           "name": "replacement",
           "label": "Replacement",
           "type": "string",
-          "required": true
+          "required": false,
+          "default": "",
+          "help": "Empty removes what matches."
         }
       ],
       "expression": {
