@@ -1,17 +1,13 @@
 appId: com.northerntech.cfengine-policy-builder
 productName: CFEngine Policy Builder
+# One naming scheme for every installer: cfengine-policy-builder-0.1.0-mac-arm64.dmg
+artifactName: ${name}-${version}-${os}-${arch}.${ext}
 directories:
   buildResources: build
   output: release
+# Only the built app: electron-builder adds package.json and the production node_modules itself.
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierrc,.prettierignore}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,vitest.config.ts}'
-  - '!{.env,.env.*,.npmrc}'
-  - '!{.github,.git}'
-  - '!python'
+  - out/**
 asarUnpack:
   - resources/**
 # The PyInstaller sidecar lands in Contents/Resources/backend (macOS) or
