@@ -1228,12 +1228,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
               <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{PROJECT_TABS[activeTab]}</Typography>
             </Stack>
           }
-          right={
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Blocks: {instances.length}</Typography>
-              <Typography sx={{ fontSize: 11, color: 'text.muted', fontFamily: 'monospace' }}>CFEngine x.xx.xx</Typography>
-            </Stack>
-          }
+          right={<Typography sx={{ fontSize: 11, color: 'text.muted' }}>Blocks: {instances.length}</Typography>}
         />
       </Box>
       <DragOverlay>{dragPreview && <DragPreviewCard label={dragPreview.label} badge={dragPreview.badge} />}</DragOverlay>

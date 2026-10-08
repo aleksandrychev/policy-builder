@@ -170,7 +170,6 @@ export default function NoProjectScreen({ onNewProject, onOpenProject, onTryDemo
             <Typography sx={{ fontSize: 11, color: 'text.muted' }}>No project open</Typography>
           </Stack>
         }
-        right={<Typography sx={{ fontSize: 11, color: 'text.muted', fontFamily: 'monospace' }}>CFEngine x.xx.xx</Typography>}
       />
     </Box>
   );
