@@ -86,3 +86,11 @@ resources. The `build:*` scripts do that for you.
 GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs
 lint + format check, type check, unit tests, and the Python backend's own lint
 and tests on every push and PR.
+
+## Releases
+
+Pushing a tag that matches `package.json`'s version (`v0.1.0`) runs
+[.github/workflows/release.yml](.github/workflows/release.yml): it builds the
+installers for macOS (arm64 and x64), Linux and Windows and attaches them to a
+draft prerelease, visible only to the repository's maintainers until published.
+The builds aren't code-signed yet; the release notes say how to open them.
