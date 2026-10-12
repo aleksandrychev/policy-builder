@@ -70,6 +70,7 @@ export function TestTransformsDialog({ open, baseType, decoratorChain, onClose }
           </Typography>
 
           <TextField
+            autoFocus
             label={baseType === 'slist' ? 'Sample input (one item per line)' : 'Sample input'}
             value={sampleInput}
             onChange={event => setSampleInput(event.target.value)}
