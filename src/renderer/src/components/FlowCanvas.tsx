@@ -52,6 +52,7 @@ import { GateEdge, type GateFlowEdge } from './GateEdge';
 import { type GateFlowNode, GateNode } from './GateNode';
 import { type GroupFrameFlowNode, GroupFrameNode } from './GroupFrameNode';
 import { OutcomeEdge, type OutcomeFlowEdge } from './OutcomeEdge';
+import { AgentScanOverlay } from './agent/AgentScanOverlay';
 
 export const CANVAS_DROPPABLE_ID = 'canvas-dropzone';
 
@@ -154,6 +155,8 @@ interface FlowCanvasProps {
   onSelectInstance: (instanceId: string | null) => void;
   onTidy: () => void;
   onToggleMaximize: () => void;
+  // An AI agent is working on the project: the canvas shows its scanning line.
+  scanning?: boolean;
   // The data chain opened from the canvas (its owner's entry id), selected in place of its block.
   selectedChainEntryId: string | null;
   selectedEdgeId: string | null;
@@ -290,6 +293,7 @@ export function FlowCanvas({
   onNodeDragStart,
   onNodeDragStop,
   selectedEdgeId,
+  scanning,
   selectedGateKey,
   selectedGroupId,
   groups,
@@ -851,6 +855,7 @@ export function FlowCanvas({
           <EmptyCanvas />
         </Box>
       )}
+      {scanning && <AgentScanOverlay />}
     </Box>
   );
 }

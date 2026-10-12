@@ -1012,6 +1012,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             <FlowCanvas
               // One React Flow per file: remounting fits the view to the file just opened.
               key={currentFileId ?? 'none'}
+              scanning={locked}
               allInstances={allInstances}
               instances={instances}
               edges={edges}
