@@ -8,10 +8,12 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileDescriptionChanged,
+  fileMoved,
   fileRemoved,
   fileRenamed,
   fileSelected,
   folderAdded,
+  folderMoved,
   folderRemoved,
   folderRenamed
 } from '../store/filesSlice';
@@ -37,6 +39,7 @@ function ConnectedExplorer() {
       onAddFolder={(name, parentId) => dispatch(folderAdded(name, parentId))}
       onRenameFile={(fileId, name) => dispatch(fileRenamed({ fileId, name }))}
       onRenameFolder={(folderId, name) => dispatch(folderRenamed({ folderId, name }))}
+      onMove={(kind, id, parentId) => dispatch(kind === 'file' ? fileMoved({ fileId: id, parentId }) : folderMoved({ folderId: id, parentId }))}
       onDeleteFile={fileId =>
         inOneStep(dispatch, () => {
           dispatch(fileRemoved({ fileId }));

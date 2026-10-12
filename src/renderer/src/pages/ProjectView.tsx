@@ -103,10 +103,12 @@ import {
   fileConditionModeChanged,
   fileConditionRemoved,
   fileDescriptionChanged,
+  fileMoved,
   fileRemoved,
   fileRenamed,
   fileSelected,
   folderAdded,
+  folderMoved,
   folderRemoved,
   folderRenamed
 } from '../store/filesSlice';
@@ -445,6 +447,10 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
   const handleRenameFolder = (folderId: string, name: string) => {
     dispatch(folderRenamed({ folderId, name }));
+  };
+
+  const handleMove = (kind: 'file' | 'folder', id: string, parentId: string | null) => {
+    dispatch(kind === 'file' ? fileMoved({ fileId: id, parentId }) : folderMoved({ folderId: id, parentId }));
   };
 
   const handleDeleteFile = (fileId: string) => {
@@ -1001,6 +1007,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                     onRenameFolder={handleRenameFolder}
                     onDeleteFile={handleDeleteFile}
                     onDeleteFolder={handleDeleteFolder}
+                    onMove={handleMove}
                   />
                 </Box>
               </Box>
