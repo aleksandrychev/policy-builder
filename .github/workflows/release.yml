@@ -90,4 +90,4 @@ jobs:
       - name: Draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" installers/* --draft --prerelease --title "$GITHUB_REF_NAME" --generate-notes --notes-file .github/release-notes.md
+        run: gh release create "$GITHUB_REF_NAME" installers/* --draft --prerelease --title "$GITHUB_REF_NAME (preview, not production-ready)" --generate-notes --notes-file .github/release-notes.md
