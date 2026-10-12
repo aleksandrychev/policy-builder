@@ -105,6 +105,8 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
     for key in ("variable", "bundle", "class_expression"):
         if key in expr:
             yield from PLACEHOLDER.findall(expr[key])
+    if "args_param" in expr:
+        yield expr["args_param"]
     for item in expr.get("args", []) + expr.get("list", []):
         yield from _walk(item, top_level=False, in_decorator=in_decorator, problems=problems, where=where)
 

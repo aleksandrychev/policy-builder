@@ -34,6 +34,8 @@ export interface ClassExpressionExpression {
 
 export interface BundleExpression {
   args?: Expression[];
+  // A parameter whose lines are further arguments, one each.
+  args_param?: string;
   bundle: Template;
 }
 

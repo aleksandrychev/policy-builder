@@ -239,6 +239,10 @@
               "items": {
                 "$ref": "#/$defs/expression"
               }
+            },
+            "args_param": {
+              "$ref": "#/$defs/identifier",
+              "description": "A parameter whose lines are further arguments, one each, quoted"
             }
           }
         },

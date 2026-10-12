@@ -267,8 +267,11 @@ def compile_value(expr, ctx: Context) -> str:
         name = ctx.substitute(expr["bundle"])
         # The stdlib, or another module's: anything unqualified is in the default namespace.
         name = name if ":" in name else f"default:{name}"
-        args = expr.get("args")
-        return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
+        args = [compile_value(arg, ctx) for arg in expr.get("args") or []]
+        # One argument per line of a parameter (Call Method's arguments).
+        if "args_param" in expr:
+            args += [quote(line) for line in lines_of(ctx.params.get(expr["args_param"], ""))]
+        return f"{name}({', '.join(args)})" if args else name
     if "variable" in expr:
         name = ctx.qualified(ctx.substitute(expr["variable"]))
         if not re.fullmatch(r"[\w.:\[\]]+", name, re.ASCII):
