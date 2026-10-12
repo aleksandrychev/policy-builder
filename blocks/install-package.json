@@ -12,7 +12,11 @@
       "promise_type": "packages",
       "promiser": "{{package_name}}",
       "attributes": {
-        "policy": "present"
+        "policy": "present",
+        "version": {
+          "if_set": "version",
+          "value": "{{version}}"
+        }
       }
     }
   ],
@@ -24,6 +28,14 @@
       "required": true,
       "allow_list": true,
       "help": "One package per line."
+    },
+    {
+      "name": "version",
+      "label": "Version",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "help": "Empty: any installed version will do. A version (e.g. 1.24.0-1) installs exactly that one, latest keeps it at the newest available. Applies to every package listed."
     }
   ]
 }

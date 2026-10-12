@@ -28,7 +28,7 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},
     "cron-job": {"command": "/usr/local/bin/backup.sh", "hours": "3", "minutes": "30"},
     "ensure-lines": {"path": "/etc/hosts", "lines": "127.0.0.1 app.local\n10.0.0.5 db.local"},
-    "install-package": {"package_name": "nginx"},
+    "install-package": {"package_name": "nginx", "version": ""},
     "manage-service": {"service_name": "nginx"},
     "manage-users": {"username": "deploy"},
     "mount-storage": {"mount_point": "/mnt/share", "server": "nas.local", "remote_path": "/exports/share"},
