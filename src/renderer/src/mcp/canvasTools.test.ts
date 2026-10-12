@@ -121,6 +121,17 @@ describe('MCP canvas tools: adding blocks', () => {
     expect(answer.result.blocks).toEqual([expect.objectContaining({ blockId: id, advice: [expect.stringMatching(/^Mode 644/)] })]);
   });
 
+  it('describes a number with suggested values as taking others too', async () => {
+    const { call, fileId } = setup();
+    const { parameters } = (await call('get_block_type', { blockType: 'run-command' })).result;
+    expect(parameters.find((param: { name: string }) => param.name === 'run_interval')).toMatchObject({
+      options: ['', '60', '1440', '10080'],
+      otherValues: 'any whole number from 1 too (Minutes between runs); options are suggestions'
+    });
+    expect((await call('add_block', { fileId, blockType: 'run-command', params: { command: '/bin/true', run_interval: '20160' } })).ok).toBe(true);
+    expect((await call('add_block', { fileId, blockType: 'run-command', params: { command: '/bin/true', run_interval: '0' } })).ok).toBe(false);
+  });
+
   it('names a Call Method promise after the block, with no label parameter of its own', async () => {
     const { call } = setup();
     const { parameters } = (await call('get_block_type', { blockType: 'call-method' })).result;

@@ -88,6 +88,11 @@ export const parameterView = (parameter: BlockParameter) => ({
   required: parameter.required,
   default: parameter.default,
   options: parameter.options?.map(optionValue),
+  // A number with suggested values: the options aren't the only ones.
+  otherValues:
+    parameter.options && parameter.type === 'number'
+      ? `any ${parameter.integer ? 'whole number' : 'number'}${parameter.minimum !== undefined ? ` from ${parameter.minimum}` : ''} too${parameter.other_label ? ` (${parameter.other_label})` : ''}; options are suggestions`
+      : undefined,
   allowedChars: parameter.allowed_chars,
   absolutePath: parameter.path === 'absolute' || undefined,
   referencesVariable: parameter.references === 'variable' || undefined,
