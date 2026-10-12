@@ -87,7 +87,18 @@ jobs:
         with:
           path: installers
           merge-multiple: true
+      # A draft prepared by hand for this tag gets the installers, keeping its title and notes.
       - name: Draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" installers/* --draft --prerelease --title "$GITHUB_REF_NAME (preview, not production-ready)" --generate-notes --notes-file .github/release-notes.md
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.draft and .tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
+          if [ -z "$id" ]; then
+            gh release create "$GITHUB_REF_NAME" installers/* --draft --prerelease --title "$GITHUB_REF_NAME (preview, not production-ready)" --generate-notes --notes-file .github/release-notes.md
+            exit 0
+          fi
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F prerelease=true >/dev/null
+          for file in installers/*; do
+            gh api --method POST -H "Content-Type: application/octet-stream" --input "$file" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$id/assets?name=$(basename "$file")" >/dev/null
+          done
