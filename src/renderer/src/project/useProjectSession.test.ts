@@ -43,6 +43,16 @@ describe('useProjectSession', () => {
     expect(await second).toBe(true);
   });
 
+  it('names the first file as asked, or after the project', async () => {
+    const store = createAppStore();
+    const result = render(store);
+    const values = { description: '', folderName: 'backup', git: false, masterfiles: 'no', name: 'Backup', parent: null, type: 'module' as const };
+    await act(async () => void (await result.current.tools.create({ ...values, firstFile: 'Common' })));
+    expect(store.getState().files.files.map(file => [file.name, file.namespace])).toEqual([['Common', 'common']]);
+    await act(async () => void (await result.current.tools.create(values)));
+    expect(store.getState().files.files.map(file => file.name)).toEqual(['Backup']);
+  });
+
   it('gives a project saved from the demo an environment id of its own', async () => {
     const createProject = vi.fn(async () => ({ ok: true as const, masterfiles: null, path: '/p/copy' }));
     installApi({ createProject });

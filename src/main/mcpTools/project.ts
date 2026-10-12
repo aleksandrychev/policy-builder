@@ -35,9 +35,13 @@ export function registerProjectTools(server: McpServer, answer: Answer) {
     'create_project',
     {
       description:
-        'Creates a CFEngine project on disk (cfbs init in <parent>/<folder named after the project>) and opens it, with one policy file named after the project. Refused while the open project has unsaved changes unless discardChanges is true. Returns the new project’s path.',
+        'Creates a CFEngine project on disk (cfbs init in <parent>/<folder named after the project>) and opens it, with one policy file (named after the project unless firstFile names it). Refused while the open project has unsaved changes unless discardChanges is true. Returns the new project’s path and its first file (id, name, namespace).',
       inputSchema: {
-        name: z.string().describe('The project name; it also becomes the first policy file’s namespace and can’t be changed later'),
+        name: z.string().describe('The project name'),
+        firstFile: z
+          .string()
+          .optional()
+          .describe('The first policy file’s name (default: the project name). Its namespace derives from it and can’t be changed later.'),
         parent: absolutePath('The folder to create the project folder in'),
         description: z.string().optional(),
         type: z
@@ -84,10 +88,12 @@ export function registerProjectTools(server: McpServer, answer: Answer) {
     'add_file',
     {
       description:
-        'Adds a policy file (opened on the canvas). Its namespace derives from the name once and never changes. Returns its id, name (made unique among its siblings) and namespace.',
+        'Adds a policy file (opened on the canvas), optionally with its description and condition, in one undo step. Its namespace derives from the name once and never changes. Returns its id, name (made unique among its siblings) and namespace.',
       inputSchema: {
         name: z.string().describe('Without .cf'),
-        folderId: z.string().optional().describe('A folder from add_folder or get_project_overview; the project root by default')
+        folderId: z.string().optional().describe('A folder from add_folder or get_project_overview; the project root by default'),
+        description: z.string().optional().describe('What the file is for, shown on hovering its name and atop the generated .cf'),
+        condition: condition('the whole file').optional()
       },
       annotations: EDIT
     },

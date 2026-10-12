@@ -121,12 +121,21 @@ async function createProject(env: ToolEnv, input: Input) {
     folderName,
     masterfiles,
     git: input.git !== false,
-    type
+    type,
+    firstFile: optionalStr(input, 'firstFile')
   };
   const result = await env.session.create(values);
   if (!result.ok) throw failure(result);
   const project = env.getState().project;
-  return { path: project?.path ?? null, name, type, masterfiles: project?.masterfiles ?? null, fileId: env.getState().files.files[0]?.id };
+  const file = env.getState().files.files[0];
+  return {
+    path: project?.path ?? null,
+    name,
+    type,
+    masterfiles: project?.masterfiles ?? null,
+    fileId: file?.id,
+    file: file && { name: file.name, namespace: file.namespace }
+  };
 }
 
 async function openProject(env: ToolEnv, input: Input) {
@@ -167,17 +176,35 @@ async function saveProject(env: ToolEnv, input: Input) {
   return { path: env.getState().project?.path ?? null, saved: true };
 }
 
+// A file's condition as the Properties panel sets it; null removes it.
+function dispatchFileCondition(env: CanvasEnv, fileId: string, condition: Condition | null) {
+  if (!condition) return void env.dispatch(fileConditionRemoved({ fileId }));
+  env.dispatch(fileConditionEnabled({ fileId }));
+  env.dispatch(fileConditionModeChanged({ fileId, mode: condition.mode }));
+  env.dispatch(fileConditionClassNameChanged({ fileId, className: condition.className }));
+}
+
 function addFile(env: CanvasEnv, input: Input) {
   const name = str(input, 'name');
   if (!sanitizeFileSystemName(name)) throw new ToolError('That name has no usable characters');
   const parentId = folderIdOf(env.getState(), input, 'folderId');
+  const description = optionalStr(input, 'description')?.trim();
+  const condition = input.condition === undefined || input.condition === null ? null : conditionOf(input);
   let fileId = '';
   inOneStep(env.dispatch, () => {
     fileId = env.dispatch(fileAdded(name, parentId)).payload.id;
+    if (description) env.dispatch(fileDescriptionChanged({ fileId, description }));
+    if (condition) dispatchFileCondition(env, fileId, condition);
   });
   env.openFile(fileId);
   const file = fileOf(env.getState(), fileId);
-  return { id: file.id, name: file.name, namespace: file.namespace };
+  return {
+    id: file.id,
+    name: file.name,
+    namespace: file.namespace,
+    ...(description ? { description } : {}),
+    ...(condition ? { condition: `${condition.mode} ${condition.className}` } : {})
+  };
 }
 
 function renameFile(env: CanvasEnv, input: Input) {
@@ -227,12 +254,7 @@ function setFileCondition(env: CanvasEnv, input: Input) {
   const file = fileOf(env.getState(), str(input, 'fileId'));
   const condition = conditionOf(input);
   const fileId = file.id;
-  inOneStep(env.dispatch, () => {
-    if (!condition) return void env.dispatch(fileConditionRemoved({ fileId }));
-    env.dispatch(fileConditionEnabled({ fileId }));
-    env.dispatch(fileConditionModeChanged({ fileId, mode: condition.mode }));
-    env.dispatch(fileConditionClassNameChanged({ fileId, className: condition.className }));
-  });
+  inOneStep(env.dispatch, () => dispatchFileCondition(env, fileId, condition));
   env.openFile(fileId);
   return { id: fileId, condition: condition ? `${condition.mode} ${condition.className}` : null };
 }
