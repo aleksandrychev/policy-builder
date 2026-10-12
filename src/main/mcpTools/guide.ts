@@ -119,29 +119,31 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`if\` / \`ifvarclass\` / a class guard (\`linux::\`) | A condition on the block, entry, group or whole file |
 | \`classes => results(...)\` / \`if_repaired\` to order promises | An arrow (connect, or after on add_block) with its outcomes |
 | \`files:\` \`copy_from\` a local path | Copy File, or Copy Directory (recursive, with depth) |
+| \`copy_from\` \`remote_dcp\` / \`servers\` (from the policy server) | Copy File with From server, e.g. $(sys.policy_hub) |
+| \`perms\` with \`depth_search\` (recursive) | Set Permissions with "Everything under each path too" |
 | \`files:\` \`create => "true"\` with perms | Create Directory, Create/Edit File (sets the whole content), Set Permissions |
 | \`edit_line\`: \`insert_lines\` / \`delete_lines\` / \`replace_patterns\` | Ensure Lines in File / Remove Matching Lines / Replace Text in File |
 | \`set_variable_values\` / \`set_line_based\` (key = value files) | Set Config Values |
 | \`edit_template\` / \`template_method => "mustache"\` | Render Template |
 | \`files:\` \`link_from\` | Create Symlink |
 | \`file_select\` + \`delete\` by age | Clean Up Old Files |
-| \`packages:\` present / absent | Install Package / Remove Package |
+| \`packages:\` present / absent, \`version\` | Install Package (with Version: exact or latest) / Remove Package |
 | \`services:\` | Manage Service |
 | \`processes:\` \`signals\` | Signal Process |
-| \`commands:\` | Run Command ("How often" is \`ifelapsed\`: every run, hourly or daily) |
+| \`commands:\` with \`ifelapsed\` | Run Command; "How often" (run_interval) takes any number of minutes, e.g. 10080 for weekly. Report Message and Signal Process have it too |
 | \`users:\` | Manage Users |
-| \`methods:\` a bundle without arguments | Call Method |
+| \`methods:\` \`usebundle\` with or without arguments | Call Method (arguments one per line; @(…) passes a list) |
+| \`difference()\` on a list | The Remove entries transformer |
 | \`reports:\` | Report Message |
 | \`comment =>\` | The block's note (note on add_block / update_block) |
 | \`storage:\` \`mount\` | Mount Storage |
 | Iterating over a list | A list in $(…) in a parameter repeats the promise per item; parameters with allowList take one value per line |
 
 ## No block yet (say so, don't drop silently)
-- \`copy_from\` from a policy server (\`servers\`, \`remote_dcp\`), content-hash checks.
-- Recursive permissions (\`depth_search\` on perms).
-- \`ifelapsed\` other than every run, hourly or daily; \`ifelapsed\` on blocks other than Run Command, Report Message and Signal Process.
-- A package version or package method; methods with arguments.
-- \`getindices\` / list difference as transformers.
+- \`copy_from\` options beyond a remote copy compared by content (\`encrypt\`, \`purge\`, \`compare => "mtime"\`).
+- \`ifelapsed\` on blocks other than Run Command, Report Message and Signal Process.
+- A package method (\`package_module\`) or architecture.
+- \`getindices\` and other transformers on data containers: data values take no transformers yet.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.
 
 For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
