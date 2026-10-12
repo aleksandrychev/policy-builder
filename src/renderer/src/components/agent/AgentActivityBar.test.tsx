@@ -24,6 +24,8 @@ describe('AgentActivityBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(agentActivity().paused).toBe(true);
     expect(screen.getByText(/answer it in Gemini CLI/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Note for the agent' }), { target: { value: 'wrong project' } });
+    expect(agentActivity().stopNote).toBe('wrong project');
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow again' }));
     expect(agentActivity().paused).toBe(false);

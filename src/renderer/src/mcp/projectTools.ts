@@ -91,11 +91,14 @@ function projectStatus(env: ToolEnv) {
   const state = env.getState();
   const { project } = state;
   // Whether the user has stopped the agent (Stop in the app): its calls are refused until "allowed".
-  const agent = agentActivity().paused ? 'stopped' : 'allowed';
-  if (!project) return { open: false, agent };
+  const { paused, stopNote } = agentActivity();
+  const agent = paused ? 'stopped' : 'allowed';
+  const note = paused && stopNote.trim() ? { stopNote: stopNote.trim() } : {};
+  if (!project) return { open: false, agent, ...note };
   return {
     open: true,
     agent,
+    ...note,
     name: project.name,
     path: project.path,
     type: project.type,

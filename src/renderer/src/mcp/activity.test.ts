@@ -10,6 +10,7 @@ import {
   paused,
   resetActivity,
   resumed,
+  stopNoteChanged,
   workBegan,
   workEnded
 } from './activity';
@@ -90,5 +91,15 @@ describe('a stopped agent', () => {
     for (const tool of ['end_work', 'get_project_status']) expect((await answerLogged(tool, {}, getState, answer)).ok).toBe(true);
     expect(answer).toHaveBeenCalledTimes(2);
     expect(agentActivity().paused).toBe(true);
+  });
+
+  it('is told the user’s note, until it is allowed again', async () => {
+    const getState = createAppStore().getState;
+    const answer = vi.fn(async () => ({ ok: true, content: '{}' }));
+    paused();
+    stopNoteChanged('wrong project');
+    expect((await answerLogged('add_block', {}, getState, answer)).content).toMatch(/The user’s note: “wrong project”$/);
+    resumed();
+    expect(agentActivity().stopNote).toBe('');
   });
 });

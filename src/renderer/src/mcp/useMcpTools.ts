@@ -53,7 +53,8 @@ export async function answerLogged(name: string, input: unknown, getState: () =>
   const text = describeCall(name, typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}, getState());
   if (agentActivity().paused && !ANSWERED_WHEN_STOPPED.has(name)) {
     callEnded(callStarted(name, text), false, 'refused: you stopped the agent');
-    return { ok: false, content: STOPPED };
+    const note = agentActivity().stopNote.trim();
+    return { ok: false, content: note ? `${STOPPED} The user’s note: “${note}”` : STOPPED };
   }
   const id = callStarted(name, text);
   const result = await answer();

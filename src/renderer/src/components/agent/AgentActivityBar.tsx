@@ -5,9 +5,9 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import TerminalOutlinedIcon from '@mui/icons-material/TerminalOutlined';
-import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 
-import { type AgentActivity, isWorking, paused, resumed } from '../../mcp/activity';
+import { type AgentActivity, isWorking, paused, resumed, stopNoteChanged } from '../../mcp/activity';
 import { agentName, chosenAgent } from '../../mcp/agents';
 
 // How long "may work again" stays after Allow again.
@@ -93,6 +93,16 @@ export function AgentActivityBar({ activity, onToggleLog }: { activity: AgentAct
             : `${doing ?? 'Starting…'} · ${elapsed(since, now)} · the editor is locked meanwhile`}
         </Typography>
       </Stack>
+      {activity.paused && (
+        <TextField
+          size="small"
+          value={activity.stopNote}
+          onChange={event => stopNoteChanged(event.target.value)}
+          placeholder="Note for the agent (optional), e.g. wrong project"
+          slotProps={{ htmlInput: { 'aria-label': 'Note for the agent', maxLength: 300 } }}
+          sx={{ width: 300, flexShrink: 0, '& .MuiInputBase-root': { bgcolor: 'background.paper', fontSize: 13 } }}
+        />
+      )}
       <Button size="small" color="inherit" startIcon={<TerminalOutlinedIcon />} onClick={onToggleLog}>
         Log
       </Button>

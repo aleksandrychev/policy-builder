@@ -2,7 +2,7 @@ import { edgeAdded } from '../store/edgesSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated, projectLocated } from '../store/projectSlice';
 import { addBlock, addFile, blockOf, fileOf, makeStore, undoAll } from '../store/test/storeTestUtils';
-import { paused, resetActivity } from './activity';
+import { paused, resetActivity, stopNoteChanged } from './activity';
 import { PROJECT_TOOLS } from './projectTools';
 import type { SessionTools, ToolEnv } from './shared';
 import { type ToolAnswer, answerTool } from './tools';
@@ -95,6 +95,8 @@ describe('MCP project tools', () => {
     const { call } = setup();
     paused();
     expect((await call('get_project_status')).result).toMatchObject({ open: true, agent: 'stopped' });
+    stopNoteChanged('  wait, I’m editing ');
+    expect((await call('get_project_status')).result).toMatchObject({ agent: 'stopped', stopNote: 'wait, I’m editing' });
     resetActivity();
   });
 
