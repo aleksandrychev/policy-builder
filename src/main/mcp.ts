@@ -189,10 +189,19 @@ function stop(): Promise<void> {
 }
 
 export function registerMcpHandlers(isTrustedFrame: (frame: WebFrameMain | null) => boolean) {
+  // Enabled before: listening again from launch. The handlers wait for it, or it would undo their change.
+  const launched = readSettings().then(async settings => {
+    permissions = settings.permissions;
+    if (!settings.enabled) return;
+    await start().catch(error => {
+      lastError = error instanceof Error ? error.message : String(error);
+    });
+  });
   const trusted =
-    <A extends unknown[], R>(handler: (event: IpcMainInvokeEvent, ...args: A) => R) =>
-    (event: IpcMainInvokeEvent, ...args: A): R => {
+    <A extends unknown[], R>(handler: (event: IpcMainInvokeEvent, ...args: A) => Promise<R> | R) =>
+    async (event: IpcMainInvokeEvent, ...args: A): Promise<R> => {
       if (!isTrustedFrame(event.senderFrame)) throw new Error('Untrusted sender');
+      await launched;
       return handler(event, ...args);
     };
 
@@ -239,14 +248,5 @@ export function registerMcpHandlers(isTrustedFrame: (frame: WebFrameMain | null)
     })
   );
 
-  // Enabled before: listening again from launch.
-  void readSettings().then(settings => {
-    permissions = settings.permissions;
-    if (settings.enabled) {
-      start().catch(error => {
-        lastError = error instanceof Error ? error.message : String(error);
-      });
-    }
-  });
   app.on('will-quit', () => void stop());
 }
