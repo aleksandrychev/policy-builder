@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { useAppDispatch, useAppSelector } from '../store';
 import { blocksRemovedForFile } from '../store/canvasSlice';
@@ -83,6 +83,26 @@ describe('PolicyFileExplorer', () => {
       const main = screen.getByRole('treeitem', { name: /Main\.cf/ });
       expect(within(main).getByText('2 blocks')).toBeInTheDocument();
       expect(within(screen.getByRole('treeitem', { name: /Web\.cf/ })).getByText('0 blocks')).toBeInTheDocument();
+    });
+
+    it('moves its focus to a file selected from elsewhere, so one file looks selected', async () => {
+      renderExplorer(store);
+      fireEvent.click(screen.getByText('Web.cf'));
+      await waitFor(() => expect(screen.getByRole('treeitem', { name: /Web\.cf/ })).toHaveFocus());
+
+      // An AI agent (or a cross-file jump) opens another file.
+      act(() => void store.dispatch(fileSelected({ fileId: mainId })));
+      await waitFor(() => expect(screen.getByRole('treeitem', { name: /Main\.cf/ })).toHaveFocus());
+    });
+
+    it('leaves focus outside the tree alone', async () => {
+      renderExplorer(store);
+      const outside = document.body.appendChild(document.createElement('input'));
+      outside.focus();
+      act(() => void store.dispatch(fileSelected({ fileId: webId })));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      expect(outside).toHaveFocus();
+      outside.remove();
     });
 
     it('shows folders before files, and their files once expanded', () => {
