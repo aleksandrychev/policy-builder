@@ -904,6 +904,8 @@ class FileCompiler:
         declared = descriptor.get("parameters", [])
         params = params_with_defaults(declared, block.get("params") or {})
         label = one_line(block.get("label") or descriptor["name"])
+        # {{label}} is the block's own label (Call Method's promiser), unless a parameter has that name.
+        params.setdefault("label", label)
         bound = set(block.get("paramBindings") or {})
         computed, missing_data = self.computed_parameters(block, owner, prefix)
         missing = [*missing_required([p for p in declared if p["name"] not in bound], params), *missing_data]

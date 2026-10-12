@@ -120,4 +120,10 @@ describe('MCP canvas tools: adding blocks', () => {
     const answer = await call('get_warnings');
     expect(answer.result.blocks).toEqual([expect.objectContaining({ blockId: id, advice: [expect.stringMatching(/^Mode 644/)] })]);
   });
+
+  it('names a Call Method promise after the block, with no label parameter of its own', async () => {
+    const { call } = setup();
+    const { parameters } = (await call('get_block_type', { blockType: 'call-method' })).result;
+    expect(parameters.map((param: { name: string }) => param.name)).toEqual(['bundle_name', 'arguments']);
+  });
 });

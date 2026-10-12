@@ -151,7 +151,8 @@ def _check_steps(steps: list[dict], params: list[dict], where: str, problems: li
                 and not by_name.get(value["list_param"], {}).get("allow_list")
             ):
                 problems.append(f"{at}/{attribute}: list_param needs an allow_list parameter")
-    for name in used - by_name.keys():
+    # {{label}}: the block's own label.
+    for name in used - by_name.keys() - {"label"}:
         problems.append(f"{where}: {{{{{name}}}}} isn't a parameter")
     return used
 

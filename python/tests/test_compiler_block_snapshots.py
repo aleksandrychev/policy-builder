@@ -18,7 +18,7 @@ UPDATE = os.environ.get("CFPB_UPDATE_SNAPSHOTS") == "1"
 ACTIONS = sorted(block_id for block_id, d in LIBRARY.descriptors.items() if d.get("compile_target") == "own_bundle")
 # Realistic inputs, so a snapshot reads like real policy; the rest are defaults. Lists show iteration.
 EXAMPLES: dict[str, dict[str, str]] = {
-    "call-method": {"label": "Run site checks", "bundle_name": "site_checks", "arguments": ""},
+    "call-method": {"bundle_name": "site_checks", "arguments": ""},
     "clean-up-old-files": {"directory": "/var/tmp", "days": "14"},
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},

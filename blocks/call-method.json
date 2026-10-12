@@ -21,12 +21,6 @@
   ],
   "parameters": [
     {
-      "name": "label",
-      "label": "Label",
-      "type": "string",
-      "required": true
-    },
-    {
       "name": "bundle_name",
       "label": "Bundle name",
       "type": "string",
