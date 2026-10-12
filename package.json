@@ -2,7 +2,10 @@
   "name": "cfengine-policy-builder",
   "version": "0.1.0",
   "description": "CFEngine Policy Builder - visual CFEngine policy builder (Electron + React)",
-  "author": "Northern.tech",
+  "author": {
+    "name": "Northern.tech",
+    "email": "contact@northern.tech"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "main": "./out/main/index.js",
   "private": true,
