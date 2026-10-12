@@ -1,4 +1,7 @@
-**Internal preview.** The installers aren't signed yet, so each system asks once whether to trust them:
+> [!WARNING]
+> **Not ready for production.** This is an early preview for internal testing: expect bugs and changes to how projects are stored. Test generated policy before it reaches real hosts.
+
+The installers aren't signed yet, so each system asks once whether to trust them:
 
 - **macOS** (arm64 for Apple Silicon, x64 for Intel): move the app to Applications, then run `xattr -dr com.apple.quarantine "/Applications/CFEngine Policy Builder.app"` once. Without it macOS says the app is damaged.
 - **Windows**: SmartScreen shows "Unknown publisher": choose More info › Run anyway.
