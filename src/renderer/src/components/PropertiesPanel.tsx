@@ -2,7 +2,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { Box, Button, Divider, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Divider, IconButton, Stack, TextField, Typography } from '@mui/material';
 
 import { currentChainType } from '../blocks/decorators';
 import { duplicateDefinitionKeys, entryName } from '../blocks/definitionEntries';
@@ -30,6 +30,8 @@ export type { IncomingArrow } from './properties/RunsWhenSection';
 export type { NewClassDefinition } from './properties/NewClassModal';
 
 interface PropertiesPanelProps {
+  // Valid settings that are probably not meant (canvas/advice.ts).
+  advice?: string[];
   allInstances: BlockInstance[];
   currentFileId: string | null;
   descriptor: BlockDescriptor | undefined;
@@ -123,6 +125,11 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
 
   const labelField = (
     <>
+      {props.advice?.map(text => (
+        <Alert key={text} severity="warning" sx={{ fontSize: 12 }}>
+          {text}
+        </Alert>
+      ))}
       <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />
       <TextField
         label="Note"

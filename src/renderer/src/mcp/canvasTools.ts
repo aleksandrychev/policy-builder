@@ -2,6 +2,7 @@ import { newDefinitionEntry } from '../blocks/definitionEntries';
 import { blockDescriptors, blockDescriptorsById } from '../blocks/loadBlocks';
 import { resolveBlockShape } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
+import { blockAdvice } from '../canvas/advice';
 import { executionOrder, isSequenced, wouldCreateCycle } from '../canvas/executionOrder';
 import { nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
@@ -164,7 +165,8 @@ async function warnings(state: RootState) {
       const problem = param.type === 'cases' || !value ? undefined : valueProblem(param, value);
       return problem ? [`${param.name} ${problem}`] : [];
     });
-    return empty.length || invalid.length || notCompiled
+    const advice = blockAdvice(block, state.edges);
+    return empty.length || invalid.length || notCompiled || advice.length
       ? [
           {
             blockId: block.instanceId,
@@ -172,7 +174,8 @@ async function warnings(state: RootState) {
             fileId: block.fileId,
             ...(empty.length ? { missing: empty } : {}),
             ...(invalid.length ? { invalid } : {}),
-            ...(notCompiled ? { notCompiled } : {})
+            ...(notCompiled ? { notCompiled } : {}),
+            ...(advice.length ? { advice } : {})
           }
         ]
       : [];

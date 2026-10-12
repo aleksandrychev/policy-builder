@@ -113,4 +113,11 @@ describe('MCP canvas tools: adding blocks', () => {
     expect((await call('add_blocks', { blocks: [report(fileId, 'One', { after: 0 })] })).content).toMatch(/blocks\[0\]: after as a number/);
     expect((await call('add_blocks', { blocks: [] })).content).toMatch(/at least one block/);
   });
+
+  it('reports advice in get_warnings', async () => {
+    const { call, fileId } = setup();
+    const { id } = (await call('add_block', { fileId, blockType: 'create-directory', params: { path: '/srv/data', mode: '644' } })).result;
+    const answer = await call('get_warnings');
+    expect(answer.result.blocks).toEqual([expect.objectContaining({ blockId: id, advice: [expect.stringMatching(/^Mode 644/)] })]);
+  });
 });
