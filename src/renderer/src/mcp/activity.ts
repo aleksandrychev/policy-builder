@@ -91,7 +91,7 @@ export function workBegan(text: string) {
 
 export const workEnded = () => set({ task: null, lastCallAt: null });
 
-// Stop: the agent's calls are refused until Resume (the running one is cancelled by its caller).
+// Stop: the agent's calls are refused until Allow again (the running one is cancelled by its caller).
 export const paused = () => set({ paused: true, task: null });
 export const resumed = () => set({ paused: false, lastCallAt: null });
 

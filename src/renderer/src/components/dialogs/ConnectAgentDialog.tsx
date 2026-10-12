@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 
 import type { McpPermissions, McpStatus } from '../../../../preload/api';
-import { AGENTS, agentById } from '../../mcp/agents';
+import { AGENTS, CHOSEN_AGENT_KEY, agentById, chosenAgent } from '../../mcp/agents';
 
 // What agents may do, in the order shown; reading the project is always on, deleting comes last.
 const PERMISSIONS: { help: string; key: keyof McpPermissions; label: string }[] = [
@@ -47,7 +47,6 @@ function PermissionRow({ checked, help, label, onChange }: { checked: boolean; h
 }
 
 // The agent picked last time.
-const AGENT_KEY = 'cfpb.connectAgent';
 
 /**
  * Connect an AI agent: turns on the local MCP server it drives the open project
@@ -57,7 +56,7 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<McpStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [agent, setAgent] = useState(() => agentById(localStorage.getItem(AGENT_KEY)));
+  const [agent, setAgent] = useState(chosenAgent);
 
   useEffect(() => {
     void window.api?.mcpStatus().then(setStatus);
@@ -76,7 +75,7 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
     setStatus((await window.api?.mcpSetPermissions({ ...status.permissions, [key]: allowed })) ?? status);
   };
   const pick = (id: string) => {
-    localStorage.setItem(AGENT_KEY, id);
+    localStorage.setItem(CHOSEN_AGENT_KEY, id);
     setAgent(agentById(id));
   };
   const snippet = status?.enabled && status.url && status.token ? agent.snippet({ name: status.name, token: status.token, url: status.url }) : null;

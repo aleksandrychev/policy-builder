@@ -35,7 +35,8 @@ export function useMcpCanvas(env: Omit<CanvasEnv, 'dispatch' | 'getState'>) {
 }
 
 const CANVAS_WAIT_MS = 3000;
-const STOPPED = 'Stopped by the user in Policy Builder. Don’t continue: tell them where you were and ask what to do (they resume you from the app).';
+const STOPPED =
+  'Stopped by the user in Policy Builder. Don’t continue: tell them where you were and ask what to do. Your calls are refused until they allow you again in the app.';
 
 // Just after a project opens, its view mounts a moment later: tools wait for its canvas.
 async function canvasWhenMounted(getState: () => RootState): Promise<ToolEnv['canvas']> {
