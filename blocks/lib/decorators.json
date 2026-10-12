@@ -468,7 +468,7 @@
           "type": "text",
           "required": true,
           "allow_list": true,
-          "help": "One per line."
+          "help": "One per line. A line @(list) removes that list's entries too, e.g. @(def.allowed) from augments."
         }
       ],
       "expression": {

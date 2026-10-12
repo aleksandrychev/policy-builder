@@ -118,6 +118,53 @@ def test_a_blocks_note_is_its_promises_comment():
     assert files[COMMON].count('comment => "Sized for the demo VM"') >= len(settings["entries"])
 
 
+def test_a_line_naming_a_list_brings_that_list_in():
+    meta = {
+        "files": [
+            {
+                "id": "f",
+                "path": "./t.cf",
+                "namespace": "t",
+                "order": [],
+                "blocks": [
+                    {
+                        "instanceId": "v",
+                        "blockId": "define-variable",
+                        "label": "Vars",
+                        "params": {},
+                        "entries": [
+                            {
+                                "id": "a",
+                                "valueSourceId": "list",
+                                "params": {"variable_name": "all", "items": "vim\n@(def.extra)"},
+                            },
+                            {
+                                "id": "b",
+                                "valueSourceId": "list-variable",
+                                "params": {"variable_name": "left", "from_variable": "vars.all"},
+                                "decorators": [
+                                    {
+                                        "instanceId": "d",
+                                        "decoratorId": "difference",
+                                        "params": {"entries": "emacs\n@(def.allowed)"},
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    policy = compile_project(meta)["./t.cf"]
+
+    assert '"all" slist => { "vim", @(default:def.extra) };' in policy
+    assert 'difference(\n        "t:vars.all", mergedata(\'["emacs"]\', "default:def.allowed")\n      )' in policy
+    # A list in a summary: its items, not a literal \n.
+    assert "# → remove emacs, @(def.allowed)" in policy
+
+
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}

@@ -247,7 +247,7 @@ def compile_value(expr, ctx: Context) -> str:
     if "list" in expr:
         return list_value([compile_value(item, ctx) for item in expr["list"]], ctx)
     if "list_param" in expr:
-        return list_value([quote(item) for item in lines_of(ctx.params.get(expr["list_param"], ""))], ctx)
+        return list_param_value(lines_of(ctx.params.get(expr["list_param"], "")), ctx)
     if "class_refs" in expr:
         refs = [
             ("!" if ref.get("negate") else "") + in_namespace(ref["name"], ctx.local_classes)
@@ -348,6 +348,35 @@ def list_value(items: list[str], ctx: Context) -> str:
     return "'" + re.sub(r"\\(?=[\\\"']|$)", r"\\\\", text).replace("'", "\\'") + "'"
 
 
+LIST_REFERENCE = re.compile(r"@\(([\w.:]+)\)|@\{([\w.:]+)\}")
+
+
+def list_reference(name: str, ctx: Context) -> str:
+    """A list a line names (@(vars.x), @(def.x), @(ns:vars.x)): its file's, else the default namespace's."""
+    if ":" in name:
+        return name
+    return ctx.qualified(name) if name.startswith("vars.") else f"default:{name}"
+
+
+def list_param_value(lines: list[str], ctx: Context) -> str:
+    """One item per line; a line that is just @(list) brings that list's items in."""
+    literals, lists = [], []
+    for line in lines:
+        reference = LIST_REFERENCE.fullmatch(line.strip())
+        if reference:
+            lists.append(list_reference(reference.group(1) or reference.group(2), ctx))
+        else:
+            literals.append(quote(line))
+    if not lists:
+        return list_value(literals, ctx)
+    if not ctx.as_argument:
+        return "{ " + ", ".join([*literals, *(f"@({name})" for name in lists)]) + " }"
+    # A function argument: the literals and the lists merged (collecting functions take the result).
+    if not literals and len(lists) == 1:
+        return quote(lists[0])
+    return f"mergedata({', '.join([*([list_value(literals, ctx)] if literals else []), *map(quote, lists)])})"
+
+
 def unquote(string: str) -> str:
     """quote()'s inverse: the text of a CFEngine string."""
     return re.sub(r"\\([\\\"'])", r"\1", string[1:-1])
@@ -421,7 +450,10 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     """A summary pattern with its parameters in, fit for a one-line comment."""
 
     def shown(match: re.Match) -> str:
-        value = params.get(match.group(1), "").replace("\r", "").replace("\n", "\\n")
+        value = params.get(match.group(1), "").replace("\r", "")
+        # Several lines (a list): one per item, joined, not a literal \n.
+        if "\n" in value.strip("\n"):
+            value = ", ".join(line.strip() for line in value.splitlines() if line.strip())
         return value if len(value) <= SUMMARY_VALUE_LENGTH else value[: SUMMARY_VALUE_LENGTH - 1] + "…"
 
     return PLACEHOLDER.sub(shown, pattern)

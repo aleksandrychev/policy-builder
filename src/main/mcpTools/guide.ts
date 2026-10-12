@@ -133,7 +133,7 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`commands:\` with \`ifelapsed\` | Run Command; "How often" (run_interval) takes any number of minutes, e.g. 10080 for weekly. Report Message and Signal Process have it too |
 | \`users:\` | Manage Users |
 | \`methods:\` \`usebundle\` with or without arguments | Call Method (arguments one per line; @(…) passes a list) |
-| \`difference()\` on a list | The Remove entries transformer |
+| \`difference()\` on a list | The Remove entries transformer; a line @(list) removes another list too, e.g. @(def.allowed) from augments |
 | \`reports:\` | Report Message |
 | \`comment =>\` | The block's note (note on add_block / update_block) |
 | \`storage:\` \`mount\` | Mount Storage |
