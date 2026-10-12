@@ -13,6 +13,26 @@ const condition = z
   .nullable()
   .describe('Gates the block; null removes the condition');
 
+const outcomes = z
+  .array(z.enum(['kept', 'repaired', 'not_kept']))
+  .optional()
+  .describe('When the arrow lets the block run: after the source was kept, repaired or not_kept (default kept + repaired)');
+
+// A block as add_block and add_blocks take it.
+const newBlock = {
+  fileId: z.string(),
+  blockType: z.string(),
+  label: z.string().optional().describe('Defaults to the block type’s name'),
+  params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them'),
+  condition: condition.optional(),
+  groupId: z.string().optional().describe('A group of the same file to put the block in (get_file lists them)'),
+  after: z
+    .union([z.string(), z.number().int().min(0)])
+    .optional()
+    .describe('Adds an arrow into the new block from this block or group id (in add_blocks also the index of an earlier block in the list)'),
+  outcomes
+};
+
 export function registerCanvasTools(server: McpServer, answer: Answer) {
   server.registerTool(
     'get_project_overview',
@@ -73,16 +93,21 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
     'add_block',
     {
       description:
-        'Adds a block to a file (opened on the canvas), below its lowest block. Parameters not given keep their defaults. Returns the new block’s id.',
-      inputSchema: {
-        fileId: z.string(),
-        blockType: z.string(),
-        label: z.string().optional().describe('Defaults to the block type’s name'),
-        params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them')
-      },
+        'Adds a block to a file (opened on the canvas), below its lowest block, with its condition, group and an arrow into it if given: one undo step. Parameters not given keep their defaults. Returns the new block’s id. For several blocks, use add_blocks.',
+      inputSchema: newBlock,
       annotations: EDIT
     },
     answer('add_block')
+  );
+  server.registerTool(
+    'add_blocks',
+    {
+      description:
+        'Adds several blocks in one call and one undo step, each as add_block takes it. after can also be the index of an earlier block in the same list, to chain them. Every block is checked first: if one is invalid, nothing is added and the error names it (blocks[i]). Returns their ids in order.',
+      inputSchema: { blocks: z.array(z.object(newBlock)).min(1).max(50) },
+      annotations: EDIT
+    },
+    answer('add_blocks')
   );
   server.registerTool(
     'update_block',

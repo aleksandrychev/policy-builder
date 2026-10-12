@@ -41,6 +41,7 @@ const GROUP_OF: Record<string, Group> = {
   get_test_results: 'read',
 
   add_block: 'edit',
+  add_blocks: 'edit',
   update_block: 'edit',
   remove_block: 'edit',
   connect: 'edit',
