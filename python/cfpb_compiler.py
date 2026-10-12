@@ -283,6 +283,8 @@ def compile_value(expr, ctx: Context) -> str:
             raise CompileError("{previous} used outside a decorator")
         return ctx.previous
     if "if_set" in expr:
+        return compile_value(expr["value"] if ctx.params.get(expr["if_set"], "").strip() else expr["else"], ctx)
+    if "if_true" in expr:
         return compile_value(expr["value"], ctx)
     if "choose" in expr:
         picked = ctx.params.get(expr["choose"], "")
@@ -351,7 +353,14 @@ def unquote(string: str) -> str:
 def attributes_of(step: dict, ctx: Context) -> list[str]:
     lines = []
     for key, value in step.get("attributes", {}).items():
-        if isinstance(value, dict) and "if_set" in value and not ctx.params.get(value["if_set"], "").strip():
+        if (
+            isinstance(value, dict)
+            and "if_set" in value
+            and "else" not in value
+            and not ctx.params.get(value["if_set"], "").strip()
+        ):
+            continue
+        if isinstance(value, dict) and "if_true" in value and ctx.params.get(value["if_true"], "") != "true":
             continue
         lines.append(f"{key} => {compile_value(value, ctx)}")
     return lines

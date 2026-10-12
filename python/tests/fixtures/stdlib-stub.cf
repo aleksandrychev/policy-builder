@@ -39,6 +39,19 @@ body depth_search recurse(d)
   depth => "$(d)";
 }
 
+body depth_search recurse_with_base(d)
+{
+  depth => "$(d)";
+  include_basedir => "true";
+}
+
+body copy_from remote_dcp(from, server)
+{
+  servers => { "$(server)" };
+  source => "$(from)";
+  compare => "digest";
+}
+
 body contain in_shell
 {
   useshell => "true";

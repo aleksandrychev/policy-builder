@@ -47,9 +47,16 @@ export interface PreviousExpression {
   previous: 'value';
 }
 
-// Attributes only: left out when the parameter is empty.
+// Attributes only: left out when the parameter is empty (or `else` then).
 export interface IfSetExpression {
+  else?: Expression;
   if_set: string;
+  value: Expression;
+}
+
+// Attributes only: there when a boolean parameter is "true".
+export interface IfTrueExpression {
+  if_true: string;
   value: Expression;
 }
 
@@ -90,6 +97,7 @@ export type Expression =
   | VariableExpression
   | PreviousExpression
   | IfSetExpression
+  | IfTrueExpression
   | TemplateFileExpression;
 
 export interface BlockStep {

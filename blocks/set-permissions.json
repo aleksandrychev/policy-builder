@@ -20,6 +20,15 @@
             "{{owner}}",
             "{{group}}"
           ]
+        },
+        "depth_search": {
+          "if_true": "recursive",
+          "value": {
+            "body": "recurse_with_base",
+            "args": [
+              "inf"
+            ]
+          }
         }
       }
     }
@@ -56,6 +65,14 @@
       "type": "string",
       "required": true,
       "default": "root"
+    },
+    {
+      "name": "recursive",
+      "label": "Everything under each path too",
+      "type": "boolean",
+      "required": false,
+      "default": false,
+      "help": "Applies to every file and directory below, on the same filesystem. Directories stay enterable whatever the mode."
     }
   ]
 }

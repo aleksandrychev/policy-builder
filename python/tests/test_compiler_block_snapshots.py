@@ -22,7 +22,7 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "clean-up-old-files": {"directory": "/var/tmp", "days": "14"},
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
-    "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd"},
+    "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
     "create-directory": {"path": "/var/www/html\n/var/www/uploads", "owner": "www-data", "group": "www-data"},
     "create-edit-file": {"path": "/etc/app.conf", "content": 'name = "app"\nport = 8080\n'},
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},
