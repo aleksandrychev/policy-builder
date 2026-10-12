@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
-import { existsSync } from 'fs';
+import { type Stats, existsSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { PassThrough } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
   }
 }));
 
-vi.mock('fs', async importOriginal => ({ ...(await importOriginal<typeof import('fs')>()), existsSync: vi.fn() }));
+vi.mock('fs', async importOriginal => ({ ...(await importOriginal<typeof import('fs')>()), existsSync: vi.fn(), statSync: vi.fn() }));
 vi.mock('child_process', async importOriginal => ({ ...(await importOriginal<typeof import('child_process')>()), spawn: vi.fn() }));
 
 const result = (stderr: string, code: number | null = 1, signal: NodeJS.Signals | null = null) => ({ code, signal, stderr, stdout: '' });
@@ -75,8 +75,21 @@ describe('resolveCommand', () => {
     expect(resolveCommand()).toEqual({ command: '/Applications/App.app/Contents/Resources/backend/cfpb-backend', commandArgs: [] });
   });
 
-  it('prefers a built bundle in development', () => {
+  it('prefers a built bundle in development, while it is newer than the sources', () => {
     const bundled = join(repoRoot, 'python/dist/cfpb-backend/cfpb-backend');
+    const venv = join(repoRoot, 'python/.venv/bin/python');
+    exists.mockImplementation(path => path === bundled || path === venv);
+    // The bundle at 2000, every source at 1000 except one file.
+    const edited = join(repoRoot, 'python/cfpb_compiler.py');
+    let editedAt = 1000;
+    vi.mocked(statSync).mockImplementation(path => ({ mtimeMs: path === bundled ? 2000 : path === edited ? editedAt : 1000 }) as Stats);
+    expect(resolveCommand()).toEqual({ command: bundled, commandArgs: [] });
+
+    // A source changed after the build: the virtualenv runs the current code.
+    editedAt = 3000;
+    expect(resolveCommand()).toEqual({ command: venv, commandArgs: ['-m', 'cfpb_backend'] });
+
+    // Without a virtualenv, the old bundle still runs (with a warning).
     exists.mockImplementation(path => path === bundled);
     expect(resolveCommand()).toEqual({ command: bundled, commandArgs: [] });
   });
