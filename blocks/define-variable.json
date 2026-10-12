@@ -60,7 +60,7 @@
           "type": "text",
           "required": true,
           "allow_list": true,
-          "help": "One item per line."
+          "help": "One item per line. A line @(list) brings in that list's items."
         }
       ],
       "steps": [

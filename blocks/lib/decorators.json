@@ -454,6 +454,36 @@
       }
     },
     {
+      "id": "difference",
+      "label": "Remove entries",
+      "summary": "remove {{entries}}",
+      "badge": "difference()",
+      "help": "Drops every entry that is also in this list, like a set difference.",
+      "input_type": "slist",
+      "output_type": "slist",
+      "parameters": [
+        {
+          "name": "entries",
+          "label": "Entries to remove",
+          "type": "text",
+          "required": true,
+          "allow_list": true,
+          "help": "One per line. A line @(list) removes that list's entries too, e.g. @(def.allowed) from augments."
+        }
+      ],
+      "expression": {
+        "call": "difference",
+        "args": [
+          {
+            "previous": "value"
+          },
+          {
+            "list_param": "entries"
+          }
+        ]
+      }
+    },
+    {
       "id": "join",
       "label": "Join into a string",
       "summary": "join with \"{{glue}}\"",

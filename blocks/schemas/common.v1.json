@@ -104,6 +104,10 @@
           "type": "boolean",
           "description": "Only on \"text\": one value per line. Used in a promiser, the compiler emits an slist var and iterates the promise over it ($(list)); used in an expression, only through {\"list_param\": name}."
         },
+        "other_label": {
+          "type": "string",
+          "description": "A number parameter with options: also any other number, in a field with this label (e.g. \"Minutes between runs\")."
+        },
         "integer": {
           "type": "boolean",
           "description": "Only on \"number\": whole numbers only."
@@ -239,6 +243,10 @@
               "items": {
                 "$ref": "#/$defs/expression"
               }
+            },
+            "args_param": {
+              "$ref": "#/$defs/identifier",
+              "description": "A parameter whose lines are further arguments, one each, quoted"
             }
           }
         },
@@ -283,9 +291,29 @@
             "if_set",
             "value"
           ],
-          "description": "Attributes only: the attribute is left out when the parameter is empty (e.g. report_to_file => \"\" is a hard error).",
+          "description": "Attributes only: the attribute is left out when the parameter is empty (e.g. report_to_file => \"\" is a hard error), or is `else` when that is given.",
           "properties": {
             "if_set": {
+              "$ref": "#/$defs/identifier"
+            },
+            "value": {
+              "$ref": "#/$defs/expression"
+            },
+            "else": {
+              "$ref": "#/$defs/expression"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "if_true",
+            "value"
+          ],
+          "description": "Attributes only: the attribute is there only when a boolean parameter is \"true\" (its false is a non-empty value, so if_set can't tell).",
+          "properties": {
+            "if_true": {
               "$ref": "#/$defs/identifier"
             },
             "value": {

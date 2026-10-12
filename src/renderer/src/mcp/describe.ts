@@ -45,6 +45,7 @@ export function describeCall(tool: string, input: Input, state: RootState): stri
     set_file_description: () => `Describe ${file(input.fileId)}`,
     set_file_condition: () => `Set the condition of ${file(input.fileId)}`,
     add_block: () => `Add ${type(input.blockType)} “${text(input.label) || type(input.blockType)}” to ${file(input.fileId)}`,
+    add_blocks: () => `Add ${Array.isArray(input.blocks) ? input.blocks.length : 0} blocks`,
     update_block: () => `Change ${block(input.blockId)}`,
     remove_block: () => `Remove ${block(input.blockId)}`,
     connect: () => `Connect ${block(input.sourceId)} → ${block(input.targetId)}`,

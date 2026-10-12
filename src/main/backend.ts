@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { app } from 'electron';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
 import type { BuildResult, CompiledPolicy } from '../preload/api';
@@ -61,9 +61,38 @@ function stop(child: ChildProcessWithoutNullStreams): void {
   }
 }
 
+const modifiedAt = (path: string) => {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
+// What the bundle carries a copy of: the sidecar's modules and the block descriptors.
+function newestSource(repoRoot: string): number {
+  const files = (dir: string, extension: string, recursive: boolean): string[] => {
+    try {
+      return readdirSync(dir, { withFileTypes: true, recursive }).flatMap(entry =>
+        entry.isFile() && entry.name.endsWith(extension) ? [join(entry.parentPath, entry.name)] : []
+      );
+    } catch {
+      return [];
+    }
+  };
+  return Math.max(0, ...[...files(join(repoRoot, 'python'), '.py', false), ...files(join(repoRoot, 'blocks'), '.json', true)].map(modifiedAt));
+}
+
+const warned = new Set<string>();
+const warnOnce = (message: string) => {
+  if (!warned.has(message)) console.warn(`[backend] ${message}`);
+  warned.add(message);
+};
+
 /**
  * Packaged: the PyInstaller bundle in the app's resources. Development: that
- * bundle if built, else the uv virtualenv (`npm run backend:sync` suffices).
+ * bundle if built and newer than the sources, else the uv virtualenv
+ * (`npm run backend:sync` suffices).
  */
 export function resolveCommand(): { command: string; commandArgs: string[] } {
   if (app.isPackaged) {
@@ -73,12 +102,17 @@ export function resolveCommand(): { command: string; commandArgs: string[] } {
   // __dirname is out/main in development, so two levels up is the repo root.
   const repoRoot = join(__dirname, '../..');
   const bundled = join(repoRoot, 'python/dist/cfpb-backend', executableName);
-  if (existsSync(bundled)) {
-    return { command: bundled, commandArgs: [] };
-  }
-
   const venvPython = join(repoRoot, 'python/.venv', isWindows ? 'Scripts/python.exe' : 'bin/python');
-  return { command: venvPython, commandArgs: ['-m', 'cfpb_backend'] };
+  const venv = { command: venvPython, commandArgs: ['-m', 'cfpb_backend'] };
+  if (!existsSync(bundled)) return venv;
+  // A bundle built before the latest change to python/ or blocks/ would compile with the old code.
+  if (modifiedAt(bundled) >= newestSource(repoRoot)) return { command: bundled, commandArgs: [] };
+  if (existsSync(venvPython)) {
+    warnOnce('python/dist is older than python/ or blocks/: using python/.venv (npm run backend:build to rebuild it)');
+    return venv;
+  }
+  warnOnce('python/dist is older than python/ or blocks/ and there is no python/.venv: run npm run backend:build');
+  return { command: bundled, commandArgs: [] };
 }
 
 // Spawns the sidecar with `args`, feeds `input` on stdin, and resolves with the

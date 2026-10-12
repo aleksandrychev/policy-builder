@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -384,6 +384,19 @@ export function PolicyFileExplorer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFileId]);
 
+  // A file selected from elsewhere (an AI agent, a cross-file jump) is scrolled to, and takes over
+  // the tree's keyboard focus if the tree had it: otherwise the last-clicked file stays highlighted.
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const item = listRef.current?.querySelector('[data-selected]')?.closest<HTMLElement>('[role="treeitem"]');
+      if (!item) return;
+      item.scrollIntoView?.({ block: 'nearest' }); // jsdom has none
+      if (listRef.current?.contains(document.activeElement) && document.activeElement !== item) item.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentFileId]);
+
   const blockCountFor = (fileId: string) => instances.filter(instance => instance.fileId === fileId).length;
 
   const startRename = (kind: 'file' | 'folder', id: string, name: string) => {
@@ -549,7 +562,7 @@ export function PolicyFileExplorer({
         </Box>
       </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1 }}>
+      <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto', px: 1 }}>
         <SimpleTreeView
           expandedItems={expandedItems}
           onExpandedItemsChange={(_event, itemIds) => setExpandedItems(itemIds)}

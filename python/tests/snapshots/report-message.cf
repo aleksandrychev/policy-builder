@@ -12,3 +12,8 @@
   # Case 2
   reports:
     "Provisioned $(sys.fqhost)" action => default:if_elapsed("1440");
+
+### run_interval = '10080'
+  # Case 3
+  reports:
+    "Provisioned $(sys.fqhost)" action => default:if_elapsed("10080");

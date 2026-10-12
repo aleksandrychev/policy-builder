@@ -2,7 +2,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { Box, Button, Divider, IconButton, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Divider, IconButton, Stack, TextField, Typography } from '@mui/material';
 
 import { currentChainType } from '../blocks/decorators';
 import { duplicateDefinitionKeys, entryName } from '../blocks/definitionEntries';
@@ -30,6 +30,8 @@ export type { IncomingArrow } from './properties/RunsWhenSection';
 export type { NewClassDefinition } from './properties/NewClassModal';
 
 interface PropertiesPanelProps {
+  // Valid settings that are probably not meant (canvas/advice.ts).
+  advice?: string[];
   allInstances: BlockInstance[];
   currentFileId: string | null;
   descriptor: BlockDescriptor | undefined;
@@ -68,6 +70,7 @@ interface PropertiesPanelProps {
   onInventoryEnable: (entryId?: string) => void;
   onInventoryRemove: (entryId?: string) => void;
   onLabelChange: (label: string) => void;
+  onNoteChange: (note: string) => void;
   onParamChange: (paramName: string, value: string, entryId?: string) => void;
   onUnbindParam: (param: string) => void;
   onValueSourceChange: (valueSourceId: string, entryId?: string) => void;
@@ -121,7 +124,27 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   });
 
   const labelField = (
-    <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />
+    <>
+      {props.advice?.map(text => (
+        <Alert key={text} severity="warning" sx={{ fontSize: 12 }}>
+          {text}
+        </Alert>
+      ))}
+      <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />
+      <TextField
+        label="Note"
+        value={instance.note ?? ''}
+        onChange={event => props.onNoteChange(event.target.value)}
+        placeholder="Why it's there, or a decision behind it"
+        helperText="Kept as the generated promise's comment."
+        multiline
+        minRows={1}
+        maxRows={6}
+        fullWidth
+        size="small"
+        sx={inputSx}
+      />
+    </>
   );
   const panelSx = { flex: 1, overflowY: 'auto', p: 2 } as const;
 

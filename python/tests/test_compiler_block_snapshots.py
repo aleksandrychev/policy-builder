@@ -18,17 +18,17 @@ UPDATE = os.environ.get("CFPB_UPDATE_SNAPSHOTS") == "1"
 ACTIONS = sorted(block_id for block_id, d in LIBRARY.descriptors.items() if d.get("compile_target") == "own_bundle")
 # Realistic inputs, so a snapshot reads like real policy; the rest are defaults. Lists show iteration.
 EXAMPLES: dict[str, dict[str, str]] = {
-    "call-method": {"label": "Run site checks", "bundle_name": "site_checks"},
+    "call-method": {"bundle_name": "site_checks", "arguments": ""},
     "clean-up-old-files": {"directory": "/var/tmp", "days": "14"},
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
-    "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd"},
+    "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
     "create-directory": {"path": "/var/www/html\n/var/www/uploads", "owner": "www-data", "group": "www-data"},
     "create-edit-file": {"path": "/etc/app.conf", "content": 'name = "app"\nport = 8080\n'},
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},
     "cron-job": {"command": "/usr/local/bin/backup.sh", "hours": "3", "minutes": "30"},
     "ensure-lines": {"path": "/etc/hosts", "lines": "127.0.0.1 app.local\n10.0.0.5 db.local"},
-    "install-package": {"package_name": "nginx"},
+    "install-package": {"package_name": "nginx", "version": ""},
     "manage-service": {"service_name": "nginx"},
     "manage-users": {"username": "deploy"},
     "mount-storage": {"mount_point": "/mnt/share", "server": "nas.local", "remote_path": "/exports/share"},

@@ -5,6 +5,7 @@ import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
   blockLabelChanged,
+  blockNoteChanged,
   blockParamChanged,
   blockValueSourceChanged,
   classRefAdded,
@@ -29,7 +30,8 @@ import {
 } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { fileConditionClassNameChanged, fileConditionEnabled, fileSelected } from '../store/filesSlice';
-import { type TestStore, addBlock, addFile, blockOf, makeStore } from '../store/test/storeTestUtils';
+import { historyCleared } from '../store/history';
+import { type TestStore, addBlock, addFile, blockOf, makeStore, undoAll } from '../store/test/storeTestUtils';
 import { renderWithProviders } from '../test/render';
 import { type IncomingArrow, PropertiesPanel } from './PropertiesPanel';
 
@@ -62,6 +64,7 @@ function ConnectedPanel({ instanceId, arrows = [], onArrowRemove = vi.fn(), onCo
       onArrowOutcomesChange={vi.fn()}
       onArrowRemove={onArrowRemove}
       onLabelChange={label => dispatch(blockLabelChanged({ instanceId, label }))}
+      onNoteChange={note => dispatch(blockNoteChanged({ instanceId, note }))}
       onParamChange={(paramName, value, entryId) => dispatch(blockParamChanged({ instanceId, entryId, paramName, value }))}
       onValueSourceChange={(valueSourceId, entryId) => dispatch(blockValueSourceChanged({ instanceId, entryId, valueSourceId }))}
       onBindParam={(param, valueSourceId) => dispatch(paramBound({ instanceId, param, binding: { valueSourceId, params: {}, decorators: [] } }))}
@@ -144,6 +147,19 @@ describe('PropertiesPanel', () => {
       expect(blockOf(store, id)?.label).toBe('Say hello');
     });
 
+    it('edits the note as one undo step, and drops it when cleared', () => {
+      const id = add('report-message', { message: 'hi' });
+      store.dispatch(historyCleared());
+      renderPanel(store, { instanceId: id });
+      const note = screen.getByRole('textbox', { name: 'Note' });
+      fireEvent.change(note, { target: { value: 'D' } });
+      fireEvent.change(note, { target: { value: 'Daily' } });
+      expect(blockOf(store, id)?.note).toBe('Daily');
+      expect(undoAll(store)).toBe(1);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), { target: { value: '  ' } });
+      expect(blockOf(store, id)).not.toHaveProperty('note');
+    });
+
     it('edits a text param', () => {
       const id = add('manage-service', { service_name: '', action: 'start' });
       renderPanel(store, { instanceId: id });
@@ -163,6 +179,25 @@ describe('PropertiesPanel', () => {
       const id = add('report-message', { message: 'hi', run_interval: '' });
       renderPanel(store, { instanceId: id });
       expect(screen.getByRole('combobox', { name: 'How often' })).toHaveTextContent('Every agent run');
+    });
+
+    it('takes any number of minutes besides the listed intervals', () => {
+      const id = add('run-command', { command: '/bin/true', run_interval: '1440' });
+      renderPanel(store, { instanceId: id });
+      expect(screen.queryByRole('textbox', { name: 'Minutes between runs' })).not.toBeInTheDocument();
+      choose('How often', 'Other…');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Minutes between runs' }), { target: { value: '30' } });
+      expect(blockOf(store, id)?.params.run_interval).toBe('30');
+      expect(screen.getByRole('combobox', { name: 'How often' })).toHaveTextContent('Other…');
+      choose('How often', 'At most once a week');
+      expect(blockOf(store, id)?.params.run_interval).toBe('10080');
+      expect(screen.queryByRole('textbox', { name: 'Minutes between runs' })).not.toBeInTheDocument();
+    });
+
+    it('shows a number that isn’t listed as Other', () => {
+      const id = add('run-command', { command: '/bin/true', run_interval: '45' });
+      renderPanel(store, { instanceId: id });
+      expect(screen.getByRole('textbox', { name: 'Minutes between runs' })).toHaveValue('45');
     });
 
     it('flags a relative path', () => {

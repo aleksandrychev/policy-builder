@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 
 import type { McpPermissions, McpStatus } from '../../../../preload/api';
-import { AGENTS, agentById } from '../../mcp/agents';
+import { AGENTS, CHOSEN_AGENT_KEY, agentById, chosenAgent } from '../../mcp/agents';
 
 // What agents may do, in the order shown; reading the project is always on, deleting comes last.
 const PERMISSIONS: { help: string; key: keyof McpPermissions; label: string }[] = [
@@ -34,30 +34,11 @@ const PERMISSIONS: { help: string; key: keyof McpPermissions; label: string }[] 
 ];
 
 // Turning a permission on or off, as a row: what it allows, and its switch.
-function PermissionRow({
-  checked,
-  disabled,
-  help,
-  label,
-  onChange
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  help: string;
-  label: string;
-  onChange?: (checked: boolean) => void;
-}) {
+function PermissionRow({ checked, help, label, onChange }: { checked: boolean; help: string; label: string; onChange: (checked: boolean) => void }) {
   return (
     <ListItem
       secondaryAction={
-        <Switch
-          edge="end"
-          size="small"
-          checked={checked}
-          disabled={disabled}
-          onChange={event => onChange?.(event.target.checked)}
-          slotProps={{ input: { 'aria-label': label } }}
-        />
+        <Switch edge="end" size="small" checked={checked} onChange={event => onChange(event.target.checked)} slotProps={{ input: { 'aria-label': label } }} />
       }
     >
       <ListItemText primary={label} secondary={help} slotProps={{ primary: { sx: { fontSize: 13 } }, secondary: { sx: { fontSize: 12 } } }} />
@@ -66,7 +47,6 @@ function PermissionRow({
 }
 
 // The agent picked last time.
-const AGENT_KEY = 'cfpb.connectAgent';
 
 /**
  * Connect an AI agent: turns on the local MCP server it drives the open project
@@ -76,7 +56,7 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<McpStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [agent, setAgent] = useState(() => agentById(localStorage.getItem(AGENT_KEY)));
+  const [agent, setAgent] = useState(chosenAgent);
 
   useEffect(() => {
     void window.api?.mcpStatus().then(setStatus);
@@ -95,7 +75,7 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
     setStatus((await window.api?.mcpSetPermissions({ ...status.permissions, [key]: allowed })) ?? status);
   };
   const pick = (id: string) => {
-    localStorage.setItem(AGENT_KEY, id);
+    localStorage.setItem(CHOSEN_AGENT_KEY, id);
     setAgent(agentById(id));
   };
   const snippet = status?.enabled && status.url && status.token ? agent.snippet({ name: status.name, token: status.token, url: status.url }) : null;
@@ -164,9 +144,11 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
         {status && (
           <Box sx={{ mt: 3 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>What agents may do</Typography>
-            <Typography sx={{ fontSize: 12, color: 'text.muted', mb: 1 }}>Applies to every agent at once. What’s off isn’t offered to them.</Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.muted', mb: 1 }}>
+              Agents can always read the project: files, blocks, generated policy, variables and test results. The rest applies to every agent at once; what’s
+              off isn’t offered to them.
+            </Typography>
             <List dense disablePadding sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-              <PermissionRow label="Read the project" help="Always on: files, blocks, generated policy, variables, test results" checked disabled />
               {PERMISSIONS.map(({ help, key, label }) => (
                 <PermissionRow key={key} label={label} help={help} checked={status.permissions[key]} onChange={allowed => void setPermission(key, allowed)} />
               ))}

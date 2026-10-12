@@ -34,6 +34,8 @@ export interface ClassExpressionExpression {
 
 export interface BundleExpression {
   args?: Expression[];
+  // A parameter whose lines are further arguments, one each.
+  args_param?: string;
   bundle: Template;
 }
 
@@ -47,9 +49,16 @@ export interface PreviousExpression {
   previous: 'value';
 }
 
-// Attributes only: left out when the parameter is empty.
+// Attributes only: left out when the parameter is empty (or `else` then).
 export interface IfSetExpression {
+  else?: Expression;
   if_set: string;
+  value: Expression;
+}
+
+// Attributes only: there when a boolean parameter is "true".
+export interface IfTrueExpression {
+  if_true: string;
   value: Expression;
 }
 
@@ -90,6 +99,7 @@ export type Expression =
   | VariableExpression
   | PreviousExpression
   | IfSetExpression
+  | IfTrueExpression
   | TemplateFileExpression;
 
 export interface BlockStep {
@@ -118,6 +128,8 @@ export interface BlockParameter {
   mustache?: boolean;
   name: string;
   options?: ParameterOption[];
+  // A number parameter with options: the label of the field for any other number.
+  other_label?: string;
   path?: 'absolute';
   references?: 'variable';
   required: boolean;

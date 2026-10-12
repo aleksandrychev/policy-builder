@@ -2,6 +2,7 @@ import { edgeAdded } from '../store/edgesSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated, projectLocated } from '../store/projectSlice';
 import { addBlock, addFile, blockOf, fileOf, makeStore, undoAll } from '../store/test/storeTestUtils';
+import { paused, resetActivity, stopNoteChanged } from './activity';
 import { PROJECT_TOOLS } from './projectTools';
 import type { SessionTools, ToolEnv } from './shared';
 import { type ToolAnswer, answerTool } from './tools';
@@ -72,6 +73,7 @@ describe('MCP project tools', () => {
     store.dispatch(projectCreated({ name: 'Web', type: 'module' }));
     expect((await call('get_project_status')).result).toEqual({
       open: true,
+      agent: 'allowed',
       name: 'Web',
       path: null,
       type: 'module',
@@ -86,7 +88,16 @@ describe('MCP project tools', () => {
     const { call, env } = setup();
     const store = makeStore();
     env.getState = store.getState;
-    expect((await call('get_project_status')).result).toEqual({ open: false });
+    expect((await call('get_project_status')).result).toEqual({ open: false, agent: 'allowed' });
+  });
+
+  it('tells a stopped agent it is stopped', async () => {
+    const { call } = setup();
+    paused();
+    expect((await call('get_project_status')).result).toMatchObject({ open: true, agent: 'stopped' });
+    stopNoteChanged('  wait, I’m editing ');
+    expect((await call('get_project_status')).result).toMatchObject({ agent: 'stopped', stopNote: 'wait, I’m editing' });
+    resetActivity();
   });
 
   describe('create_project', () => {
@@ -111,6 +122,14 @@ describe('MCP project tools', () => {
       });
       expect(answer.result).toMatchObject({ path: '/tmp/x/my-web', masterfiles: '3.27.9' });
       expect(window.api?.checkProjectTarget).toHaveBeenCalledWith('/tmp/x', 'my-web');
+    });
+
+    it('names the first file when asked', async () => {
+      const create = vi.fn(async () => ({ ok: true }));
+      const { call } = setup({ create });
+      installApi({});
+      await call('create_project', { name: 'Backup', parent: '/p', firstFile: 'Common' });
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Backup', firstFile: 'Common' }));
     });
 
     it('creates a module without masterfiles or git', async () => {
@@ -218,6 +237,15 @@ describe('MCP project tools', () => {
       expect(fileOf(store, added.id)?.condition).toBeUndefined();
       expect(opened).toContain(added.id);
       expect(undoAll(store)).toBe(6);
+    });
+
+    it('adds a file with its description and condition in one step', async () => {
+      const { call, store } = setup();
+      const added = (await call('add_file', { name: 'Backups', description: 'Nightly backups', condition: { className: 'linux', mode: 'if' } })).result;
+      expect(added).toMatchObject({ name: 'Backups', description: 'Nightly backups', condition: 'if linux' });
+      expect(fileOf(store, added.id)).toMatchObject({ description: 'Nightly backups', condition: { className: 'linux', mode: 'if' } });
+      expect(undoAll(store)).toBe(1);
+      expect((await call('add_file', { name: 'x', condition: { className: 'linux' } })).content).toMatch(/mode of if or unless/);
     });
 
     it('refuses bad input', async () => {

@@ -55,9 +55,8 @@
     {
       "name": "run_interval",
       "label": "How often",
-      "type": "string",
+      "type": "number",
       "required": false,
-      "default": "",
       "options": [
         {
           "value": "",
@@ -70,9 +69,16 @@
         {
           "value": "1440",
           "label": "At most once a day"
+        },
+        {
+          "value": "10080",
+          "label": "At most once a week"
         }
       ],
-      "help": "Every matching process gets the signal each time this runs."
+      "help": "Every matching process gets the signal each time this runs.",
+      "integer": true,
+      "minimum": 1,
+      "other_label": "Minutes between runs"
     }
   ]
 }

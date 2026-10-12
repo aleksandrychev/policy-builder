@@ -189,7 +189,7 @@ def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: 
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all:main" }; }\n'
-        "bundle agent some_bundle { }\n"
+        "bundle agent some_bundle(one) { }\n"
     )
 
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)

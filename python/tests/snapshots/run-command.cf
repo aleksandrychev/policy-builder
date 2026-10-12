@@ -16,3 +16,10 @@
     "/usr/sbin/update-ca-certificates"
       contain => default:in_shell,
       action => default:if_elapsed("60");
+
+### run_interval = '10080'
+  # Case 3
+  commands:
+    "/usr/sbin/update-ca-certificates"
+      contain => default:in_shell,
+      action => default:if_elapsed("10080");

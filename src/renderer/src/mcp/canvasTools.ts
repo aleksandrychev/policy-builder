@@ -2,17 +2,28 @@ import { newDefinitionEntry } from '../blocks/definitionEntries';
 import { blockDescriptors, blockDescriptorsById } from '../blocks/loadBlocks';
 import { resolveBlockShape } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
+import { blockAdvice } from '../canvas/advice';
 import { executionOrder, isSequenced, wouldCreateCycle } from '../canvas/executionOrder';
 import { nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
 import { toCfbsProject } from '../project/cfbsProject';
 import { compiledPart } from '../project/useCompiledPolicy';
 import type { RootState } from '../store';
-import { blockAdded, blockLabelChanged, blockParamChanged, blockRemoved, blocksMoved, conditionRemoved, conditionSet } from '../store/canvasSlice';
+import {
+  blockAdded,
+  blockLabelChanged,
+  blockNoteChanged,
+  blockParamChanged,
+  blockRemoved,
+  blocksMoved,
+  conditionRemoved,
+  conditionSet
+} from '../store/canvasSlice';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import { derivedNodePositionsClearedForFile } from '../store/derivedNodesSlice';
 import { edgeAdded, edgeRemoved } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
+import { changeMembership } from '../store/groupArrows';
 import { groupFramesFitted } from '../store/groupsSlice';
 import { inOneStep } from '../store/history';
 import { asRecord, checkedParams, parameterView, valueProblem } from './params';
@@ -87,6 +98,7 @@ function fileDetail(state: RootState, fileId: string) {
     blocks: byOrder.map(block => ({
       id: block.instanceId,
       label: block.label,
+      note: block.note,
       type: block.blockId,
       runOrder: order.indexOf(block.instanceId) + 1 || undefined,
       params: block.entries ? undefined : block.params,
@@ -153,7 +165,8 @@ async function warnings(state: RootState) {
       const problem = param.type === 'cases' || !value ? undefined : valueProblem(param, value);
       return problem ? [`${param.name} ${problem}`] : [];
     });
-    return empty.length || invalid.length || notCompiled
+    const advice = blockAdvice(block, state.edges);
+    return empty.length || invalid.length || notCompiled || advice.length
       ? [
           {
             blockId: block.instanceId,
@@ -161,7 +174,8 @@ async function warnings(state: RootState) {
             fileId: block.fileId,
             ...(empty.length ? { missing: empty } : {}),
             ...(invalid.length ? { invalid } : {}),
-            ...(notCompiled ? { notCompiled } : {})
+            ...(notCompiled ? { notCompiled } : {}),
+            ...(advice.length ? { advice } : {})
           }
         ]
       : [];
@@ -188,33 +202,142 @@ function checkedBlockParams(descriptor: BlockDescriptor, valueSourceId: string |
   return checkedParams(resolveBlockShape(descriptor, valueSourceId).parameters, asRecord(params, 'params'), descriptor.name);
 }
 
-function addBlock(env: CanvasEnv, input: Input) {
-  const state = env.getState();
+const OUTCOMES: BlockOutcome[] = ['kept', 'repaired', 'not_kept'];
+
+// A block to add, checked against the project (and the blocks before it in a batch) before anything changes.
+interface BlockSpec {
+  // From an existing block or group (its id), or a block earlier in the same batch (its index).
+  after?: { outcomes: BlockOutcome[]; source: number | string };
+  condition?: Condition;
+  descriptor: BlockDescriptor;
+  fileId: string;
+  groupId?: string;
+  label: string;
+  note?: string;
+  params: Record<string, string>;
+  valueSourceId?: string;
+}
+
+function conditionInput(input: Input): Condition | undefined {
+  const condition = input.condition as { className?: unknown; mode?: unknown } | null | undefined;
+  if (condition === null || condition === undefined) return undefined;
+  if (typeof condition.className !== 'string' || !condition.className.trim() || (condition.mode !== 'if' && condition.mode !== 'unless')) {
+    throw new ToolError('condition needs a className and a mode of if or unless');
+  }
+  return { kind: 'class', className: condition.className.trim(), mode: condition.mode };
+}
+
+function outcomesInput(input: Input): BlockOutcome[] {
+  const outcomes = Array.isArray(input.outcomes) && input.outcomes.length ? (input.outcomes as BlockOutcome[]) : (['kept', 'repaired'] as BlockOutcome[]);
+  if (!outcomes.every(outcome => OUTCOMES.includes(outcome))) throw new ToolError('Outcomes are kept, repaired and not_kept');
+  return outcomes;
+}
+
+function checkedGroupId(state: RootState, input: Input, fileId: string, sequenced: boolean): string | undefined {
+  const groupId = optionalStr(input, 'groupId');
+  if (!groupId) return undefined;
+  const group = state.groups.find(item => item.id === groupId);
+  if (!group) throw new ToolError(`No group ${groupId}; get_file lists a file's groups`);
+  if (group.fileId !== fileId) throw new ToolError('A group holds blocks of its own file');
+  if (!sequenced) throw new ToolError('Define Variable / Define Class blocks don’t go in groups');
+  return groupId;
+}
+
+const NO_ARROWS = 'Define Variable / Define Class blocks can’t take arrows; use a condition on their classes';
+const CROSSES_GROUP = 'Arrows can’t cross a group’s edge: connect to the group itself';
+
+// The arrow into a new block (`after`): from an existing block or group, or an earlier block of the batch.
+function checkedArrow(state: RootState, input: Input, spec: BlockSpec, earlier: BlockSpec[]): BlockSpec['after'] {
+  if (input.after === undefined || input.after === null) return undefined;
+  if (!isSequenced(spec.descriptor)) throw new ToolError(NO_ARROWS);
+  const outcomes = outcomesInput(input);
+  if (typeof input.after === 'number') {
+    const source = earlier[input.after];
+    if (!Number.isInteger(input.after) || !source) throw new ToolError('after as a number is the index of an earlier block in the same batch');
+    if (source.fileId !== spec.fileId) throw new ToolError('Arrows connect blocks of the same file');
+    if (!isSequenced(source.descriptor)) throw new ToolError(NO_ARROWS);
+    if (source.groupId !== spec.groupId) throw new ToolError(CROSSES_GROUP);
+    return { source: input.after, outcomes };
+  }
+  const sourceId = str(input, 'after');
+  const from = endpoint(state, sourceId);
+  if (from.fileId !== spec.fileId) throw new ToolError('Arrows connect blocks of the same file');
+  if (!from.takesArrows) throw new ToolError(NO_ARROWS);
+  if (from.groupId !== spec.groupId || sourceId === spec.groupId) throw new ToolError(CROSSES_GROUP);
+  return { source: sourceId, outcomes };
+}
+
+function checkedBlockSpec(state: RootState, input: Input, earlier: BlockSpec[] = []): BlockSpec {
   const fileId = str(input, 'fileId');
   fileOf(state, fileId);
   const descriptor = descriptorOf(str(input, 'blockType'));
   if (descriptor.entries && input.params) throw new ToolError(`${descriptor.name} holds entries: add it without params, then add_entry`);
   const valueSourceId = descriptor.value_sources?.[0]?.id;
   const params = checkedBlockParams(descriptor, valueSourceId, input.params);
-  const defaults = Object.fromEntries(resolveBlockShape(descriptor, valueSourceId).parameters.map(param => [param.name, String(param.default ?? '')]));
+  const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : descriptor.name;
+  const groupId = checkedGroupId(state, input, fileId, isSequenced(descriptor));
+  const note = optionalStr(input, 'note')?.trim() || undefined;
+  const spec: BlockSpec = { fileId, descriptor, label, note, params, valueSourceId, condition: conditionInput(input), groupId };
+  return { ...spec, after: checkedArrow(state, input, spec, earlier) };
+}
+
+// Adds one checked block (inside the caller's undo step): its condition, group and arrow with it.
+function dispatchBlock(env: CanvasEnv, spec: BlockSpec, added: string[]): string {
+  const { descriptor, fileId, label } = spec;
+  const defaults = Object.fromEntries(resolveBlockShape(descriptor, spec.valueSourceId).parameters.map(param => [param.name, String(param.default ?? '')]));
   const position = nextStackPosition(
-    state.canvas.filter(block => block.fileId === fileId),
+    env.getState().canvas.filter(block => block.fileId === fileId),
     env.sizeOf
   );
-  const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : descriptor.name;
-  env.openFile(fileId);
+  const instanceId = env.dispatch(
+    blockAdded(
+      descriptor.entries
+        ? { blockId: descriptor.id, fileId, label, params: {}, entries: [newDefinitionEntry(descriptor)], position }
+        : { blockId: descriptor.id, fileId, label, params: { ...defaults, ...spec.params }, valueSourceId: spec.valueSourceId, position }
+    )
+  ).payload.instanceId;
+  if (spec.note) env.dispatch(blockNoteChanged({ instanceId, note: spec.note }));
+  if (spec.condition) env.dispatch(conditionSet({ instanceId, condition: spec.condition }));
+  if (spec.groupId) env.dispatch(changeMembership(fileId, [instanceId], spec.groupId));
+  if (spec.after) {
+    const source = typeof spec.after.source === 'number' ? added[spec.after.source] : spec.after.source;
+    env.dispatch(edgeAdded({ fileId, source, target: instanceId, outcomes: spec.after.outcomes }));
+  }
+  return instanceId;
+}
+
+function addBlock(env: CanvasEnv, input: Input) {
+  const spec = checkedBlockSpec(env.getState(), input);
+  env.openFile(spec.fileId);
   let instanceId = '';
   inOneStep(env.dispatch, () => {
-    const action = env.dispatch(
-      blockAdded(
-        descriptor.entries
-          ? { blockId: descriptor.id, fileId, label, params: {}, entries: [newDefinitionEntry(descriptor)], position }
-          : { blockId: descriptor.id, fileId, label, params: { ...defaults, ...params }, valueSourceId, position }
-      )
-    );
-    instanceId = action.payload.instanceId;
+    instanceId = dispatchBlock(env, spec, []);
   });
-  return { id: instanceId, label };
+  return { id: instanceId, label: spec.label };
+}
+
+const MAX_BATCH = 50;
+
+// Several blocks in one call and one undo step: every one is checked first, so it's all or nothing.
+function addBlocks(env: CanvasEnv, input: Input) {
+  if (!Array.isArray(input.blocks) || !input.blocks.length) throw new ToolError('blocks needs at least one block');
+  if (input.blocks.length > MAX_BATCH) throw new ToolError(`At most ${MAX_BATCH} blocks per call`);
+  const state = env.getState();
+  const specs: BlockSpec[] = [];
+  input.blocks.forEach((item: unknown, index) => {
+    try {
+      if (typeof item !== 'object' || item === null || Array.isArray(item)) throw new ToolError('each block is an object, as add_block takes it');
+      specs.push(checkedBlockSpec(state, item as Input, specs));
+    } catch (error) {
+      throw new ToolError(`blocks[${index}]: ${error instanceof Error ? error.message : String(error)}. Nothing was added.`);
+    }
+  });
+  env.openFile(specs[0].fileId);
+  const added: string[] = [];
+  inOneStep(env.dispatch, () => {
+    for (const spec of specs) added.push(dispatchBlock(env, spec, added));
+  });
+  return { added: specs.map((spec, index) => ({ id: added[index], label: spec.label, fileId: spec.fileId })) };
 }
 
 function updateBlock(env: CanvasEnv, input: Input) {
@@ -222,23 +345,14 @@ function updateBlock(env: CanvasEnv, input: Input) {
   const descriptor = descriptorOf(block.blockId);
   if (block.entries && input.params) throw new ToolError(`${descriptor.name} holds entries: change them with update_entry`);
   const params = checkedBlockParams(descriptor, block.valueSourceId, input.params);
-  const condition = input.condition as { className?: unknown; mode?: unknown } | null | undefined;
-  if (condition && (typeof condition.className !== 'string' || (condition.mode !== 'if' && condition.mode !== 'unless'))) {
-    throw new ToolError('condition needs a className and a mode of if or unless');
-  }
+  const condition = input.condition === null ? null : conditionInput(input);
   env.openFile(block.fileId);
   inOneStep(env.dispatch, () => {
     if (typeof input.label === 'string' && input.label.trim()) env.dispatch(blockLabelChanged({ instanceId: block.instanceId, label: input.label.trim() }));
+    if (typeof input.note === 'string') env.dispatch(blockNoteChanged({ instanceId: block.instanceId, note: input.note.trim() }));
     for (const [paramName, value] of Object.entries(params)) env.dispatch(blockParamChanged({ instanceId: block.instanceId, paramName, value }));
     if (condition === null) env.dispatch(conditionRemoved({ instanceId: block.instanceId }));
-    else if (condition) {
-      env.dispatch(
-        conditionSet({
-          instanceId: block.instanceId,
-          condition: { kind: 'class', className: condition.className as string, mode: condition.mode as 'if' | 'unless' }
-        })
-      );
-    }
+    else if (condition) env.dispatch(conditionSet({ instanceId: block.instanceId, condition }));
   });
   return { id: block.instanceId, updated: true };
 }
@@ -258,8 +372,6 @@ function endpoint(state: RootState, id: string) {
   return { fileId: block.fileId, takesArrows: isSequenced(blockDescriptorsById.get(block.blockId)), groupId: block.groupId };
 }
 
-const OUTCOMES: BlockOutcome[] = ['kept', 'repaired', 'not_kept'];
-
 function connect(env: CanvasEnv, input: Input) {
   const state = env.getState();
   const [source, target] = [str(input, 'sourceId'), str(input, 'targetId')];
@@ -273,8 +385,7 @@ function connect(env: CanvasEnv, input: Input) {
   const edges = state.edges.filter(edge => edge.fileId === from.fileId);
   if (edges.some(edge => edge.source === source && edge.target === target)) throw new ToolError('Those are already connected');
   if (wouldCreateCycle(edges, source, target)) throw new ToolError('That arrow would create a loop');
-  const outcomes = Array.isArray(input.outcomes) && input.outcomes.length ? (input.outcomes as BlockOutcome[]) : (['kept', 'repaired'] as BlockOutcome[]);
-  if (!outcomes.every(outcome => OUTCOMES.includes(outcome))) throw new ToolError('Outcomes are kept, repaired and not_kept');
+  const outcomes = outcomesInput(input);
   env.openFile(from.fileId);
   inOneStep(env.dispatch, () => env.dispatch(edgeAdded({ fileId: from.fileId, source, target, outcomes })));
   return { connected: { source, target, outcomes } };
@@ -315,6 +426,7 @@ export const CANVAS_TOOLS: Record<string, Tool> = {
   get_generated_policy: (env, input) => generatedPolicy(env.getState(), optionalStr(input, 'fileId')),
   get_warnings: env => warnings(env.getState()),
   add_block: (env, input) => addBlock(canvasOf(env), input),
+  add_blocks: (env, input) => addBlocks(canvasOf(env), input),
   update_block: (env, input) => updateBlock(canvasOf(env), input),
   remove_block: (env, input) => removeBlock(canvasOf(env), input),
   connect: (env, input) => connect(canvasOf(env), input),

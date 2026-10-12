@@ -104,6 +104,67 @@ def test_a_files_own_variables_are_referenced_with_its_namespace():
     assert '"$(webserver:vars.a) ${webserver:vars.b} $(common:vars.c) $(myvars.d)"' in policy
 
 
+def test_a_blocks_note_is_its_promises_comment():
+    meta = _demo()
+    report = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "report-message")
+    report["note"] = 'Daily, not "weekly":\nthe old one was too slow'
+    settings = next(b for b in meta["files"][0]["blocks"] if b["blockId"] == "define-variable")
+    settings["note"] = "Sized for the demo VM"
+
+    files = compile_project(meta)
+
+    assert 'comment => "Daily, not \\"weekly\\": the old one was too slow"' in _block(files[WEBSERVER], report["label"])
+    # Every entry's promises: a chained one compiles to more than one.
+    assert files[COMMON].count('comment => "Sized for the demo VM"') >= len(settings["entries"])
+
+
+def test_a_line_naming_a_list_brings_that_list_in():
+    meta = {
+        "files": [
+            {
+                "id": "f",
+                "path": "./t.cf",
+                "namespace": "t",
+                "order": [],
+                "blocks": [
+                    {
+                        "instanceId": "v",
+                        "blockId": "define-variable",
+                        "label": "Vars",
+                        "params": {},
+                        "entries": [
+                            {
+                                "id": "a",
+                                "valueSourceId": "list",
+                                "params": {"variable_name": "all", "items": "vim\n@(def.extra)"},
+                            },
+                            {
+                                "id": "b",
+                                "valueSourceId": "list-variable",
+                                "params": {"variable_name": "left", "from_variable": "vars.all"},
+                                "decorators": [
+                                    {
+                                        "instanceId": "d",
+                                        "decoratorId": "difference",
+                                        "params": {"entries": "emacs\n@(def.allowed)"},
+                                    }
+                                ],
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    policy = compile_project(meta)["./t.cf"]
+
+    assert '"all" slist => { "vim", @(default:def.extra) };' in policy
+    assert 'difference(\n        "t:vars.all", mergedata(\'["emacs"]\', "default:def.allowed")\n      )' in policy
+    # A list in a summary: its items, not a literal \n.
+    assert "# → remove emacs, @(def.allowed)" in policy
+
+
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}

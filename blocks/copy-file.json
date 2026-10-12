@@ -13,10 +13,20 @@
       "promiser": "{{destination}}",
       "attributes": {
         "copy_from": {
-          "body": "local_cp",
-          "args": [
-            "{{source}}"
-          ]
+          "if_set": "server",
+          "value": {
+            "body": "remote_dcp",
+            "args": [
+              "{{source}}",
+              "{{server}}"
+            ]
+          },
+          "else": {
+            "body": "local_cp",
+            "args": [
+              "{{source}}"
+            ]
+          }
         },
         "perms": {
           "body": "mog",
@@ -42,7 +52,16 @@
       "label": "Source path",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "An absolute path on this host, or on the server when one is given."
+    },
+    {
+      "name": "server",
+      "label": "From server",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "help": "Copy from this host instead, e.g. $(sys.policy_hub), comparing content. Its cf-serverd must allow access to the source path (the hub's default policy shares /var/cfengine/masterfiles)."
     },
     {
       "name": "mode",

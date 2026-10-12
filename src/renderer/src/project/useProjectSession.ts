@@ -65,10 +65,10 @@ export function useProjectSession() {
   const createProject = async (values: ProjectFormValues): Promise<SubmitResult> => {
     const { name, description, type } = values;
     const moduleName = moduleNameFor(name);
-    const filesInitialized = projectFilesInitialized(name);
+    const filesInitialized = projectFilesInitialized(values.firstFile?.trim() || name);
     const open = (located: { masterfiles: string | null; path: string | null }) => {
       dispatch(projectCreated({ name, description, moduleName, type, ...located }));
-      // Every project starts with one policy file, named after the project (its namespace derives from it).
+      // Every project starts with one policy file, named after the project unless named (its namespace derives from it).
       dispatch(filesInitialized);
       dispatch(historyCleared());
       markSaved();

@@ -19,7 +19,19 @@ PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
 # Stdlib bodies the compiled policy may reference (as default:<name>). The
 # compiler has to ship masterfiles' lib/ for these; add to the list knowingly.
-STDLIB_BODIES = {"mog", "local_cp", "recurse", "tidy", "in_shell", "if_elapsed", "ln_s", "days_old", "detect_content"}
+STDLIB_BODIES = {
+    "mog",
+    "local_cp",
+    "remote_dcp",
+    "recurse",
+    "recurse_with_base",
+    "tidy",
+    "in_shell",
+    "if_elapsed",
+    "ln_s",
+    "days_old",
+    "detect_content",
+}
 
 
 def _schema(name: str) -> dict:
@@ -55,12 +67,17 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
     if isinstance(expr, str):
         yield from PLACEHOLDER.findall(expr)
         return
-    if "if_set" in expr:
-        if not top_level:
-            problems.append(f"{where}: if_set is only allowed as a whole attribute value")
-        yield expr["if_set"]
-        yield from _walk(expr["value"], top_level=False, in_decorator=in_decorator, problems=problems, where=where)
-        return
+    for gate in ("if_set", "if_true"):
+        if gate in expr:
+            if not top_level:
+                problems.append(f"{where}: {gate} is only allowed as a whole attribute value")
+            yield expr[gate]
+            for branch in ("value", "else"):
+                if branch in expr:
+                    yield from _walk(
+                        expr[branch], top_level=False, in_decorator=in_decorator, problems=problems, where=where
+                    )
+            return
     if "previous" in expr and not in_decorator:
         problems.append(f"{where}: previous is only allowed in decorators")
     if "body" in expr:
@@ -88,6 +105,8 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
     for key in ("variable", "bundle", "class_expression"):
         if key in expr:
             yield from PLACEHOLDER.findall(expr[key])
+    if "args_param" in expr:
+        yield expr["args_param"]
     for item in expr.get("args", []) + expr.get("list", []):
         yield from _walk(item, top_level=False, in_decorator=in_decorator, problems=problems, where=where)
 
@@ -132,7 +151,8 @@ def _check_steps(steps: list[dict], params: list[dict], where: str, problems: li
                 and not by_name.get(value["list_param"], {}).get("allow_list")
             ):
                 problems.append(f"{at}/{attribute}: list_param needs an allow_list parameter")
-    for name in used - by_name.keys():
+    # {{label}}: the block's own label.
+    for name in used - by_name.keys() - {"label"}:
         problems.append(f"{where}: {{{{{name}}}}} isn't a parameter")
     return used
 

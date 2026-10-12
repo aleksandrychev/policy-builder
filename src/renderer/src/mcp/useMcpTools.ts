@@ -35,7 +35,10 @@ export function useMcpCanvas(env: Omit<CanvasEnv, 'dispatch' | 'getState'>) {
 }
 
 const CANVAS_WAIT_MS = 3000;
-const STOPPED = 'Stopped by the user in Policy Builder. Don’t continue: tell them where you were and ask what to do (they resume you from the app).';
+const STOPPED =
+  'Stopped by the user in Policy Builder. Don’t continue: tell them where you were and ask what to do. Your calls are refused until they allow you again in the app; get_project_status (always answered) shows agent: "allowed" once they have. end_work is always answered too.';
+// Answered while stopped too: they change nothing, and tell the agent where it stands.
+const ANSWERED_WHEN_STOPPED = new Set(['end_work', 'get_project_status']);
 
 // Just after a project opens, its view mounts a moment later: tools wait for its canvas.
 async function canvasWhenMounted(getState: () => RootState): Promise<ToolEnv['canvas']> {
@@ -46,11 +49,12 @@ async function canvasWhenMounted(getState: () => RootState): Promise<ToolEnv['ca
 }
 
 // A call as the agent's log shows it; refused while the user has stopped the agent.
-async function answerLogged(name: string, input: unknown, getState: () => RootState, answer: () => Promise<ToolAnswer>): Promise<ToolAnswer> {
+export async function answerLogged(name: string, input: unknown, getState: () => RootState, answer: () => Promise<ToolAnswer>): Promise<ToolAnswer> {
   const text = describeCall(name, typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}, getState());
-  if (agentActivity().paused) {
+  if (agentActivity().paused && !ANSWERED_WHEN_STOPPED.has(name)) {
     callEnded(callStarted(name, text), false, 'refused: you stopped the agent');
-    return { ok: false, content: STOPPED };
+    const note = agentActivity().stopNote.trim();
+    return { ok: false, content: note ? `${STOPPED} The user’s note: “${note}”` : STOPPED };
   }
   const id = callStarted(name, text);
   const result = await answer();

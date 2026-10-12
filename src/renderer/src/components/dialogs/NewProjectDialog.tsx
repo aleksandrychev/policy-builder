@@ -35,6 +35,8 @@ type TargetCheck = Awaited<ReturnType<NonNullable<Window['api']>['checkProjectTa
 
 export interface ProjectFormValues {
   description: string;
+  // The first policy file's name (and so its namespace); the project's name when not given.
+  firstFile?: string;
   folderName: string;
   git: boolean;
   // An exact version ("3.27.1") or "master".

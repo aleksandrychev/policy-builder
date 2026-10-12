@@ -31,11 +31,13 @@ export interface AgentActivity {
   // The latest last: this app session's history.
   log: LogEntry[];
   paused: boolean;
+  // What the user told the stopped agent (optional): sent with each refusal.
+  stopNote: string;
   // What the agent said it's doing (begin_work), until end_work.
   task: { since: number; text: string } | null;
 }
 
-let state: AgentActivity = { current: null, log: [], lastCallAt: null, paused: false, task: null };
+let state: AgentActivity = { current: null, log: [], lastCallAt: null, paused: false, stopNote: '', task: null };
 const listeners = new Set<() => void>();
 let expiry: ReturnType<typeof setTimeout> | undefined;
 
@@ -91,14 +93,15 @@ export function workBegan(text: string) {
 
 export const workEnded = () => set({ task: null, lastCallAt: null });
 
-// Stop: the agent's calls are refused until Resume (the running one is cancelled by its caller).
-export const paused = () => set({ paused: true, task: null });
-export const resumed = () => set({ paused: false, lastCallAt: null });
+// Stop: the agent's calls are refused until Allow again (the running one is cancelled by its caller).
+export const paused = () => set({ paused: true, stopNote: '', task: null });
+export const resumed = () => set({ paused: false, stopNote: '', lastCallAt: null });
+export const stopNoteChanged = (stopNote: string) => set({ stopNote });
 
 export const logCleared = () => set({ log: [] });
 
 /** For tests: back to no activity. */
 export function resetActivity() {
   clearTimeout(expiry);
-  state = { current: null, log: [], lastCallAt: null, paused: false, task: null };
+  state = { current: null, log: [], lastCallAt: null, paused: false, stopNote: '', task: null };
 }

@@ -247,7 +247,7 @@ def compile_value(expr, ctx: Context) -> str:
     if "list" in expr:
         return list_value([compile_value(item, ctx) for item in expr["list"]], ctx)
     if "list_param" in expr:
-        return list_value([quote(item) for item in lines_of(ctx.params.get(expr["list_param"], ""))], ctx)
+        return list_param_value(lines_of(ctx.params.get(expr["list_param"], "")), ctx)
     if "class_refs" in expr:
         refs = [
             ("!" if ref.get("negate") else "") + in_namespace(ref["name"], ctx.local_classes)
@@ -267,8 +267,11 @@ def compile_value(expr, ctx: Context) -> str:
         name = ctx.substitute(expr["bundle"])
         # The stdlib, or another module's: anything unqualified is in the default namespace.
         name = name if ":" in name else f"default:{name}"
-        args = expr.get("args")
-        return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
+        args = [compile_value(arg, ctx) for arg in expr.get("args") or []]
+        # One argument per line of a parameter (Call Method's arguments).
+        if "args_param" in expr:
+            args += [quote(line) for line in lines_of(ctx.params.get(expr["args_param"], ""))]
+        return f"{name}({', '.join(args)})" if args else name
     if "variable" in expr:
         name = ctx.qualified(ctx.substitute(expr["variable"]))
         if not re.fullmatch(r"[\w.:\[\]]+", name, re.ASCII):
@@ -283,6 +286,8 @@ def compile_value(expr, ctx: Context) -> str:
             raise CompileError("{previous} used outside a decorator")
         return ctx.previous
     if "if_set" in expr:
+        return compile_value(expr["value"] if ctx.params.get(expr["if_set"], "").strip() else expr["else"], ctx)
+    if "if_true" in expr:
         return compile_value(expr["value"], ctx)
     if "choose" in expr:
         picked = ctx.params.get(expr["choose"], "")
@@ -343,6 +348,35 @@ def list_value(items: list[str], ctx: Context) -> str:
     return "'" + re.sub(r"\\(?=[\\\"']|$)", r"\\\\", text).replace("'", "\\'") + "'"
 
 
+LIST_REFERENCE = re.compile(r"@\(([\w.:]+)\)|@\{([\w.:]+)\}")
+
+
+def list_reference(name: str, ctx: Context) -> str:
+    """A list a line names (@(vars.x), @(def.x), @(ns:vars.x)): its file's, else the default namespace's."""
+    if ":" in name:
+        return name
+    return ctx.qualified(name) if name.startswith("vars.") else f"default:{name}"
+
+
+def list_param_value(lines: list[str], ctx: Context) -> str:
+    """One item per line; a line that is just @(list) brings that list's items in."""
+    literals, lists = [], []
+    for line in lines:
+        reference = LIST_REFERENCE.fullmatch(line.strip())
+        if reference:
+            lists.append(list_reference(reference.group(1) or reference.group(2), ctx))
+        else:
+            literals.append(quote(line))
+    if not lists:
+        return list_value(literals, ctx)
+    if not ctx.as_argument:
+        return "{ " + ", ".join([*literals, *(f"@({name})" for name in lists)]) + " }"
+    # A function argument: the literals and the lists merged (collecting functions take the result).
+    if not literals and len(lists) == 1:
+        return quote(lists[0])
+    return f"mergedata({', '.join([*([list_value(literals, ctx)] if literals else []), *map(quote, lists)])})"
+
+
 def unquote(string: str) -> str:
     """quote()'s inverse: the text of a CFEngine string."""
     return re.sub(r"\\([\\\"'])", r"\1", string[1:-1])
@@ -351,7 +385,14 @@ def unquote(string: str) -> str:
 def attributes_of(step: dict, ctx: Context) -> list[str]:
     lines = []
     for key, value in step.get("attributes", {}).items():
-        if isinstance(value, dict) and "if_set" in value and not ctx.params.get(value["if_set"], "").strip():
+        if (
+            isinstance(value, dict)
+            and "if_set" in value
+            and "else" not in value
+            and not ctx.params.get(value["if_set"], "").strip()
+        ):
+            continue
+        if isinstance(value, dict) and "if_true" in value and ctx.params.get(value["if_true"], "") != "true":
             continue
         lines.append(f"{key} => {compile_value(value, ctx)}")
     return lines
@@ -409,10 +450,19 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     """A summary pattern with its parameters in, fit for a one-line comment."""
 
     def shown(match: re.Match) -> str:
-        value = params.get(match.group(1), "").replace("\r", "").replace("\n", "\\n")
+        value = params.get(match.group(1), "").replace("\r", "")
+        # Several lines (a list): one per item, joined, not a literal \n.
+        if "\n" in value.strip("\n"):
+            value = ", ".join(line.strip() for line in value.splitlines() if line.strip())
         return value if len(value) <= SUMMARY_VALUE_LENGTH else value[: SUMMARY_VALUE_LENGTH - 1] + "…"
 
     return PLACEHOLDER.sub(shown, pattern)
+
+
+def noted(block: dict) -> list[str]:
+    """A block's note, as its promises' comment (one line: CFEngine prints it in reports)."""
+    note = one_line(block.get("note") or "")
+    return [f"comment => {quote(note)}"] if note else []
 
 
 def one_line(text: str) -> str:
@@ -655,7 +705,7 @@ class FileCompiler:
             class_refs=entry.get("classRefs") or [],
             local_classes=self.local_classes,
         )
-        extra = []
+        extra = noted(block)
         if entry.get("inventory", {}).get("attributeName", "").strip():
             extra.append(
                 f'meta => {{ "inventory", {quote("attribute_name=" + entry["inventory"]["attributeName"].strip())} }}'
@@ -663,7 +713,8 @@ class FileCompiler:
 
         if kind != "vars":
             return kind, promise(
-                quote(ctx.substitute(step["promiser"])), [*attributes_of(step, ctx), *condition_attributes(conditions)]
+                quote(ctx.substitute(step["promiser"])),
+                [*attributes_of(step, ctx), *noted(block), *condition_attributes(conditions)],
             )
 
         [(value_type, value)] = step["attributes"].items()
@@ -793,7 +844,7 @@ class FileCompiler:
         body = [f"  # {label}"]
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
-        lines = promise(promiser, [*attributes, *self.gating(block, names, edges)])
+        lines = promise(promiser, [*attributes, *noted(block), *self.gating(block, names, edges)])
         return [*body, f"  {promise_type}:", *guarded, *[f"      {line}" for line in lines], ""]
 
     # bundle agent main: every ungrouped block's own promise and every group's call, in order (top_down).
@@ -853,6 +904,8 @@ class FileCompiler:
         declared = descriptor.get("parameters", [])
         params = params_with_defaults(declared, block.get("params") or {})
         label = one_line(block.get("label") or descriptor["name"])
+        # {{label}} is the block's own label (Call Method's promiser), unless a parameter has that name.
+        params.setdefault("label", label)
         bound = set(block.get("paramBindings") or {})
         computed, missing_data = self.computed_parameters(block, owner, prefix)
         missing = [*missing_required([p for p in declared if p["name"] not in bound], params), *missing_data]

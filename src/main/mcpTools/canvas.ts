@@ -13,6 +13,33 @@ const condition = z
   .nullable()
   .describe('Gates the block; null removes the condition');
 
+const note = z
+  .string()
+  .describe(
+    'Why the block is there, or a decision behind it (e.g. “daily, not weekly: the old run took too long”): shown in Properties, compiled to the promise’s comment'
+  );
+
+const outcomes = z
+  .array(z.enum(['kept', 'repaired', 'not_kept']))
+  .optional()
+  .describe('When the arrow lets the block run: after the source was kept, repaired or not_kept (default kept + repaired)');
+
+// A block as add_block and add_blocks take it.
+const newBlock = {
+  fileId: z.string(),
+  blockType: z.string(),
+  label: z.string().optional().describe('Defaults to the block type’s name'),
+  note: note.optional(),
+  params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them'),
+  condition: condition.optional(),
+  groupId: z.string().optional().describe('A group of the same file to put the block in (get_file lists them)'),
+  after: z
+    .union([z.string(), z.number().int().min(0)])
+    .optional()
+    .describe('Adds an arrow into the new block from this block or group id (in add_blocks also the index of an earlier block in the list)'),
+  outcomes
+};
+
 export function registerCanvasTools(server: McpServer, answer: Answer) {
   server.registerTool(
     'get_project_overview',
@@ -63,7 +90,7 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
     {
       inputSchema: {},
       description:
-        'What the editor flags in the project: blocks with required parameters left empty, values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters), and blocks or entries the generated policy leaves out (notCompiled, with why: e.g. an invalid class expression). Run it after editing, before saving.',
+        'What the editor flags in the project: blocks with required parameters left empty, values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters), blocks or entries the generated policy leaves out (notCompiled, with why: e.g. an invalid class expression), and advice: settings that are valid but probably not meant (a directory mode without x, a restart that runs on every agent run). Run it after editing, before saving.',
       annotations: READ_ONLY
     },
     answer('get_warnings')
@@ -73,24 +100,30 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
     'add_block',
     {
       description:
-        'Adds a block to a file (opened on the canvas), below its lowest block. Parameters not given keep their defaults. Returns the new block’s id.',
-      inputSchema: {
-        fileId: z.string(),
-        blockType: z.string(),
-        label: z.string().optional().describe('Defaults to the block type’s name'),
-        params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them')
-      },
+        'Adds a block to a file (opened on the canvas), below its lowest block, with its condition, group and an arrow into it if given: one undo step. Parameters not given keep their defaults. Returns the new block’s id. For several blocks, use add_blocks.',
+      inputSchema: newBlock,
       annotations: EDIT
     },
     answer('add_block')
   );
   server.registerTool(
+    'add_blocks',
+    {
+      description:
+        'Adds several blocks in one call and one undo step, each as add_block takes it. after can also be the index of an earlier block in the same list, to chain them. Every block is checked first: if one is invalid, nothing is added and the error names it (blocks[i]). Returns their ids in order.',
+      inputSchema: { blocks: z.array(z.object(newBlock)).min(1).max(50) },
+      annotations: EDIT
+    },
+    answer('add_blocks')
+  );
+  server.registerTool(
     'update_block',
     {
-      description: 'Changes a block’s label, parameters (only those given) or condition.',
+      description: 'Changes a block’s label, note, parameters (only those given) or condition.',
       inputSchema: {
         blockId: z.string(),
         label: z.string().optional(),
+        note: note.optional().describe('Empty removes it'),
         params: z.record(z.string(), z.string()).optional(),
         condition: condition.optional()
       },

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from test_compiler_all_blocks import FIXTURES, LIBRARY, _params
 
-from cfpb_compiler import compile_project
+from cfpb_compiler import compile_project, lines_of
 
 ACTIONS = sorted(block_id for block_id, d in LIBRARY.descriptors.items() if d.get("compile_target") == "own_bundle")
 # Quotes, backslashes (one at the end too), a variable reference and regex syntax.
@@ -48,6 +48,9 @@ def variants(block_id: str) -> list[tuple[str, dict[str, str]]]:
         for value in _values(param):
             if value != base[param["name"]]:
                 found.append((f"{param['name']}={value!r}", {**base, param["name"]: value}))
+    if block_id == "call-method":
+        # A bundle's arity is checked: one stand-in per number of arguments.
+        found = [(name, {**p, "bundle_name": f"some_bundle_{len(lines_of(p['arguments']))}"}) for name, p in found]
     return found
 
 
@@ -78,7 +81,7 @@ def test_every_variant_passes_cf_promises(block_id: str, tmp_path: Path):
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "variants.cf" }; bundlesequence => { "variants:main" }; }\n'
-        "bundle agent some_bundle { }\n"
+        + "".join(f"bundle agent some_bundle_{n}({', '.join(f'a{i}' for i in range(n))}) {{ }}\n" for n in range(6))
     )
 
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)

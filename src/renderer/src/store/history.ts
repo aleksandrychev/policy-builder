@@ -26,6 +26,7 @@ export type UndoableKey = (typeof UNDOABLE_KEYS)[number];
 // into one step. The value is the payload field being typed into.
 const TYPING_FIELDS: Record<string, string> = {
   'canvas/blockLabelChanged': 'label',
+  'canvas/blockNoteChanged': 'note',
   'canvas/blockParamChanged': 'value',
   'canvas/classRefChanged': 'name',
   'canvas/conditionClassNameChanged': 'className',

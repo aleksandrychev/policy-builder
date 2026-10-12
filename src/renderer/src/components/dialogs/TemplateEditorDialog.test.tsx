@@ -34,6 +34,11 @@ const chip = (name: string) => screen.getByRole('button', { name: new RegExp(nam
 describe('TemplateEditorDialog', () => {
   afterEach(uninstallApi);
 
+  it('puts the cursor in the editor, at the end, as it opens', async () => {
+    setup({ value: 'echo hi' });
+    await waitFor(() => expect(document.activeElement?.closest('.cm-editor')).not.toBeNull());
+  });
+
   it('edits CFEngine text with variables only', () => {
     setup({ help: 'Mustache help' });
     expect(screen.getByRole('heading', { name: 'Command' })).toBeInTheDocument();

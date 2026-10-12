@@ -133,6 +133,7 @@ export function ShipDialog({
           )}
           {commits && (
             <TextField
+              autoFocus
               label="Commit message"
               size="small"
               multiline

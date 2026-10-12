@@ -62,3 +62,10 @@ export const AGENTS: Agent[] = [
 export const DEFAULT_AGENT = AGENTS[0];
 
 export const agentById = (id: string | null): Agent => AGENTS.find(agent => agent.id === id) ?? DEFAULT_AGENT;
+
+// The agent last picked in Connect an AI agent (remembered in localStorage).
+export const CHOSEN_AGENT_KEY = 'cfpb.connectAgent';
+export const chosenAgent = (): Agent => agentById(localStorage.getItem(CHOSEN_AGENT_KEY));
+
+// Where the user talks to their agent, for "tell it in …".
+export const agentName = (agent: Agent) => (agent.id === 'other' ? 'your agent' : agent.label);

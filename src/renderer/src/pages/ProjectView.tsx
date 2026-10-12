@@ -12,6 +12,7 @@ import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType, resolveBlockShape } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
+import { blockAdvice } from '../canvas/advice';
 import type { ChainOwner } from '../canvas/dataChains';
 import { executionOrder } from '../canvas/executionOrder';
 import { describeFileCondition } from '../canvas/fileCondition';
@@ -57,6 +58,7 @@ import {
   blockGroupChanged,
   blockLabelChanged,
   blockMoved,
+  blockNoteChanged,
   blockParamChanged,
   blockRemoved,
   blockValueSourceChanged,
@@ -893,6 +895,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
+            advice={blockAdvice(selectedInstance, allEdges)}
+            onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}
             onParamChange={(paramName, value, entryId) =>
               selectedInstance && dispatch(blockParamChanged({ instanceId: selectedInstance.instanceId, entryId, paramName, value }))
             }
@@ -1008,6 +1012,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             <FlowCanvas
               // One React Flow per file: remounting fits the view to the file just opened.
               key={currentFileId ?? 'none'}
+              scanning={locked}
               allInstances={allInstances}
               instances={instances}
               edges={edges}

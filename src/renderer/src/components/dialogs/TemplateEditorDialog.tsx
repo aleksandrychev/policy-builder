@@ -185,6 +185,12 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
     onClose();
   };
 
+  const focusAtEnd = (view: EditorView | null) => {
+    if (!view) return;
+    view.focus();
+    view.dispatch({ selection: { anchor: view.state.doc.length } });
+  };
+
   const insertAtCursor = (token: TemplateToken) => {
     if (!editorView) return;
     const { from, to } = editorView.state.selection.main;
@@ -199,7 +205,14 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
   const groups = groupTokens(filtered);
 
   return (
-    <Dialog open={open} onClose={handleDialogClose} maxWidth="lg" fullWidth>
+    <Dialog
+      open={open}
+      onClose={handleDialogClose}
+      maxWidth="lg"
+      fullWidth
+      // Opened by clicking the field: typing goes straight into the editor, at the end.
+      slotProps={{ transition: { onEntered: () => focusAtEnd(editorView) } }}
+    >
       <DialogTitle sx={{ fontSize: 16, fontWeight: 700 }}>
         {title}
         {mustache && help && <Typography sx={{ fontSize: 12, color: 'text.muted', mt: 0.5 }}>{help}</Typography>}
