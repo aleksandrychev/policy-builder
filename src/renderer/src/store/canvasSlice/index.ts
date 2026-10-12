@@ -72,6 +72,12 @@ const canvasSlice = createSlice({
       const instance = state.find(item => item.instanceId === action.payload.instanceId);
       if (instance) instance.label = action.payload.label;
     },
+    blockNoteChanged(state, action: PayloadAction<{ instanceId: string; note: string }>) {
+      const instance = state.find(item => item.instanceId === action.payload.instanceId);
+      if (!instance) return;
+      if (action.payload.note.trim()) instance.note = action.payload.note;
+      else delete instance.note;
+    },
     blockParamChanged(state, action: PayloadAction<SubjectRef & { paramName: string; value: string }>) {
       const subject = findSubject(state, action.payload);
       if (subject) subject.params[action.payload.paramName] = action.payload.value;
@@ -236,6 +242,7 @@ export const {
   blocksMoved,
   incomingModeChanged,
   blockLabelChanged,
+  blockNoteChanged,
   blockParamChanged,
   blockValueSourceChanged,
   paramBound,

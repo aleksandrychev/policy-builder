@@ -5,6 +5,7 @@ import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
   blockLabelChanged,
+  blockNoteChanged,
   blockParamChanged,
   blockValueSourceChanged,
   classRefAdded,
@@ -29,7 +30,8 @@ import {
 } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
 import { fileConditionClassNameChanged, fileConditionEnabled, fileSelected } from '../store/filesSlice';
-import { type TestStore, addBlock, addFile, blockOf, makeStore } from '../store/test/storeTestUtils';
+import { historyCleared } from '../store/history';
+import { type TestStore, addBlock, addFile, blockOf, makeStore, undoAll } from '../store/test/storeTestUtils';
 import { renderWithProviders } from '../test/render';
 import { type IncomingArrow, PropertiesPanel } from './PropertiesPanel';
 
@@ -62,6 +64,7 @@ function ConnectedPanel({ instanceId, arrows = [], onArrowRemove = vi.fn(), onCo
       onArrowOutcomesChange={vi.fn()}
       onArrowRemove={onArrowRemove}
       onLabelChange={label => dispatch(blockLabelChanged({ instanceId, label }))}
+      onNoteChange={note => dispatch(blockNoteChanged({ instanceId, note }))}
       onParamChange={(paramName, value, entryId) => dispatch(blockParamChanged({ instanceId, entryId, paramName, value }))}
       onValueSourceChange={(valueSourceId, entryId) => dispatch(blockValueSourceChanged({ instanceId, entryId, valueSourceId }))}
       onBindParam={(param, valueSourceId) => dispatch(paramBound({ instanceId, param, binding: { valueSourceId, params: {}, decorators: [] } }))}
@@ -142,6 +145,19 @@ describe('PropertiesPanel', () => {
       renderPanel(store, { instanceId: id });
       fireEvent.change(screen.getByRole('textbox', { name: 'Label' }), { target: { value: 'Say hello' } });
       expect(blockOf(store, id)?.label).toBe('Say hello');
+    });
+
+    it('edits the note as one undo step, and drops it when cleared', () => {
+      const id = add('report-message', { message: 'hi' });
+      store.dispatch(historyCleared());
+      renderPanel(store, { instanceId: id });
+      const note = screen.getByRole('textbox', { name: 'Note' });
+      fireEvent.change(note, { target: { value: 'D' } });
+      fireEvent.change(note, { target: { value: 'Daily' } });
+      expect(blockOf(store, id)?.note).toBe('Daily');
+      expect(undoAll(store)).toBe(1);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Note' }), { target: { value: '  ' } });
+      expect(blockOf(store, id)).not.toHaveProperty('note');
     });
 
     it('edits a text param', () => {

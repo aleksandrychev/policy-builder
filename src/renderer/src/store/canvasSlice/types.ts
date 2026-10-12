@@ -104,6 +104,8 @@ export interface BlockInstance {
   // Only meaningful for Define Variable instances.
   inventory?: InventoryTag;
   label: string;
+  // Why the block is there, or a decision behind it: the generated promise's comment.
+  note?: string;
   // Parameters computed from a data chain instead of typed, by param name.
   paramBindings?: Record<string, ParamBinding>;
   params: Record<string, string>;

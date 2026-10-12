@@ -104,6 +104,20 @@ def test_a_files_own_variables_are_referenced_with_its_namespace():
     assert '"$(webserver:vars.a) ${webserver:vars.b} $(common:vars.c) $(myvars.d)"' in policy
 
 
+def test_a_blocks_note_is_its_promises_comment():
+    meta = _demo()
+    report = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "report-message")
+    report["note"] = 'Daily, not "weekly":\nthe old one was too slow'
+    settings = next(b for b in meta["files"][0]["blocks"] if b["blockId"] == "define-variable")
+    settings["note"] = "Sized for the demo VM"
+
+    files = compile_project(meta)
+
+    assert 'comment => "Daily, not \\"weekly\\": the old one was too slow"' in _block(files[WEBSERVER], report["label"])
+    # Every entry's promises: a chained one compiles to more than one.
+    assert files[COMMON].count('comment => "Sized for the demo VM"') >= len(settings["entries"])
+
+
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}

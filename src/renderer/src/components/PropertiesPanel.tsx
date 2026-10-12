@@ -68,6 +68,7 @@ interface PropertiesPanelProps {
   onInventoryEnable: (entryId?: string) => void;
   onInventoryRemove: (entryId?: string) => void;
   onLabelChange: (label: string) => void;
+  onNoteChange: (note: string) => void;
   onParamChange: (paramName: string, value: string, entryId?: string) => void;
   onUnbindParam: (param: string) => void;
   onValueSourceChange: (valueSourceId: string, entryId?: string) => void;
@@ -121,7 +122,22 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   });
 
   const labelField = (
-    <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />
+    <>
+      <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />
+      <TextField
+        label="Note"
+        value={instance.note ?? ''}
+        onChange={event => props.onNoteChange(event.target.value)}
+        placeholder="Why it's there, or a decision behind it"
+        helperText="Kept as the generated promise's comment."
+        multiline
+        minRows={1}
+        maxRows={6}
+        fullWidth
+        size="small"
+        sx={inputSx}
+      />
+    </>
   );
   const panelSx = { flex: 1, overflowY: 'auto', p: 2 } as const;
 

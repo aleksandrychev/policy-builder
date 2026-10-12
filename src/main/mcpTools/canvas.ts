@@ -13,6 +13,12 @@ const condition = z
   .nullable()
   .describe('Gates the block; null removes the condition');
 
+const note = z
+  .string()
+  .describe(
+    'Why the block is there, or a decision behind it (e.g. “daily, not weekly: the old run took too long”): shown in Properties, compiled to the promise’s comment'
+  );
+
 const outcomes = z
   .array(z.enum(['kept', 'repaired', 'not_kept']))
   .optional()
@@ -23,6 +29,7 @@ const newBlock = {
   fileId: z.string(),
   blockType: z.string(),
   label: z.string().optional().describe('Defaults to the block type’s name'),
+  note: note.optional(),
   params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them'),
   condition: condition.optional(),
   groupId: z.string().optional().describe('A group of the same file to put the block in (get_file lists them)'),
@@ -112,10 +119,11 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
   server.registerTool(
     'update_block',
     {
-      description: 'Changes a block’s label, parameters (only those given) or condition.',
+      description: 'Changes a block’s label, note, parameters (only those given) or condition.',
       inputSchema: {
         blockId: z.string(),
         label: z.string().optional(),
+        note: note.optional().describe('Empty removes it'),
         params: z.record(z.string(), z.string()).optional(),
         condition: condition.optional()
       },

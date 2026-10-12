@@ -8,7 +8,16 @@ import { tidyPositions } from '../canvas/tidy';
 import { toCfbsProject } from '../project/cfbsProject';
 import { compiledPart } from '../project/useCompiledPolicy';
 import type { RootState } from '../store';
-import { blockAdded, blockLabelChanged, blockParamChanged, blockRemoved, blocksMoved, conditionRemoved, conditionSet } from '../store/canvasSlice';
+import {
+  blockAdded,
+  blockLabelChanged,
+  blockNoteChanged,
+  blockParamChanged,
+  blockRemoved,
+  blocksMoved,
+  conditionRemoved,
+  conditionSet
+} from '../store/canvasSlice';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import { derivedNodePositionsClearedForFile } from '../store/derivedNodesSlice';
 import { edgeAdded, edgeRemoved } from '../store/edgesSlice';
@@ -88,6 +97,7 @@ function fileDetail(state: RootState, fileId: string) {
     blocks: byOrder.map(block => ({
       id: block.instanceId,
       label: block.label,
+      note: block.note,
       type: block.blockId,
       runOrder: order.indexOf(block.instanceId) + 1 || undefined,
       params: block.entries ? undefined : block.params,
@@ -200,6 +210,7 @@ interface BlockSpec {
   fileId: string;
   groupId?: string;
   label: string;
+  note?: string;
   params: Record<string, string>;
   valueSourceId?: string;
 }
@@ -262,7 +273,8 @@ function checkedBlockSpec(state: RootState, input: Input, earlier: BlockSpec[] =
   const params = checkedBlockParams(descriptor, valueSourceId, input.params);
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : descriptor.name;
   const groupId = checkedGroupId(state, input, fileId, isSequenced(descriptor));
-  const spec: BlockSpec = { fileId, descriptor, label, params, valueSourceId, condition: conditionInput(input), groupId };
+  const note = optionalStr(input, 'note')?.trim() || undefined;
+  const spec: BlockSpec = { fileId, descriptor, label, note, params, valueSourceId, condition: conditionInput(input), groupId };
   return { ...spec, after: checkedArrow(state, input, spec, earlier) };
 }
 
@@ -281,6 +293,7 @@ function dispatchBlock(env: CanvasEnv, spec: BlockSpec, added: string[]): string
         : { blockId: descriptor.id, fileId, label, params: { ...defaults, ...spec.params }, valueSourceId: spec.valueSourceId, position }
     )
   ).payload.instanceId;
+  if (spec.note) env.dispatch(blockNoteChanged({ instanceId, note: spec.note }));
   if (spec.condition) env.dispatch(conditionSet({ instanceId, condition: spec.condition }));
   if (spec.groupId) env.dispatch(changeMembership(fileId, [instanceId], spec.groupId));
   if (spec.after) {
@@ -333,6 +346,7 @@ function updateBlock(env: CanvasEnv, input: Input) {
   env.openFile(block.fileId);
   inOneStep(env.dispatch, () => {
     if (typeof input.label === 'string' && input.label.trim()) env.dispatch(blockLabelChanged({ instanceId: block.instanceId, label: input.label.trim() }));
+    if (typeof input.note === 'string') env.dispatch(blockNoteChanged({ instanceId: block.instanceId, note: input.note.trim() }));
     for (const [paramName, value] of Object.entries(params)) env.dispatch(blockParamChanged({ instanceId: block.instanceId, paramName, value }));
     if (condition === null) env.dispatch(conditionRemoved({ instanceId: block.instanceId }));
     else if (condition) env.dispatch(conditionSet({ instanceId: block.instanceId, condition }));

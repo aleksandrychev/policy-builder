@@ -415,6 +415,12 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     return PLACEHOLDER.sub(shown, pattern)
 
 
+def noted(block: dict) -> list[str]:
+    """A block's note, as its promises' comment (one line: CFEngine prints it in reports)."""
+    note = one_line(block.get("note") or "")
+    return [f"comment => {quote(note)}"] if note else []
+
+
 def one_line(text: str) -> str:
     """Text for a `# …` comment: a line break would end it, and the rest would be policy."""
     return " ".join(text.split())
@@ -655,7 +661,7 @@ class FileCompiler:
             class_refs=entry.get("classRefs") or [],
             local_classes=self.local_classes,
         )
-        extra = []
+        extra = noted(block)
         if entry.get("inventory", {}).get("attributeName", "").strip():
             extra.append(
                 f'meta => {{ "inventory", {quote("attribute_name=" + entry["inventory"]["attributeName"].strip())} }}'
@@ -663,7 +669,8 @@ class FileCompiler:
 
         if kind != "vars":
             return kind, promise(
-                quote(ctx.substitute(step["promiser"])), [*attributes_of(step, ctx), *condition_attributes(conditions)]
+                quote(ctx.substitute(step["promiser"])),
+                [*attributes_of(step, ctx), *noted(block), *condition_attributes(conditions)],
             )
 
         [(value_type, value)] = step["attributes"].items()
@@ -793,7 +800,7 @@ class FileCompiler:
         body = [f"  # {label}"]
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
-        lines = promise(promiser, [*attributes, *self.gating(block, names, edges)])
+        lines = promise(promiser, [*attributes, *noted(block), *self.gating(block, names, edges)])
         return [*body, f"  {promise_type}:", *guarded, *[f"      {line}" for line in lines], ""]
 
     # bundle agent main: every ungrouped block's own promise and every group's call, in order (top_down).

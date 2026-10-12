@@ -55,6 +55,17 @@ describe('MCP canvas tools: adding blocks', () => {
     expect(undoAll(store)).toBe(1);
   });
 
+  it('keeps a note on a block, changed or removed with update_block', async () => {
+    const { call, fileId, store } = setup();
+    const { id } = (await call('add_block', report(fileId, 'Backup', { note: ' Daily, not weekly ' }))).result;
+    expect(blockOf(store, id)?.note).toBe('Daily, not weekly');
+    expect((await call('get_file', { fileId })).result.blocks[0]).toMatchObject({ id, note: 'Daily, not weekly' });
+    await call('update_block', { blockId: id, note: 'Hourly' });
+    expect(blockOf(store, id)?.note).toBe('Hourly');
+    await call('update_block', { blockId: id, note: '' });
+    expect(blockOf(store, id)).not.toHaveProperty('note');
+  });
+
   it('refuses an arrow or group that breaks the canvas rules', async () => {
     const { call, fileId, otherId, store } = setup();
     const inOther = addBlock(store, otherId);

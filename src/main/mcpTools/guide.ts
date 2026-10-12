@@ -33,7 +33,7 @@ If a call comes back "Stopped by the user", stop at once: say where you were and
 - Read before you write: get_file shows a file's blocks, run order, arrows and groups with ids.
 - Prefer several small, clear blocks over one clever one; the canvas is for people to read.
 - After a refusal, read the message: it says what's wrong and which tool shows the valid values.
-- **Ask before judgement calls** that change behaviour: a schedule, a dropped check, a looser permission, something the blocks can't express. Say what you'd do and why, and let the user decide.
+- **Ask before judgement calls** that change behaviour: a schedule, a dropped check, a looser permission, something the blocks can't express. Say what you'd do and why, and let the user decide; then record it in the block's note.
 - **Keep your summaries short**: what changed and what's left open. Don't repeat what file descriptions already say.
 
 Other guide topics: ${'`blocks`, `variables`, `conditions`, `testing`, `translating`, `pitfalls`'}.`;
@@ -132,6 +132,7 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`users:\` | Manage Users |
 | \`methods:\` a bundle without arguments | Call Method |
 | \`reports:\` | Report Message |
+| \`comment =>\` | The block's note (note on add_block / update_block) |
 | \`storage:\` \`mount\` | Mount Storage |
 | Iterating over a list | A list in $(…) in a parameter repeats the promise per item; parameters with allowList take one value per line |
 
@@ -142,9 +143,8 @@ Map each promise to a block before creating anything, and tell the user up front
 - A package version or package method; methods with arguments.
 - \`getindices\` / list difference as transformers.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.
-- \`comment =>\`: there's no place for it on a block yet.
 
-For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision where the user will see it, e.g. the file's description.`;
+For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
 
 const pitfalls = `# Pitfalls
 

@@ -57,6 +57,7 @@ import {
   blockGroupChanged,
   blockLabelChanged,
   blockMoved,
+  blockNoteChanged,
   blockParamChanged,
   blockRemoved,
   blockValueSourceChanged,
@@ -893,6 +894,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
+            onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}
             onParamChange={(paramName, value, entryId) =>
               selectedInstance && dispatch(blockParamChanged({ instanceId: selectedInstance.instanceId, entryId, paramName, value }))
             }
