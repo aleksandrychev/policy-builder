@@ -104,6 +104,10 @@
           "type": "boolean",
           "description": "Only on \"text\": one value per line. Used in a promiser, the compiler emits an slist var and iterates the promise over it ($(list)); used in an expression, only through {\"list_param\": name}."
         },
+        "other_label": {
+          "type": "string",
+          "description": "A number parameter with options: also any other number, in a field with this label (e.g. \"Minutes between runs\")."
+        },
         "integer": {
           "type": "boolean",
           "description": "Only on \"number\": whole numbers only."

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { Autocomplete, Box, Checkbox, FormControlLabel, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
 
@@ -95,6 +95,54 @@ function renderOptionsField({ parameter, value, onChange, label }: FieldProps) {
   );
 }
 
+const OTHER = '\u0000other';
+
+// A number with suggested values (e.g. How often): the options, or Other… and any number.
+function OptionsOrNumberField(props: Pick<FieldProps, 'error' | 'label' | 'onChange' | 'parameter' | 'value'>) {
+  const { parameter, value, onChange, label, error } = props;
+  const options = parameter.options ?? [];
+  const selected = options.find(option => optionValue(option) === value);
+  const [choosingOther, setChoosingOther] = useState(!selected);
+  const other = choosingOther || !selected;
+  const hasEmptyOption = options.some(option => optionValue(option) === '');
+  return (
+    <>
+      <TextField
+        select
+        label={label}
+        value={other ? OTHER : value}
+        onChange={event => {
+          setChoosingOther(event.target.value === OTHER);
+          if (event.target.value !== OTHER) onChange(event.target.value);
+        }}
+        helperText={optionHelp(selected) ?? parameter.help}
+        fullWidth
+        size="small"
+        sx={inputSx}
+        slotProps={{
+          select: { displayEmpty: hasEmptyOption, renderValue: current => (current === OTHER ? 'Other…' : selected ? optionLabel(selected) : String(current)) },
+          inputLabel: hasEmptyOption ? { shrink: true } : undefined
+        }}
+      >
+        {options.map(option => (
+          <MenuItem key={optionValue(option)} value={optionValue(option)}>
+            {optionLabel(option)}
+          </MenuItem>
+        ))}
+        <MenuItem value={OTHER}>Other…</MenuItem>
+      </TextField>
+      {other &&
+        renderPlainField({
+          ...props,
+          parameter: { ...parameter, help: undefined },
+          label: parameter.other_label ?? 'Other value',
+          value: selected ? '' : value,
+          error
+        })}
+    </>
+  );
+}
+
 function renderBooleanField({ parameter, value, onChange, label }: FieldProps) {
   return (
     <Box>
@@ -167,6 +215,7 @@ const FIELD_FACTORIES: FieldFactory[] = [
     )
   },
   { matches: parameter => parameter.references === 'variable', render: renderVariableReferenceField },
+  { matches: parameter => Boolean(parameter.options) && parameter.type === 'number', render: props => <OptionsOrNumberField {...props} /> },
   { matches: parameter => Boolean(parameter.options), render: renderOptionsField },
   { matches: parameter => parameter.type === 'boolean', render: renderBooleanField },
   { matches: parameter => parameter.type === 'text', render: renderTextField }

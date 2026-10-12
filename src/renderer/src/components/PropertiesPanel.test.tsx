@@ -181,6 +181,25 @@ describe('PropertiesPanel', () => {
       expect(screen.getByRole('combobox', { name: 'How often' })).toHaveTextContent('Every agent run');
     });
 
+    it('takes any number of minutes besides the listed intervals', () => {
+      const id = add('run-command', { command: '/bin/true', run_interval: '1440' });
+      renderPanel(store, { instanceId: id });
+      expect(screen.queryByRole('textbox', { name: 'Minutes between runs' })).not.toBeInTheDocument();
+      choose('How often', 'Other…');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Minutes between runs' }), { target: { value: '30' } });
+      expect(blockOf(store, id)?.params.run_interval).toBe('30');
+      expect(screen.getByRole('combobox', { name: 'How often' })).toHaveTextContent('Other…');
+      choose('How often', 'At most once a week');
+      expect(blockOf(store, id)?.params.run_interval).toBe('10080');
+      expect(screen.queryByRole('textbox', { name: 'Minutes between runs' })).not.toBeInTheDocument();
+    });
+
+    it('shows a number that isn’t listed as Other', () => {
+      const id = add('run-command', { command: '/bin/true', run_interval: '45' });
+      renderPanel(store, { instanceId: id });
+      expect(screen.getByRole('textbox', { name: 'Minutes between runs' })).toHaveValue('45');
+    });
+
     it('flags a relative path', () => {
       const id = add('report-message', { message: 'hi', report_to_file: '' });
       renderPanel(store, { instanceId: id });

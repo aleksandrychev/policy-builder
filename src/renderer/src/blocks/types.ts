@@ -128,6 +128,8 @@ export interface BlockParameter {
   mustache?: boolean;
   name: string;
   options?: ParameterOption[];
+  // A number parameter with options: the label of the field for any other number.
+  other_label?: string;
   path?: 'absolute';
   references?: 'variable';
   required: boolean;

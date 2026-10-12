@@ -39,9 +39,9 @@
     {
       "name": "run_interval",
       "label": "How often",
-      "type": "string",
+      "type": "number",
       "required": false,
-      "default": "1440",
+      "default": 1440,
       "options": [
         {
           "value": "",
@@ -54,9 +54,16 @@
         {
           "value": "1440",
           "label": "At most once a day"
+        },
+        {
+          "value": "10080",
+          "label": "At most once a week"
         }
       ],
-      "help": "A command runs every time the agent does (every 5 minutes by default) unless limited here."
+      "help": "A command runs every time the agent does (every 5 minutes by default) unless limited here.",
+      "integer": true,
+      "minimum": 1,
+      "other_label": "Minutes between runs"
     }
   ]
 }

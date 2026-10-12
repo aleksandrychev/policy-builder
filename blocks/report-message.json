@@ -46,9 +46,8 @@
     {
       "name": "run_interval",
       "label": "How often",
-      "type": "string",
+      "type": "number",
       "required": false,
-      "default": "",
       "options": [
         {
           "value": "",
@@ -61,9 +60,16 @@
         {
           "value": "1440",
           "label": "At most once a day"
+        },
+        {
+          "value": "10080",
+          "label": "At most once a week"
         }
       ],
-      "help": "Appending to a file every run grows it without limit."
+      "help": "Appending to a file every run grows it without limit.",
+      "integer": true,
+      "minimum": 1,
+      "other_label": "Minutes between runs"
     }
   ]
 }
