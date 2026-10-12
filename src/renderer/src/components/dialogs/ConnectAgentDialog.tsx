@@ -34,30 +34,11 @@ const PERMISSIONS: { help: string; key: keyof McpPermissions; label: string }[] 
 ];
 
 // Turning a permission on or off, as a row: what it allows, and its switch.
-function PermissionRow({
-  checked,
-  disabled,
-  help,
-  label,
-  onChange
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  help: string;
-  label: string;
-  onChange?: (checked: boolean) => void;
-}) {
+function PermissionRow({ checked, help, label, onChange }: { checked: boolean; help: string; label: string; onChange: (checked: boolean) => void }) {
   return (
     <ListItem
       secondaryAction={
-        <Switch
-          edge="end"
-          size="small"
-          checked={checked}
-          disabled={disabled}
-          onChange={event => onChange?.(event.target.checked)}
-          slotProps={{ input: { 'aria-label': label } }}
-        />
+        <Switch edge="end" size="small" checked={checked} onChange={event => onChange(event.target.checked)} slotProps={{ input: { 'aria-label': label } }} />
       }
     >
       <ListItemText primary={label} secondary={help} slotProps={{ primary: { sx: { fontSize: 13 } }, secondary: { sx: { fontSize: 12 } } }} />
@@ -164,9 +145,11 @@ export function ConnectAgentDialog({ onClose }: { onClose: () => void }) {
         {status && (
           <Box sx={{ mt: 3 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 600 }}>What agents may do</Typography>
-            <Typography sx={{ fontSize: 12, color: 'text.muted', mb: 1 }}>Applies to every agent at once. What’s off isn’t offered to them.</Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.muted', mb: 1 }}>
+              Agents can always read the project: files, blocks, generated policy, variables and test results. The rest applies to every agent at once; what’s
+              off isn’t offered to them.
+            </Typography>
             <List dense disablePadding sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-              <PermissionRow label="Read the project" help="Always on: files, blocks, generated policy, variables, test results" checked disabled />
               {PERMISSIONS.map(({ help, key, label }) => (
                 <PermissionRow key={key} label={label} help={help} checked={status.permissions[key]} onChange={allowed => void setPermission(key, allowed)} />
               ))}
