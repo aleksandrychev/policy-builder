@@ -19,6 +19,7 @@ import { groupBlocks, ungroupBlocks } from '../store/groupArrows';
 import { groupConditionClassNameChanged, groupConditionEnabled, groupConditionModeChanged, groupConditionRemoved } from '../store/groupsSlice';
 import { GROUP_COLORS } from '../store/groupsSlice/types';
 import { inOneStep } from '../store/history';
+import { agentActivity } from './activity';
 import { type CanvasEnv, type Input, type Tool, type ToolEnv, ToolError, canvasOf, optionalStr, str } from './shared';
 
 /** The project's life cycle, its files and folders, and groups (src/main/mcpTools/project.ts names them). */
@@ -89,9 +90,12 @@ async function latestMasterfiles() {
 function projectStatus(env: ToolEnv) {
   const state = env.getState();
   const { project } = state;
-  if (!project) return { open: false };
+  // Whether the user has stopped the agent (Stop in the app): its calls are refused until "allowed".
+  const agent = agentActivity().paused ? 'stopped' : 'allowed';
+  if (!project) return { open: false, agent };
   return {
     open: true,
+    agent,
     name: project.name,
     path: project.path,
     type: project.type,

@@ -2,6 +2,7 @@ import { edgeAdded } from '../store/edgesSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated, projectLocated } from '../store/projectSlice';
 import { addBlock, addFile, blockOf, fileOf, makeStore, undoAll } from '../store/test/storeTestUtils';
+import { paused, resetActivity } from './activity';
 import { PROJECT_TOOLS } from './projectTools';
 import type { SessionTools, ToolEnv } from './shared';
 import { type ToolAnswer, answerTool } from './tools';
@@ -72,6 +73,7 @@ describe('MCP project tools', () => {
     store.dispatch(projectCreated({ name: 'Web', type: 'module' }));
     expect((await call('get_project_status')).result).toEqual({
       open: true,
+      agent: 'allowed',
       name: 'Web',
       path: null,
       type: 'module',
@@ -86,7 +88,14 @@ describe('MCP project tools', () => {
     const { call, env } = setup();
     const store = makeStore();
     env.getState = store.getState;
-    expect((await call('get_project_status')).result).toEqual({ open: false });
+    expect((await call('get_project_status')).result).toEqual({ open: false, agent: 'allowed' });
+  });
+
+  it('tells a stopped agent it is stopped', async () => {
+    const { call } = setup();
+    paused();
+    expect((await call('get_project_status')).result).toMatchObject({ open: true, agent: 'stopped' });
+    resetActivity();
   });
 
   describe('create_project', () => {

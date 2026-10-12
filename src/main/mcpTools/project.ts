@@ -26,7 +26,7 @@ export function registerProjectTools(server: McpServer, answer: Answer) {
     {
       inputSchema: {},
       description:
-        'Whether a project is open, and if so its name, folder (path, null while it has never been saved), type (policy-set or module), masterfiles version, whether it has unsaved changes, and how many files and folders it has.',
+        'Whether a project is open, and if so its name, folder (path, null while it has never been saved), type (policy-set or module), masterfiles version, whether it has unsaved changes, and how many files and folders it has. Also agent: "allowed", or "stopped" while the user has stopped you (answered even then: check it before going on after a stop).',
       annotations: READ_ONLY
     },
     answer('get_project_status')

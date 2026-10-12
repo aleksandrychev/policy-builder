@@ -14,6 +14,7 @@ import {
   workEnded
 } from './activity';
 import { describeCall } from './describe';
+import { answerLogged } from './useMcpTools';
 
 describe('agent activity', () => {
   beforeEach(() => {
@@ -72,5 +73,22 @@ describe('describeCall', () => {
     );
     expect(describeCall('begin_work', { task: 'Adding nginx' }, store.getState())).toBe('Started: Adding nginx');
     expect(describeCall('mystery', {}, store.getState())).toBe('mystery');
+  });
+});
+
+describe('a stopped agent', () => {
+  beforeEach(() => resetActivity());
+
+  it('is refused, except end_work and get_project_status', async () => {
+    const getState = createAppStore().getState;
+    const answer = vi.fn(async () => ({ ok: true, content: '{}' }));
+    paused();
+    for (const tool of ['add_block', 'begin_work', 'get_file']) {
+      expect(await answerLogged(tool, {}, getState, answer)).toMatchObject({ ok: false, content: expect.stringMatching(/^Stopped by the user/) });
+    }
+    expect(answer).not.toHaveBeenCalled();
+    for (const tool of ['end_work', 'get_project_status']) expect((await answerLogged(tool, {}, getState, answer)).ok).toBe(true);
+    expect(answer).toHaveBeenCalledTimes(2);
+    expect(agentActivity().paused).toBe(true);
   });
 });
