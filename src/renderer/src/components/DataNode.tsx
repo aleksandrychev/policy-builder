@@ -14,6 +14,7 @@ import { runDecoratorChain } from '../blocks/runDecoratorChain';
 import { DATA_NODE_WIDTH, type DataChain } from '../canvas/dataChains';
 import { useMenuAnchor } from '../hooks/useMenuAnchor';
 import { AddDecoratorButton } from './PropertiesPanel';
+import { contentSized, plainTextarea } from './contentSized';
 import { stopCanvasEvents } from './stopCanvasEvents';
 
 export interface DataNodeData extends Record<string, unknown> {
@@ -189,12 +190,11 @@ export function DataNode({ data, selected }: NodeProps<DataFlowNode>) {
             className="nodrag nopan"
             size="small"
             multiline
-            maxRows={2}
             value={chain.sampleInput}
             onChange={event => onSampleChange(event.target.value)}
             placeholder="Sample input, to preview the steps…"
             sx={{ mb: 0.5, ml: 2.75, width: 'calc(100% - 22px)', '& .MuiInputBase-root': { py: 0.5, px: 0.75 } }}
-            slotProps={{ htmlInput: { style: { fontSize: 10, fontFamily: 'monospace', lineHeight: 1.3 } } }}
+            slotProps={{ input: plainTextarea, htmlInput: { style: { ...contentSized(1, 2), fontSize: 10, fontFamily: 'monospace', lineHeight: 1.3 } } }}
           />
         )}
         {chain.steps.map((step, index) => {

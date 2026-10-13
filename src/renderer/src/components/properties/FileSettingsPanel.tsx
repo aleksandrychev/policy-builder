@@ -2,6 +2,7 @@ import { Box, Divider, Stack, TextField, Typography } from '@mui/material';
 
 import type { BlockInstance } from '../../store/canvasSlice/types';
 import type { PolicyFile } from '../../store/filesSlice/types';
+import { contentSized, plainTextarea } from '../contentSized';
 import { ConditionSection } from './ConditionSection';
 import { buildClassNameOptions, buildTemplateTokens } from './classOptions';
 
@@ -39,8 +40,7 @@ export function FileSettingsPanel({
         label="Description"
         size="small"
         multiline
-        minRows={2}
-        maxRows={8}
+        slotProps={{ input: plainTextarea, htmlInput: { style: contentSized(2, 8) } }}
         placeholder="What this file is for"
         helperText="Shown on hovering the file's name."
         value={file.description ?? ''}

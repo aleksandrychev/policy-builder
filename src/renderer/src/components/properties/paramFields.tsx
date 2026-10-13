@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react';
 import { Autocomplete, Box, Checkbox, FormControlLabel, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
 
 import { type BlockParameter, optionHelp, optionLabel, optionValue } from '../../blocks/types';
+import { contentSized, plainTextarea } from '../contentSized';
 import type { TemplateToken } from '../editor/templateTokens';
 import { CasesField } from './CasesField';
 import type { NewClassDefinition } from './NewClassModal';
@@ -162,12 +163,11 @@ function renderTextField({ parameter, value, onOpenEditor, label, error }: Field
       helperText={error ?? (parameter.help && !parameter.mustache ? `${parameter.help} Click to edit.` : 'Click to edit.')}
       fullWidth
       multiline
-      minRows={3}
-      maxRows={3}
       size="small"
       onClick={onOpenEditor}
       slotProps={{
-        htmlInput: { style: { fontFamily: 'monospace', cursor: 'pointer' }, readOnly: true }
+        input: plainTextarea,
+        htmlInput: { style: { ...contentSized(3, 3), fontFamily: 'monospace', cursor: 'pointer' }, readOnly: true }
       }}
       sx={inputSx}
     />
