@@ -1,3 +1,4 @@
+import { fileConditionClassNameChanged, fileConditionEnabled, fileDescriptionChanged, fileMoved, folderAdded } from '../store/filesSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
 import { addBlock, addFile, blockOf, makeStore, undoAll } from '../store/test/storeTestUtils';
@@ -28,7 +29,7 @@ function setup() {
     const answer: ToolAnswer = await answerTool(env, name, input);
     return { ...answer, result: answer.ok ? JSON.parse(answer.content) : undefined };
   };
-  return { call, fileId, opened, otherId, store };
+  return { call, env, fileId, opened, otherId, store };
 }
 
 const report = (fileId: string, label: string, extra: Record<string, unknown> = {}) => ({
@@ -136,5 +137,114 @@ describe('MCP canvas tools: adding blocks', () => {
     const { call } = setup();
     const { parameters } = (await call('get_block_type', { blockType: 'call-method' })).result;
     expect(parameters.map((param: { name: string }) => param.name)).toEqual(['bundle_name', 'arguments']);
+  });
+});
+
+describe('MCP canvas tools: reading the project', () => {
+  it('gives an overview: files with their folder, gate, description, blocks by type and groups; the open file and selection', async () => {
+    const { call, env, fileId, otherId, store } = setup();
+    const folder = store.dispatch(folderAdded('Web', null)).payload.id;
+    store.dispatch(fileMoved({ fileId: otherId, parentId: folder }));
+    store.dispatch(fileConditionEnabled({ fileId }));
+    store.dispatch(fileConditionClassNameChanged({ fileId, className: 'debian' }));
+    store.dispatch(fileDescriptionChanged({ fileId, description: 'Packages' }));
+    const first = addBlock(store, fileId);
+    addBlock(store, fileId);
+    addBlock(store, fileId, { blockId: 'define-variable', label: 'Vars', params: {} });
+    const group = (await call('group_blocks', { blockIds: [first], name: 'Reports' })).result.id;
+    env.canvas!.selectedInstanceId = first;
+
+    const { result } = await call('get_project_overview');
+    expect(result).toMatchObject({ project: 'Web', openFileId: store.getState().files.currentFileId, selectedBlock: { id: first, fileId } });
+    const [main, other] = result.files;
+    expect(main).toMatchObject({ id: fileId, condition: expect.stringContaining('debian'), description: 'Packages', groups: [{ id: group }] });
+    expect(main.folder).toBeUndefined();
+    expect(main.blocks).toEqual({ 'Report Message': 2, 'Define Variable': 1 });
+    expect(other).toMatchObject({ id: otherId, folder: 'Web', blocks: {} });
+  });
+
+  it('generates one file’s policy with the lines each block made, or every file', async () => {
+    const { call, fileId, store } = setup();
+    const block = addBlock(store, fileId);
+    const compilePolicy = vi.fn(async () => ({
+      files: { './main.cf': 'bundle agent main {}', './other.cf': '' },
+      sourceMap: { './main.cf': { [block]: [[3, 5]] } }
+    }));
+    window.api = { compilePolicy } as unknown as typeof window.api;
+    try {
+      expect((await call('get_generated_policy', { fileId })).result).toEqual({
+        path: './main.cf',
+        policy: 'bundle agent main {}',
+        blocks: [{ id: block, lines: [[3, 5]] }]
+      });
+      expect(Object.keys((await call('get_generated_policy')).result.files)).toEqual(['./main.cf', './other.cf']);
+      expect((await call('get_generated_policy', { fileId: 'nope' })).ok).toBe(false);
+    } finally {
+      delete window.api;
+    }
+    expect((await call('get_generated_policy')).content).toMatch(/couldn’t be generated/);
+  });
+});
+
+describe('MCP canvas tools: changing the canvas', () => {
+  it('removes a block in one undo step, showing its file', async () => {
+    const { call, fileId, opened, store } = setup();
+    const block = addBlock(store, fileId, { label: 'Old' });
+    store.dispatch(historyCleared());
+    expect((await call('remove_block', { blockId: block })).result).toEqual({ removed: block, label: 'Old' });
+    expect(blockOf(store, block)).toBeUndefined();
+    expect(opened.at(-1)).toBe(fileId);
+    expect(undoAll(store)).toBe(1);
+    expect((await call('remove_block', { blockId: 'gone' })).content).toMatch(/No block gone/);
+  });
+
+  it('connects two blocks in one undo step, and disconnects them', async () => {
+    const { call, fileId, store } = setup();
+    const [first, second] = [addBlock(store, fileId), addBlock(store, fileId)];
+    store.dispatch(historyCleared());
+    expect((await call('connect', { sourceId: first, targetId: second, outcomes: ['repaired'] })).result).toEqual({
+      connected: { source: first, target: second, outcomes: ['repaired'] }
+    });
+    expect(store.getState().edges).toContainEqual(expect.objectContaining({ fileId, source: first, target: second, outcomes: ['repaired'] }));
+    expect(undoAll(store)).toBe(1);
+
+    await call('connect', { sourceId: first, targetId: second });
+    expect((await call('disconnect', { sourceId: first, targetId: second })).result).toEqual({ disconnected: { source: first, target: second } });
+    expect(store.getState().edges).toEqual([]);
+    expect((await call('disconnect', { sourceId: first, targetId: second })).content).toMatch(/no arrow/);
+  });
+
+  it('refuses arrows that break the canvas rules', async () => {
+    const { call, fileId, otherId, store } = setup();
+    const [a, b, c] = [addBlock(store, fileId), addBlock(store, fileId), addBlock(store, fileId)];
+    const inOther = addBlock(store, otherId);
+    const variable = addBlock(store, fileId, { blockId: 'define-variable', label: 'Vars', params: {} });
+    await call('connect', { sourceId: a, targetId: b });
+    await call('connect', { sourceId: b, targetId: c });
+    const grouped = addBlock(store, fileId);
+    await call('group_blocks', { blockIds: [grouped] });
+    const refusal = async (sourceId: string, targetId: string) => (await call('connect', { sourceId, targetId })).content;
+
+    expect(await refusal(a, a)).toMatch(/two different blocks/);
+    expect(await refusal(a, inOther)).toMatch(/same file/);
+    expect(await refusal(a, variable)).toMatch(/can’t take arrows/);
+    expect(await refusal(a, grouped)).toMatch(/group’s edge/);
+    expect(await refusal(a, b)).toMatch(/already connected/);
+    expect(await refusal(c, a)).toMatch(/loop/);
+    expect(store.getState().edges).toHaveLength(2);
+  });
+
+  it('tidies a file in one undo step and fits the view', async () => {
+    const { call, env, fileId, store } = setup();
+    const blocks = [addBlock(store, fileId, { position: { x: 500, y: 0 } }), addBlock(store, fileId, { position: { x: 0, y: 900 } })];
+    store.dispatch(historyCleared());
+    const fitView = vi.spyOn(env.canvas!, 'fitView');
+    expect((await call('tidy_file', { fileId })).result).toEqual({ tidied: fileId, blocks: 2 });
+    const [first, second] = blocks.map(id => blockOf(store, id)!.position!);
+    expect(first.x).toBe(second.x);
+    expect(first.y).toBeLessThan(second.y);
+    expect(fitView).toHaveBeenCalled();
+    expect(undoAll(store)).toBe(1);
+    expect((await call('tidy_file', { fileId: 'nope' })).ok).toBe(false);
   });
 });
