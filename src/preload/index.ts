@@ -46,6 +46,7 @@ interface LayoutSettings {
 }
 
 export type MenuAction =
+  | 'close-project'
   | 'close-requested'
   | 'command'
   | 'connect-agent'
@@ -54,7 +55,9 @@ export type MenuAction =
   | 'open-recent'
   | 'project-settings'
   | 'recents-changed'
+  | 'reload-project'
   | 'save'
+  | 'show-project-folder'
   | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
@@ -66,6 +69,9 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:project-settings': 'project-settings',
   'menu:connect-agent': 'connect-agent',
   'menu:try-demo': 'try-demo',
+  'menu:close-project': 'close-project',
+  'menu:reload-project': 'reload-project',
+  'menu:show-project-folder': 'show-project-folder',
   // Carries the command (Edit and View menus): see the renderer's menuCommands.ts.
   'menu:command': 'command',
   // Not a menu item: main asking whether a window with unsaved changes may close.
@@ -175,7 +181,7 @@ const api = {
   gitSync: (path: string, mode: 'force' | 'rebase'): Promise<OperationResult<{ pulled: boolean; status: GitStatus }>> => invoke('git:sync', path, mode),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */
-  setDocument: (document: { edited: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
+  setDocument: (document: { edited: boolean; onDisk?: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
   nativeEdit: (command: NativeEdit): Promise<void> => invoke('window:native-edit', command),
 
   /** Tells main the user agreed to close the window despite unsaved changes. */

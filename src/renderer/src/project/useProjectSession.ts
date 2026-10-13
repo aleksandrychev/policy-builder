@@ -6,7 +6,7 @@ import { DEMO_ENVIRONMENT_ID, createNginxDemoProject } from '../demo/nginxDemoPr
 import { type RootState, createAppStore, useAppDispatch, useAppSelector } from '../store';
 import { projectFilesInitialized } from '../store/filesSlice';
 import { UNDOABLE_KEYS, historyCleared } from '../store/history';
-import { projectCreated, projectLoaded, projectLocated, projectTypeChanged } from '../store/projectSlice';
+import { projectClosed, projectCreated, projectLoaded, projectLocated, projectTypeChanged } from '../store/projectSlice';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
 import type { Project, ProjectType } from '../store/projectSlice/types';
 import { environmentIdChanged } from '../store/testEnvironmentsSlice';
@@ -222,6 +222,18 @@ export function useProjectSession() {
     dismissError: () => setError(null),
     error,
     newProject: () => guarded(() => setProjectDialog('new')),
+    closeProject: () =>
+      guarded(() => {
+        dispatch(projectClosed());
+        baselineRef.current = null;
+        setBaseline(null);
+      }),
+    // From disk again, dropping unsaved changes (after asking): picks up what changed outside the app.
+    revertProject: () =>
+      guarded(() => {
+        const path = store.getState().project?.path;
+        if (path) void openProject(path);
+      }),
     openProject: (path?: string) => guarded(() => void openProject(path)),
     // The open project again from disk, as it is (Deployment pulled commits into it; nothing unsaved).
     reloadProject: async () => {

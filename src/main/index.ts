@@ -16,8 +16,16 @@ import { registerTestEnvHandlers } from './testenv';
 const APP_TITLE = 'CFEngine Policy Builder';
 const MAX_TITLE_LENGTH = 200;
 
-// Per window: unsaved changes (from window:set-document), and whether the user already agreed to lose them.
-const documentState = new WeakMap<BrowserWindow, { closeConfirmed: boolean; edited: boolean; quitAfterClose: boolean }>();
+// Per window, from window:set-document: unsaved changes, whether a project is open (and has a folder), and
+// whether the user already agreed to lose the changes.
+interface DocumentState {
+  closeConfirmed: boolean;
+  edited: boolean;
+  hasProject: boolean;
+  onDisk: boolean;
+  quitAfterClose: boolean;
+}
+const documentState = new WeakMap<BrowserWindow, DocumentState>();
 let quitting = false;
 // The window the application menu talks to.
 let menuWindow: BrowserWindow | null = null;
@@ -124,6 +132,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
   const send = (channel: string, argument?: string) => () => mainWindow.webContents.send(channel, argument);
   // An editing or canvas command: the renderer runs it on the canvas, or natively in a focused text field.
   const command = (id: string) => send('menu:command', id);
+  const { hasProject = false, onDisk = false } = documentState.get(mainWindow) ?? {};
   // As VS Code lists them: by folder, home as ~ (names can repeat; folders can't).
   const openRecent: MenuItemConstructorOptions[] = [
     ...recents.map(recent => ({
@@ -144,8 +153,13 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: send('menu:new-project') },
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: send('menu:open-project') },
         { label: 'Open Recent', submenu: openRecent },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
-        { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', click: send('menu:project-settings') },
+        { type: 'separator' },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', enabled: hasProject, click: send('menu:save') },
+        { label: 'Reload from Disk', enabled: onDisk, click: send('menu:reload-project') },
+        { label: 'Close Project', enabled: hasProject, click: send('menu:close-project') },
+        { type: 'separator' },
+        { label: isMac ? 'Show Project in Finder' : 'Show Project Folder', enabled: onDisk, click: send('menu:show-project-folder') },
+        { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', enabled: hasProject, click: send('menu:project-settings') },
         { label: 'Connect AI Agent…', click: send('menu:connect-agent') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
@@ -226,7 +240,7 @@ function createWindow(): void {
   void refreshMenu();
   // A recent project's folder may have gone (or come back) meanwhile.
   mainWindow.on('focus', () => void refreshMenu());
-  documentState.set(mainWindow, { closeConfirmed: false, edited: false, quitAfterClose: false });
+  documentState.set(mainWindow, { closeConfirmed: false, edited: false, hasProject: false, onDisk: false, quitAfterClose: false });
 
   // With unsaved changes the renderer asks Save / Don't Save / Cancel, then confirms via window:close-confirmed.
   mainWindow.on('close', event => {
@@ -284,14 +298,20 @@ app.whenReady().then(() => {
     return nativeTheme.shouldUseDarkColors;
   });
 
-  ipcMain.handle('window:set-document', (event, document: { edited?: unknown; title?: unknown }) => {
+  ipcMain.handle('window:set-document', (event, document: { edited?: unknown; onDisk?: unknown; title?: unknown }) => {
     if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
     const window = BrowserWindow.fromWebContents(event.sender);
     const state = window && documentState.get(window);
     if (!window || !state) return;
-    const { edited, title } = document ?? {};
-    if (typeof edited !== 'boolean' || (title !== null && typeof title !== 'string')) throw new Error('invalid document state');
+    const { edited, onDisk = false, title } = document ?? {};
+    if (typeof edited !== 'boolean' || typeof onDisk !== 'boolean' || (title !== null && typeof title !== 'string')) throw new Error('invalid document state');
     state.edited = edited;
+    // The File menu enables its project items by these.
+    const hasProject = title !== null;
+    if (state.hasProject !== hasProject || state.onDisk !== onDisk) {
+      Object.assign(state, { hasProject, onDisk });
+      void refreshMenu();
+    }
     window.setTitle(title ? `${title.slice(0, MAX_TITLE_LENGTH)} — ${APP_TITLE}` : APP_TITLE);
     if (process.platform === 'darwin') window.setDocumentEdited(edited);
   });

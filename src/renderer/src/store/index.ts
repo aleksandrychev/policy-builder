@@ -9,10 +9,10 @@ import edgesReducer from './edgesSlice';
 import filesReducer from './filesSlice';
 import groupsReducer from './groupsSlice';
 import { withHistory } from './history';
-import projectReducer from './projectSlice';
+import projectReducer, { projectClosed } from './projectSlice';
 import testEnvironmentsReducer from './testEnvironmentsSlice';
 
-const rootReducer = withHistory(
+const appReducer = withHistory(
   combineReducers({
     canvas: canvasReducer,
     clipboard: clipboardReducer,
@@ -24,6 +24,9 @@ const rootReducer = withHistory(
     testEnvironments: testEnvironmentsReducer
   })
 );
+
+// Closing the project starts over: nothing of it stays (or can be undone back into view).
+const rootReducer: typeof appReducer = (state, action) => appReducer(projectClosed.match(action) ? undefined : state, action);
 
 // Factory rather than a bare instance so tests can create isolated stores
 // instead of sharing (and leaking state through) the app's singleton.

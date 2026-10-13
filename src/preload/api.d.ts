@@ -8,6 +8,7 @@ interface LayoutSettings {
 }
 
 type MenuAction =
+  | 'close-project'
   | 'close-requested'
   | 'command'
   | 'connect-agent'
@@ -16,7 +17,9 @@ type MenuAction =
   | 'open-recent'
   | 'project-settings'
   | 'recents-changed'
+  | 'reload-project'
   | 'save'
+  | 'show-project-folder'
   | 'try-demo';
 
 // The Edit menu's text commands, run natively on the focused field (webContents' own).
@@ -376,8 +379,8 @@ declare global {
       revealProject: (path: string) => Promise<void>;
       /** Merges the builder's content into the project's cfbs.json. */
       saveProject: (path: string, content: ProjectContent, storage: ProjectStorage) => Promise<OperationResult<{ masterfiles: string | null }>>;
-      /** Sets the window title (null: no project) and the unsaved-changes state. */
-      setDocument: (document: { edited: boolean; title: string | null }) => Promise<void>;
+      /** Sets the window title (null: no project), the unsaved-changes state, and whether the project has a folder (File menu items). */
+      setDocument: (document: { edited: boolean; onDisk?: boolean; title: string | null }) => Promise<void>;
       /** Persists sidebar/palette sizes so they survive an app restart. */
       setLayoutSettings: (settings: LayoutSettings) => Promise<void>;
       shouldUseDarkColors: () => Promise<boolean>;

@@ -17,6 +17,8 @@ import { runMenuCommand } from './pages/menuCommands';
 import { useProjectSession } from './project/useProjectSession';
 
 type Session = ReturnType<typeof useProjectSession>;
+type MenuAction = Parameters<Parameters<NonNullable<Window['api']>['onMenuAction']>[0]>[0];
+type MenuHandlers = Partial<Record<MenuAction, () => unknown>>;
 
 // A menu's Save while a dialog is up would act behind it.
 const modalOpen = () => Boolean(document.querySelector('[role="dialog"]'));
@@ -49,16 +51,26 @@ export default function App() {
     () =>
       window.api?.onMenuAction((action, argument) => {
         const current = sessionRef.current;
-        if (action === 'command' && argument) return runMenuCommand(argument);
-        if (action === 'new-project') current.newProject();
-        else if (action === 'try-demo') current.startDemo();
-        else if (action === 'save' && !modalOpen()) current.save();
-        else if (action === 'close-requested') current.requestClose();
-        else if (action === 'open-project' && !modalOpen()) current.openProject();
-        else if (action === 'open-recent' && argument && !modalOpen()) current.openProject(argument);
-        else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
-        else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
-        else if (action === 'connect-agent' && !modalOpen()) setConnectAgentOpen(true);
+        const path = current.project?.path;
+        const always: MenuHandlers = {
+          command: () => argument && runMenuCommand(argument),
+          'close-requested': () => current.requestClose(),
+          'new-project': () => current.newProject(),
+          'recents-changed': () => setRecentsVersion(version => version + 1),
+          'show-project-folder': () => path && window.api?.revealProject(path).catch(() => {}),
+          'try-demo': () => current.startDemo()
+        };
+        // Not while a dialog is up: they would act behind it.
+        const whenIdle: MenuHandlers = {
+          'close-project': () => current.project && current.closeProject(),
+          'connect-agent': () => setConnectAgentOpen(true),
+          'open-project': () => current.openProject(),
+          'open-recent': () => argument && current.openProject(argument),
+          'project-settings': () => current.project && setSettingsOpen(true),
+          'reload-project': () => path && current.revertProject(),
+          save: () => current.save()
+        };
+        (always[action] ?? (modalOpen() ? undefined : whenIdle[action]))?.();
       }),
     []
   );
@@ -87,8 +99,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    window.api?.setDocument({ edited: dirty, title: project?.name ?? null }).catch(() => {});
-  }, [dirty, project?.name]);
+    window.api?.setDocument({ edited: dirty, onDisk: Boolean(project?.path), title: project?.name ?? null }).catch(() => {});
+  }, [dirty, project?.name, project?.path]);
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
