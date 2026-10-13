@@ -131,9 +131,15 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
     },
     { role: 'editMenu' },
     // The default View menu minus page zoom: Ctrl/Cmd +/-/0 zoom the canvas instead (renderer).
+    // Reload and DevTools only in development: a reload drops unsaved changes without asking.
     {
       label: 'View',
-      submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }]
+      submenu: [
+        ...(app.isPackaged
+          ? []
+          : [{ role: 'reload' as const }, { role: 'forceReload' as const }, { role: 'toggleDevTools' as const }, { type: 'separator' as const }]),
+        { role: 'togglefullscreen' }
+      ]
     },
     ...(isMac ? [{ role: 'windowMenu' as const }] : [])
   ];
