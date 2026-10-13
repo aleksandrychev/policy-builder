@@ -126,7 +126,7 @@ import {
 } from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
-import { useProjectMenuCommands } from './menuCommands';
+import { routeProjectCommand, useProjectMenuCommands } from './menuCommands';
 import { definedNames } from './pasteCopies';
 import { useClipboardActions } from './useClipboardActions';
 import { useGroupActions } from './useGroupActions';
@@ -284,9 +284,6 @@ interface ProjectViewProps {
   // Resolves with whether the project ended up saved.
   onSave: () => Promise<boolean>;
 }
-
-// View menu commands on the canvas's zoom controls.
-const CANVAS_VIEW_COMMANDS: Record<string, keyof ZoomControls> = { zoomIn: 'zoomIn', zoomOut: 'zoomOut', zoomReset: 'reset', zoomFit: 'fit' };
 
 // A module constant: a new options object each render would make new sensors, and re-render every draggable.
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
@@ -775,36 +772,37 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     if (groupId) ungroup(groupId);
   };
 
-  // The View menu: tabs, and the canvas's zoom, tidy and maximize (only while it's showing).
-  const runViewCommand = (command: string): boolean => {
-    const tab = /^tab-([0-3])$/.exec(command);
-    if (tab) setActiveTab(Number(tab[1]));
-    else if (command !== 'tidy' && command !== 'maximize' && !(command in CANVAS_VIEW_COMMANDS)) return false;
-    else if (activeTab !== 0) return true;
-    else if (command === 'tidy') setTidyConfirmOpen(true);
-    else if (command === 'maximize') setMaximized(current => !current);
-    else zoomControlsRef.current?.[CANVAS_VIEW_COMMANDS[command]]();
+  const pasteBlock = () => {
+    if (!clipboard.snapshot) return false;
+    handlePasteBlock();
     return true;
   };
 
-  // The Edit menu, clicked: what its keys do here, unless a text field or dialog has them (runMenuCommand).
-  useProjectMenuCommands(command => {
-    if (locked || modalOpen()) return false;
-    if (runViewCommand(command)) return true;
-    if (isEditableTarget(document.activeElement)) return false;
-    if (command === 'undo' || command === 'redo') handleHistoryKey(command === 'redo');
-    else if (command === 'cut') return copyOrCutKey(handleCutBlock);
-    else if (command === 'copy') return copyOrCutKey(handleCopyBlock);
-    else if (command === 'paste') {
-      if (!clipboard.snapshot) return false;
-      handlePasteBlock();
-    } else if (command === 'delete') return handleDeleteKey();
-    else if (command === 'selectAll' && activeTab === 0) handleMultiSelect(instances.map(instance => instance.instanceId));
-    else if (command === 'group') groupSelection();
-    else if (command === 'ungroup') ungroupSelection();
-    else return false;
-    return true;
-  });
+  // The Edit and View menus, clicked (keys are useKeyboardShortcuts'): see routeProjectCommand.
+  useProjectMenuCommands(command =>
+    routeProjectCommand(command, {
+      blocked: locked || modalOpen(),
+      canvasShowing: activeTab === 0,
+      textFocused: isEditableTarget(document.activeElement),
+      edit: {
+        copy: () => copyOrCutKey(handleCopyBlock),
+        cut: () => copyOrCutKey(handleCutBlock),
+        delete: handleDeleteKey,
+        group: groupSelection,
+        paste: pasteBlock,
+        redo: () => handleHistoryKey(true),
+        selectAll: () => handleMultiSelect(instances.map(instance => instance.instanceId)),
+        undo: () => handleHistoryKey(false),
+        ungroup: ungroupSelection
+      },
+      view: {
+        showTab: setActiveTab,
+        tidy: () => setTidyConfirmOpen(true),
+        toggleMaximized: () => setMaximized(current => !current),
+        zoom: control => zoomControlsRef.current?.[control]()
+      }
+    })
+  );
 
   useKeyboardShortcuts({
     locked,
@@ -819,11 +817,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onUngroup: ungroupSelection,
     onCopy: () => copyOrCutKey(handleCopyBlock),
     onCut: () => copyOrCutKey(handleCutBlock),
-    onPaste: () => {
-      if (!clipboard.snapshot) return false;
-      handlePasteBlock();
-      return true;
-    }
+    onPaste: pasteBlock
   });
 
   // New handlers re-render every draggable (the palette's rows) through dnd-kit's context.
