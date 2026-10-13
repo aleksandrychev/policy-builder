@@ -7,6 +7,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { Box, Button, IconButton, ListItemText, Menu, MenuItem, Stack, TextField, Typography } from '@mui/material';
 
 import { decorators } from '../../blocks/decorators';
+import { useMenuAnchor } from '../../hooks/useMenuAnchor';
 import type { DecoratorInstance } from '../../store/canvasSlice/types';
 import { ParameterField } from './paramFields';
 
@@ -71,7 +72,7 @@ const DECORATOR_GROUPS: { label: string; note: string; type: 'slist' | 'string' 
 ];
 
 export function AddDecoratorButton({ chainType, onAdd }: { chainType: 'slist' | 'string'; onAdd: (decoratorId: string) => void }) {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const matches = (decorator: (typeof decorators)[number]) =>
@@ -83,51 +84,53 @@ export function AddDecoratorButton({ chainType, onAdd }: { chainType: 'slist' | 
         size="small"
         startIcon={<AddIcon />}
         onClick={event => {
-          setAnchorEl(event.currentTarget);
+          menu.open(event.currentTarget);
           setSearch('');
         }}
         sx={{ alignSelf: 'flex-start' }}
       >
         Add transform
       </Button>
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        <Box sx={{ px: 1.5, pb: 0.5 }}>
-          <TextField
-            autoFocus
-            size="small"
-            variant="standard"
-            placeholder="Search transforms…"
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-            onKeyDown={event => event.stopPropagation()}
-            fullWidth
-          />
-        </Box>
-        {DECORATOR_GROUPS.flatMap(group => {
-          const items = decorators.filter(decorator => decorator.input_type === group.type && matches(decorator));
-          if (items.length === 0) return [];
-          const enabled = group.type === chainType;
-          return [
-            <Box key={`${group.type}-header`} sx={{ px: 1.5, pt: 1, pb: 0.25 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.muted' }}>{group.label}</Typography>
-              {!enabled && <Typography sx={{ fontSize: 10, color: 'text.muted', fontStyle: 'italic' }}>{group.note}</Typography>}
-            </Box>,
-            ...items.map(decorator => (
-              <MenuItem
-                key={decorator.id}
-                disabled={!enabled}
-                onClick={() => {
-                  onAdd(decorator.id);
-                  setAnchorEl(null);
-                }}
-              >
-                <ListItemText primary={decorator.label} />
-                {decorator.badge && <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: 'text.muted', ml: 1 }}>{decorator.badge}</Typography>}
-              </MenuItem>
-            ))
-          ];
-        })}
-      </Menu>
+      {menu.mounted && (
+        <Menu anchorEl={menu.anchor} open={Boolean(menu.anchor)} onClose={menu.close}>
+          <Box sx={{ px: 1.5, pb: 0.5 }}>
+            <TextField
+              autoFocus
+              size="small"
+              variant="standard"
+              placeholder="Search transforms…"
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              onKeyDown={event => event.stopPropagation()}
+              fullWidth
+            />
+          </Box>
+          {DECORATOR_GROUPS.flatMap(group => {
+            const items = decorators.filter(decorator => decorator.input_type === group.type && matches(decorator));
+            if (items.length === 0) return [];
+            const enabled = group.type === chainType;
+            return [
+              <Box key={`${group.type}-header`} sx={{ px: 1.5, pt: 1, pb: 0.25 }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: 'text.muted' }}>{group.label}</Typography>
+                {!enabled && <Typography sx={{ fontSize: 10, color: 'text.muted', fontStyle: 'italic' }}>{group.note}</Typography>}
+              </Box>,
+              ...items.map(decorator => (
+                <MenuItem
+                  key={decorator.id}
+                  disabled={!enabled}
+                  onClick={() => {
+                    onAdd(decorator.id);
+                    menu.close();
+                  }}
+                >
+                  <ListItemText primary={decorator.label} />
+                  {decorator.badge && <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: 'text.muted', ml: 1 }}>{decorator.badge}</Typography>}
+                </MenuItem>
+              ))
+            ];
+          })}
+        </Menu>
+      )}
     </>
   );
 }
