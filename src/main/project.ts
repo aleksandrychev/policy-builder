@@ -34,7 +34,8 @@ const MASTERFILES = /^(\d+\.\d+\.\d+(-\d+)?|master|no)$/;
 const MAX_PATH_LENGTH = 4096;
 const MAX_CONTENT_BYTES = 50_000_000;
 const MAX_CFBS_JSON_BYTES = 10_000_000;
-const MAX_RECENTS = 5;
+// The File menu's Open Recent shows them all; the start screen the first few.
+const MAX_RECENTS = 10;
 
 // Project folders this session created or opened; saves may only write into these.
 const knownProjects = new Set<string>();

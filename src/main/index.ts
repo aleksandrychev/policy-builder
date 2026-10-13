@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, net, protocol, session, shell } from 'electron';
 import type { MenuItemConstructorOptions, WebFrameMain } from 'electron';
 import { promises as fs } from 'fs';
+import { homedir } from 'os';
 import { basename, join, normalize, sep } from 'path';
 import { pathToFileURL } from 'url';
 
@@ -97,21 +98,42 @@ function isTrustedFrame(frame: WebFrameMain | null): boolean {
 // demo builder); this just forwards a "you chose X" signal down the same
 // window's preload bridge, since a Menu click handler runs in the main
 // process and has no access to renderer state.
+// ~/projects/web for a folder in the home directory.
+function displayPath(path: string): string {
+  const home = homedir();
+  return path === home || path.startsWith(home + sep) ? `~${path.slice(home.length)}` : path;
+}
+
+// Windows and Linux read "&" in a menu label as a mnemonic marker: "&&" shows one.
+const menuLabel = (text: string) => (process.platform === 'darwin' ? text : text.replaceAll('&', '&&'));
+
+async function confirmClearRecents(window: BrowserWindow): Promise<void> {
+  const { response } = await dialog.showMessageBox(window, {
+    type: 'question',
+    message: 'Clear the list of recently opened projects?',
+    detail: 'The projects themselves stay as they are.',
+    buttons: ['Clear', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1
+  });
+  if (response === 0) await clearRecentProjects();
+}
+
 function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[]): Menu {
   const isMac = process.platform === 'darwin';
   const send = (channel: string, argument?: string) => () => mainWindow.webContents.send(channel, argument);
   // An editing or canvas command: the renderer runs it on the canvas, or natively in a focused text field.
   const command = (id: string) => send('menu:command', id);
+  // As VS Code lists them: by folder, home as ~ (names can repeat; folders can't).
   const openRecent: MenuItemConstructorOptions[] = [
     ...recents.map(recent => ({
-      label: recent.name,
-      sublabel: recent.path,
-      toolTip: recent.path,
+      label: menuLabel(displayPath(recent.path)),
+      toolTip: recent.name,
       enabled: recent.exists,
       click: send('menu:open-recent', recent.path)
     })),
     ...(recents.length ? [{ type: 'separator' as const }] : []),
-    { label: 'Clear Recent', enabled: recents.length > 0, click: () => void clearRecentProjects() }
+    { label: 'Clear Recently Opened…', enabled: recents.length > 0, click: () => void confirmClearRecents(mainWindow) }
   ];
 
   const template: MenuItemConstructorOptions[] = [

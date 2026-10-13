@@ -11,6 +11,9 @@ import { BlockNodesIcon } from '../components/icons/BlockNodesIcon';
 
 const RECENT_PATH_CHARS = 60;
 
+// The rest are in File > Open Recent.
+const START_SCREEN_RECENTS = 5;
+
 type RecentProject = Awaited<ReturnType<NonNullable<Window['api']>['getRecentProjects']>>[number];
 
 interface NoProjectScreenProps {
@@ -27,7 +30,7 @@ function RecentProjects({ onOpen, version }: { onOpen: (path: string) => void; v
     let current = true;
     window.api
       ?.getRecentProjects()
-      .then(list => current && setRecents(list))
+      .then(list => current && setRecents(list.slice(0, START_SCREEN_RECENTS)))
       .catch(() => {});
     return () => {
       current = false;
