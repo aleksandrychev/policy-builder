@@ -13,6 +13,7 @@ import { isWorking, useAgentActivity } from './mcp/activity';
 import { useMcpTools } from './mcp/useMcpTools';
 import NoProjectScreen from './pages/NoProjectScreen';
 import ProjectView from './pages/ProjectView';
+import { runMenuCommand } from './pages/menuCommands';
 import { useProjectSession } from './project/useProjectSession';
 
 type Session = ReturnType<typeof useProjectSession>;
@@ -46,14 +47,15 @@ export default function App() {
 
   useEffect(
     () =>
-      window.api?.onMenuAction((action, path) => {
+      window.api?.onMenuAction((action, argument) => {
         const current = sessionRef.current;
+        if (action === 'command' && argument) return runMenuCommand(argument);
         if (action === 'new-project') current.newProject();
         else if (action === 'try-demo') current.startDemo();
         else if (action === 'save' && !modalOpen()) current.save();
         else if (action === 'close-requested') current.requestClose();
         else if (action === 'open-project' && !modalOpen()) current.openProject();
-        else if (action === 'open-recent' && path && !modalOpen()) current.openProject(path);
+        else if (action === 'open-recent' && argument && !modalOpen()) current.openProject(argument);
         else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
         else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
         else if (action === 'connect-agent' && !modalOpen()) setConnectAgentOpen(true);

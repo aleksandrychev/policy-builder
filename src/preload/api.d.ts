@@ -8,7 +8,19 @@ interface LayoutSettings {
 }
 
 type MenuAction =
-  'close-requested' | 'connect-agent' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
+  | 'close-requested'
+  | 'command'
+  | 'connect-agent'
+  | 'new-project'
+  | 'open-project'
+  | 'open-recent'
+  | 'project-settings'
+  | 'recents-changed'
+  | 'save'
+  | 'try-demo';
+
+// The Edit menu's text commands, run natively on the focused field (webContents' own).
+export type NativeEdit = 'copy' | 'cut' | 'delete' | 'paste' | 'redo' | 'selectAll' | 'undo';
 
 // What the builder saves: its cfbs.json modules (`build` entries for a policy set, the one
 // `provides` entry for a module), and its own data for .policy-builder/project.json.
@@ -342,12 +354,14 @@ declare global {
       mcpStatus: () => Promise<McpStatus>;
       /** Answers a tool call from Claude Code (onMcpToolRequest) from the project state. */
       mcpToolResult: (requestId: string, result: { content: string; ok: boolean }) => Promise<void>;
+      /** Runs an Edit menu command natively, on the focused text field. */
+      nativeEdit: (command: NativeEdit) => Promise<void>;
       /** Each step of a running Build or SSH deploy as it starts (build, lint, promises, copy, validate, install, update, policy). */
       onDeployProgress: (callback: (stage: string) => void) => () => void;
       /** Claude Code's tool calls, answered with mcpToolResult. */
       onMcpToolRequest: (callback: (requestId: string, name: string, input: unknown) => void) => () => void;
-      /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. */
-      onMenuAction: (callback: (action: MenuAction, path?: string) => void) => () => void;
+      /** Subscribes to native menu clicks, window-close requests and recent-project changes; call the returned function to unsubscribe. `argument`: a recent project's path, or a menu command. */
+      onMenuAction: (callback: (action: MenuAction, argument?: string) => void) => () => void;
       /** Subscribes to the events of streaming test-environment runs; call the returned function to unsubscribe. */
       onTestEnvEvent: (callback: (runId: string, event: TestEnvEvent) => void) => () => void;
       /** Reads a project's cfbs.json: `path` is its folder or the cfbs.json; without one, a native picker asks (null: cancelled). */

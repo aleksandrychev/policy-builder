@@ -100,6 +100,8 @@ function isTrustedFrame(frame: WebFrameMain | null): boolean {
 function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[]): Menu {
   const isMac = process.platform === 'darwin';
   const send = (channel: string, argument?: string) => () => mainWindow.webContents.send(channel, argument);
+  // An editing or canvas command: the renderer runs it on the canvas, or natively in a focused text field.
+  const command = (id: string) => send('menu:command', id);
   const openRecent: MenuItemConstructorOptions[] = [
     ...recents.map(recent => ({
       label: recent.name,
@@ -129,7 +131,24 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
     },
-    { role: 'editMenu' },
+    // Not the built-in editMenu: its items only edit text, never the canvas (blocks, its undo history).
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: command('undo') },
+        { label: 'Redo', accelerator: isMac ? 'Shift+Cmd+Z' : 'Ctrl+Y', click: command('redo') },
+        { type: 'separator' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: command('cut') },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: command('copy') },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: command('paste') },
+        // The renderer handles the key itself: shown here, not registered (it would take Backspace from text fields).
+        { label: 'Delete', accelerator: isMac ? 'Backspace' : 'Delete', registerAccelerator: false, click: command('delete') },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: command('selectAll') },
+        { type: 'separator' },
+        { label: 'Group', accelerator: 'CmdOrCtrl+G', registerAccelerator: false, click: command('group') },
+        { label: 'Ungroup', accelerator: 'Shift+CmdOrCtrl+G', registerAccelerator: false, click: command('ungroup') }
+      ]
+    },
     // The default View menu minus page zoom: Ctrl/Cmd +/-/0 zoom the canvas instead (renderer).
     // Reload and DevTools only in development: a reload drops unsaved changes without asking.
     {
@@ -253,6 +272,15 @@ app.whenReady().then(() => {
     state.edited = edited;
     window.setTitle(title ? `${title.slice(0, MAX_TITLE_LENGTH)} — ${APP_TITLE}` : APP_TITLE);
     if (process.platform === 'darwin') window.setDocumentEdited(edited);
+  });
+
+  // Edit menu commands on a focused text field (the renderer decides: see menu:command).
+  const NATIVE_EDITS = ['undo', 'redo', 'cut', 'copy', 'paste', 'delete', 'selectAll'] as const;
+  ipcMain.handle('window:native-edit', (event, edit: unknown) => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    const command = NATIVE_EDITS.find(candidate => candidate === edit);
+    if (!command) throw new Error('unknown edit command');
+    event.sender[command]();
   });
 
   ipcMain.handle('window:close-confirmed', event => {

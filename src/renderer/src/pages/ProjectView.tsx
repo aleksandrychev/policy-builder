@@ -126,10 +126,11 @@ import {
 } from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
+import { useProjectMenuCommands } from './menuCommands';
 import { definedNames } from './pasteCopies';
 import { useClipboardActions } from './useClipboardActions';
 import { useGroupActions } from './useGroupActions';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { isEditableTarget, modalOpen, useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useSelection } from './useSelection';
 
 const UNDO_KEY = navigator.platform.startsWith('Mac') ? '⌘Z' : 'Ctrl+Z';
@@ -764,6 +765,31 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     showTests: () => setActiveTab(2)
   });
 
+  // ⌘G groups the selection; ⌘⇧G ungroups the selected group (or the selected block's).
+  const groupSelection = () => createGroup(selectionOf(multiSelectedIds, selectedInstanceId));
+  const ungroupSelection = () => {
+    const groupId = selectedGroup?.id ?? instances.find(instance => instance.instanceId === selectedInstanceId)?.groupId;
+    if (groupId) ungroup(groupId);
+  };
+
+  // The Edit menu, clicked: what its keys do here, unless a text field or dialog has them (runMenuCommand).
+  useProjectMenuCommands(command => {
+    if (locked || modalOpen()) return false;
+    if (isEditableTarget(document.activeElement)) return false;
+    if (command === 'undo' || command === 'redo') handleHistoryKey(command === 'redo');
+    else if (command === 'cut') return copyOrCutKey(handleCutBlock);
+    else if (command === 'copy') return copyOrCutKey(handleCopyBlock);
+    else if (command === 'paste') {
+      if (!clipboard.snapshot) return false;
+      handlePasteBlock();
+    } else if (command === 'delete') return handleDeleteKey();
+    else if (command === 'selectAll' && activeTab === 0) handleMultiSelect(instances.map(instance => instance.instanceId));
+    else if (command === 'group') groupSelection();
+    else if (command === 'ungroup') ungroupSelection();
+    else return false;
+    return true;
+  });
+
   useKeyboardShortcuts({
     locked,
     canvasActive: activeTab === 0,
@@ -773,12 +799,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onDelete: handleDeleteKey,
     onUndo: () => handleHistoryKey(false),
     onRedo: () => handleHistoryKey(true),
-    // ⌘G groups the selection; ⌘⇧G ungroups the selected group (or the selected block's).
-    onGroup: () => createGroup(selectionOf(multiSelectedIds, selectedInstanceId)),
-    onUngroup: () => {
-      const groupId = selectedGroup?.id ?? instances.find(instance => instance.instanceId === selectedInstanceId)?.groupId;
-      if (groupId) ungroup(groupId);
-    },
+    onGroup: groupSelection,
+    onUngroup: ungroupSelection,
     onCopy: () => copyOrCutKey(handleCopyBlock),
     onCut: () => copyOrCutKey(handleCutBlock),
     onPaste: () => {
