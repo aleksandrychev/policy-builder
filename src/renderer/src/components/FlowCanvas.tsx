@@ -38,6 +38,8 @@ import { GATE_EDGE_PREFIX, GATE_WIDTH, type Gate, deriveGates } from '../canvas/
 import { GROUP_NODE_PREFIX, type GroupFrame, type Rect, deriveGroupFrames, frameAt, settleGroup } from '../canvas/groupFrames';
 import { GRID_SIZE, NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
 import { defaultOutcomesFor, describeOutcomes } from '../canvas/outcomes';
+import { stableItems } from '../canvas/stableItems';
+import { useLatest, useStableCallback } from '../hooks/useLatest';
 import { useBlockProblems } from '../project/testRuns';
 import { useAppSelector } from '../store';
 import type { BlockInstance } from '../store/canvasSlice/types';
@@ -339,6 +341,23 @@ export function FlowCanvas({
   // Where dragged blocks started, to carry a resized frame along when its whole group moves.
   const dragStartRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 
+  // Unchanged nodes and edges keep their objects, so React Flow re-renders only the changed ones.
+  const [stableNodes] = useState(() => stableItems<CanvasNode>());
+  const [stableEdges] = useState(() => stableItems<CanvasEdge>());
+  // What their callbacks call: a reused item keeps its first closures.
+  const handlers = useLatest({
+    dataCallbacks,
+    onEdgeOutcomesChange,
+    onEdgeRemove,
+    onGateLinkRemove,
+    onGateModeChange,
+    onGateRemove,
+    onGroupResize,
+    onNodeDragStart,
+    onNodeDragStop,
+    onRemove
+  });
+
   const order = useMemo(() => executionOrder(instances, edges, blockDescriptorsById), [instances, edges]);
   // Blocks whose promises failed in the last test run, and on which hosts.
   const testEnvironments = useAppSelector(state => state.testEnvironments);
@@ -374,7 +393,7 @@ export function FlowCanvas({
         descriptor,
         duplicateKeys,
         orderNumber: orderNumbers.get(instance.instanceId),
-        onRemove: () => onRemove(instance.instanceId),
+        onRemove: () => handlers.current.onRemove(instance.instanceId),
         cutPending: instance.instanceId === cutPendingId,
         highlighted: instance.instanceId === highlightedId,
         hasDataInput: fedBlocks.has(instance.instanceId),
@@ -406,8 +425,8 @@ export function FlowCanvas({
       source: conditionSourceOf(gate.condition.className, allInstances, files, currentFileId),
       fileRelation: relationToFileCondition(gate.condition, fileCondition),
       onHighlight: setHighlightedId,
-      onModeChange: mode => onGateModeChange(gate, mode),
-      onRemove: () => onGateRemove(gate)
+      onModeChange: mode => handlers.current.onGateModeChange(gate, mode),
+      onRemove: () => handlers.current.onGateRemove(gate)
     }
   }));
   const gateEdges: GateFlowEdge[] = gates.flatMap(gate =>
@@ -419,7 +438,7 @@ export function FlowCanvas({
       targetHandle: 'gate',
       type: 'gate' as const,
       selected: `${GATE_EDGE_PREFIX}${instanceId}` === selectedEdgeId,
-      data: { onRemove: () => onGateLinkRemove(instanceId) }
+      data: { onRemove: () => handlers.current.onGateLinkRemove(instanceId) }
     }))
   );
 
@@ -481,12 +500,12 @@ export function FlowCanvas({
       dropTarget: frame.group.id === dropGroupId,
       onResizeStart: () => {
         resizingRef.current = true;
-        onNodeDragStart();
+        handlers.current.onNodeDragStart();
       },
-      onResize: rect => onGroupResize(frame.group.id, rect),
+      onResize: rect => handlers.current.onGroupResize(frame.group.id, rect),
       onResizeEnd: () => {
         resizingRef.current = false;
-        onNodeDragStop();
+        handlers.current.onNodeDragStop();
       }
     }
   }));
@@ -502,7 +521,11 @@ export function FlowCanvas({
       type: 'outcome',
       selected: edge.id === selectedEdgeId,
       markerEnd: { type: MarkerType.ArrowClosed, color, width: 18, height: 18 },
-      data: { outcomes: edge.outcomes, onOutcomesChange: outcomes => onEdgeOutcomesChange(edge.id, outcomes), onDelete: () => onEdgeRemove(edge.id) }
+      data: {
+        outcomes: edge.outcomes,
+        onOutcomesChange: outcomes => handlers.current.onEdgeOutcomesChange(edge.id, outcomes),
+        onDelete: () => handlers.current.onEdgeRemove(edge.id)
+      }
     };
   });
   const dataNodes: DataFlowNode[] = chains.map(chain => ({
@@ -514,11 +537,11 @@ export function FlowCanvas({
     selected: chain.owner.instanceId === selectedInstanceId && chain.owner.entryId === selectedChainEntryId,
     data: {
       chain,
-      onAddStep: decoratorId => dataCallbacks.addStep(chain.owner, decoratorId),
-      onMoveStep: (fromIndex, toIndex) => dataCallbacks.moveStep(chain.owner, fromIndex, toIndex),
-      onRemove: () => dataCallbacks.remove(chain.owner),
-      onRemoveStep: stepId => dataCallbacks.removeStep(chain.owner, stepId),
-      onSampleChange: value => dataCallbacks.sampleChange(chain.owner, value)
+      onAddStep: decoratorId => handlers.current.dataCallbacks.addStep(chain.owner, decoratorId),
+      onMoveStep: (fromIndex, toIndex) => handlers.current.dataCallbacks.moveStep(chain.owner, fromIndex, toIndex),
+      onRemove: () => handlers.current.dataCallbacks.remove(chain.owner),
+      onRemoveStep: stepId => handlers.current.dataCallbacks.removeStep(chain.owner, stepId),
+      onSampleChange: value => handlers.current.dataCallbacks.sampleChange(chain.owner, value)
     }
   }));
   // Solid info-blue arrows: data flowing into what a chain produces — unlike
@@ -535,8 +558,8 @@ export function FlowCanvas({
   }));
 
   // Later nodes draw on top: a chain's controls stay usable even where it overlaps a block.
-  const nodes: CanvasNode[] = [...groupNodes, ...gateNodes, ...blockNodes, ...dataNodes];
-  const flowEdges: CanvasEdge[] = [...gateEdges, ...dataEdges, ...outcomeEdges];
+  const nodes = stableNodes([...groupNodes, ...gateNodes, ...blockNodes, ...dataNodes]);
+  const flowEdges = stableEdges([...gateEdges, ...dataEdges, ...outcomeEdges]);
 
   // Positions and measured sizes live outside React Flow (Redux / the
   // parent), so only those two change kinds matter; selection is driven by
@@ -715,6 +738,20 @@ export function FlowCanvas({
     return null;
   };
 
+  // Stable: React Flow hands them to every node and edge wrapper, which re-render when they change.
+  const handleNodeClick = useStableCallback((event: React.MouseEvent, node: CanvasNode) => {
+    const frame = frameByNodeId.get(node.id);
+    if (frame) return onSelectGroup(frame.group.id);
+    const gate = gateByNodeId.get(node.id);
+    const chain = chainByNodeId.get(node.id);
+    if (event.shiftKey && byId.has(node.id)) toggleSelected(node.id);
+    else if (gate) onSelectGate(gate.key);
+    else if (chain) dataCallbacks.open(chain.owner);
+    else onSelectInstance(node.id);
+  });
+  // Data arrows aren't selectable, but React Flow still reports their clicks.
+  const handleEdgeClick = useStableCallback((_event: React.MouseEvent, edge: CanvasEdge) => edge.selectable !== false && onSelectEdge(edge.id));
+
   return (
     <Box
       ref={setNodeRef}
@@ -765,18 +802,8 @@ export function FlowCanvas({
           setDropGroupId(null);
           onNodeDragStop();
         }}
-        onNodeClick={(event, node) => {
-          const frame = frameByNodeId.get(node.id);
-          if (frame) return onSelectGroup(frame.group.id);
-          const gate = gateByNodeId.get(node.id);
-          const chain = chainByNodeId.get(node.id);
-          if (event.shiftKey && byId.has(node.id)) toggleSelected(node.id);
-          else if (gate) onSelectGate(gate.key);
-          else if (chain) dataCallbacks.open(chain.owner);
-          else onSelectInstance(node.id);
-        }}
-        // Data arrows aren't selectable, but React Flow still reports their clicks.
-        onEdgeClick={(_event, edge) => edge.selectable !== false && onSelectEdge(edge.id)}
+        onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         onPaneClick={clearSelection}
         onConnect={connection => {
           if (connectionProblem(connection)) return;

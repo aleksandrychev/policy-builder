@@ -701,7 +701,12 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
   useEffect(() => () => clearTimeout(statusMessageTimeoutRef.current), []);
 
-  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId), [allInstances, currentFileId]);
+  // A new Set only when its keys change: every block card depends on it.
+  const duplicateList = useMemo(
+    () => [...duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId)].sort().join('\n'),
+    [allInstances, currentFileId]
+  );
+  const duplicateKeys = useMemo(() => new Set(duplicateList ? duplicateList.split('\n') : []), [duplicateList]);
 
   const handleEscape = () => {
     if (selectedGroup) setSelectedGroupId(null);
