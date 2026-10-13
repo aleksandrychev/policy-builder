@@ -4,10 +4,12 @@ import {
   fileConditionModeChanged,
   fileConditionRemoved,
   fileDescriptionChanged,
+  fileMoved,
   fileRemoved,
   fileRenamed,
   fileSelected,
   folderAdded,
+  folderMoved,
   folderRemoved,
   folderRenamed,
   projectFilesInitialized
@@ -153,6 +155,67 @@ describe('filesSlice', () => {
       expect(files.map(file => file.id)).toEqual([outside]);
       expect(folders.map(folder => folder.id)).toEqual([sibling]);
       expect(currentFileId).toBe(outside);
+    });
+  });
+
+  describe('moving', () => {
+    const folderOf = (store: ReturnType<typeof makeStore>, folderId: string) => store.getState().files.folders.find(folder => folder.id === folderId);
+
+    it('moves a file into a folder and back to the root, keeping its namespace', () => {
+      const store = makeStore();
+      const folder = addFolder(store, 'Web');
+      const file = addFile(store, 'Nginx');
+      store.dispatch(fileMoved({ fileId: file, parentId: folder }));
+      expect(fileOf(store, file)).toMatchObject({ parentId: folder, namespace: 'nginx' });
+      store.dispatch(fileMoved({ fileId: file, parentId: null }));
+      expect(fileOf(store, file)?.parentId).toBeNull();
+    });
+
+    it('renames a file whose name is taken in the folder it lands in', () => {
+      const store = makeStore();
+      const folder = addFolder(store, 'Web');
+      addFile(store, 'Main', folder);
+      const file = addFile(store, 'Main');
+      store.dispatch(fileMoved({ fileId: file, parentId: folder }));
+      expect(fileOf(store, file)).toMatchObject({ name: 'Main 2', parentId: folder });
+    });
+
+    it('ignores a move into a folder that doesn’t exist', () => {
+      const store = makeStore();
+      const file = addFile(store, 'Main');
+      const before = store.getState().files;
+      store.dispatch(fileMoved({ fileId: file, parentId: 'gone' }));
+      expect(store.getState().files).toBe(before);
+    });
+
+    it('moves a folder with its contents into another', () => {
+      const store = makeStore();
+      const target = addFolder(store, 'All');
+      const folder = addFolder(store, 'Web');
+      const file = addFile(store, 'Nginx', folder);
+      store.dispatch(folderMoved({ folderId: folder, parentId: target }));
+      expect(folderOf(store, folder)?.parentId).toBe(target);
+      expect(fileOf(store, file)?.parentId).toBe(folder);
+    });
+
+    it('never moves a folder into itself or into a folder inside it', () => {
+      const store = makeStore();
+      const outer = addFolder(store, 'Outer');
+      const inner = addFolder(store, 'Inner', outer);
+      const innermost = addFolder(store, 'Innermost', inner);
+      const before = store.getState().files;
+      for (const parentId of [outer, inner, innermost]) store.dispatch(folderMoved({ folderId: outer, parentId }));
+      expect(store.getState().files).toBe(before);
+      expect(folderOf(store, outer)?.parentId).toBeNull();
+    });
+
+    it('renames a folder whose name is taken where it lands', () => {
+      const store = makeStore();
+      addFolder(store, 'Web');
+      const parent = addFolder(store, 'Sites');
+      const folder = addFolder(store, 'Web', parent);
+      store.dispatch(folderMoved({ folderId: folder, parentId: null }));
+      expect(folderOf(store, folder)).toMatchObject({ name: 'Web 2', parentId: null });
     });
   });
 

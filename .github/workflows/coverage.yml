@@ -27,6 +27,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # The integration tests count too: they run the real Python sidecar.
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --directory python
       - run: npm run test:coverage
       - uses: actions/upload-artifact@v7
         with:

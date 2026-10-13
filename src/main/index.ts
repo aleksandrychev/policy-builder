@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, net, protocol, session, shell } from 'electron';
 import type { MenuItemConstructorOptions, WebFrameMain } from 'electron';
 import { promises as fs } from 'fs';
+import { homedir } from 'os';
 import { basename, join, normalize, sep } from 'path';
 import { pathToFileURL } from 'url';
 
@@ -13,10 +14,19 @@ import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProje
 import { registerTestEnvHandlers } from './testenv';
 
 const APP_TITLE = 'CFEngine Policy Builder';
+const REPOSITORY_URL = 'https://github.com/cfengine/policy-builder';
 const MAX_TITLE_LENGTH = 200;
 
-// Per window: unsaved changes (from window:set-document), and whether the user already agreed to lose them.
-const documentState = new WeakMap<BrowserWindow, { closeConfirmed: boolean; edited: boolean; quitAfterClose: boolean }>();
+// Per window, from window:set-document: unsaved changes, whether a project is open (and has a folder), and
+// whether the user already agreed to lose the changes.
+interface DocumentState {
+  closeConfirmed: boolean;
+  edited: boolean;
+  hasProject: boolean;
+  onDisk: boolean;
+  quitAfterClose: boolean;
+}
+const documentState = new WeakMap<BrowserWindow, DocumentState>();
 let quitting = false;
 // The window the application menu talks to.
 let menuWindow: BrowserWindow | null = null;
@@ -97,19 +107,43 @@ function isTrustedFrame(frame: WebFrameMain | null): boolean {
 // demo builder); this just forwards a "you chose X" signal down the same
 // window's preload bridge, since a Menu click handler runs in the main
 // process and has no access to renderer state.
+// ~/projects/web for a folder in the home directory.
+function displayPath(path: string): string {
+  const home = homedir();
+  return path === home || path.startsWith(home + sep) ? `~${path.slice(home.length)}` : path;
+}
+
+// Windows and Linux read "&" in a menu label as a mnemonic marker: "&&" shows one.
+const menuLabel = (text: string) => (process.platform === 'darwin' ? text : text.replaceAll('&', '&&'));
+
+async function confirmClearRecents(window: BrowserWindow): Promise<void> {
+  const { response } = await dialog.showMessageBox(window, {
+    type: 'question',
+    message: 'Clear the list of recently opened projects?',
+    detail: 'The projects themselves stay as they are.',
+    buttons: ['Clear', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1
+  });
+  if (response === 0) await clearRecentProjects();
+}
+
 function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[]): Menu {
   const isMac = process.platform === 'darwin';
   const send = (channel: string, argument?: string) => () => mainWindow.webContents.send(channel, argument);
+  // An editing or canvas command: the renderer runs it on the canvas, or natively in a focused text field.
+  const command = (id: string) => send('menu:command', id);
+  const { hasProject = false, onDisk = false } = documentState.get(mainWindow) ?? {};
+  // As VS Code lists them: by folder, home as ~ (names can repeat; folders can't).
   const openRecent: MenuItemConstructorOptions[] = [
     ...recents.map(recent => ({
-      label: recent.name,
-      sublabel: recent.path,
-      toolTip: recent.path,
+      label: menuLabel(displayPath(recent.path)),
+      toolTip: recent.name,
       enabled: recent.exists,
       click: send('menu:open-recent', recent.path)
     })),
     ...(recents.length ? [{ type: 'separator' as const }] : []),
-    { label: 'Clear Recent', enabled: recents.length > 0, click: () => void clearRecentProjects() }
+    { label: 'Clear Recently Opened…', enabled: recents.length > 0, click: () => void confirmClearRecents(mainWindow) }
   ];
 
   const template: MenuItemConstructorOptions[] = [
@@ -120,8 +154,13 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'New Project…', accelerator: 'CmdOrCtrl+N', click: send('menu:new-project') },
         { label: 'Open Project…', accelerator: 'CmdOrCtrl+O', click: send('menu:open-project') },
         { label: 'Open Recent', submenu: openRecent },
-        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: send('menu:save') },
-        { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', click: send('menu:project-settings') },
+        { type: 'separator' },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', enabled: hasProject, click: send('menu:save') },
+        { label: 'Reload from Disk', enabled: onDisk, click: send('menu:reload-project') },
+        { label: 'Close Project', enabled: hasProject, click: send('menu:close-project') },
+        { type: 'separator' },
+        { label: isMac ? 'Show Project in Finder' : 'Show Project Folder', enabled: onDisk, click: send('menu:show-project-folder') },
+        { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', enabled: hasProject, click: send('menu:project-settings') },
         { label: 'Connect AI Agent…', click: send('menu:connect-agent') },
         { type: 'separator' },
         { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
@@ -129,13 +168,64 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
     },
-    { role: 'editMenu' },
-    // The default View menu minus page zoom: Ctrl/Cmd +/-/0 zoom the canvas instead (renderer).
+    // Not the built-in editMenu: its items only edit text, never the canvas (blocks, its undo history).
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: command('undo') },
+        { label: 'Redo', accelerator: isMac ? 'Shift+Cmd+Z' : 'Ctrl+Y', click: command('redo') },
+        { type: 'separator' },
+        { label: 'Cut', accelerator: 'CmdOrCtrl+X', click: command('cut') },
+        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: command('copy') },
+        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: command('paste') },
+        // The renderer handles the key itself: shown here, not registered (it would take Backspace from text fields).
+        { label: 'Delete', accelerator: isMac ? 'Backspace' : 'Delete', registerAccelerator: false, click: command('delete') },
+        { label: 'Select All', accelerator: 'CmdOrCtrl+A', click: command('selectAll') },
+        { type: 'separator' },
+        { label: 'Group', accelerator: 'CmdOrCtrl+G', registerAccelerator: false, click: command('group') },
+        { label: 'Ungroup', accelerator: 'Shift+CmdOrCtrl+G', registerAccelerator: false, click: command('ungroup') }
+      ]
+    },
+    // The project's tabs and the canvas's view; no page zoom: Ctrl/Cmd +/-/0 zoom the canvas (renderer, so
+    // shown, not registered). Reload and DevTools only in development: a reload drops unsaved changes unasked.
     {
       label: 'View',
-      submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }]
+      submenu: [
+        ...['Canvas', 'Generated Policy', 'Tests & Logs', 'Deployment'].map((label, index) => ({
+          label,
+          accelerator: `CmdOrCtrl+${index + 1}`,
+          enabled: hasProject,
+          click: command(`tab-${index}`)
+        })),
+        { type: 'separator' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', registerAccelerator: false, enabled: hasProject, click: command('zoomIn') },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', registerAccelerator: false, enabled: hasProject, click: command('zoomOut') },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', registerAccelerator: false, enabled: hasProject, click: command('zoomReset') },
+        { label: 'Fit to View', accelerator: '1', registerAccelerator: false, enabled: hasProject, click: command('zoomFit') },
+        { type: 'separator' },
+        { label: 'Tidy Up Canvas…', enabled: hasProject, click: command('tidy') },
+        { label: 'Toggle Maximized Canvas', enabled: hasProject, click: command('maximize') },
+        { type: 'separator' },
+        ...(app.isPackaged
+          ? []
+          : [{ role: 'reload' as const }, { role: 'forceReload' as const }, { role: 'toggleDevTools' as const }, { type: 'separator' as const }]),
+        { role: 'togglefullscreen' }
+      ]
     },
-    ...(isMac ? [{ role: 'windowMenu' as const }] : [])
+    ...(isMac ? [{ role: 'windowMenu' as const }] : []),
+    // role 'help' gets macOS's menu search field.
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Keyboard Shortcuts', click: send('menu:keyboard-shortcuts') },
+        { type: 'separator' },
+        { label: 'CFEngine Documentation', click: () => openExternalIfSafe('https://docs.cfengine.com/') },
+        { label: 'Policy Builder on GitHub', click: () => openExternalIfSafe(REPOSITORY_URL) },
+        { label: 'Report an Issue…', click: () => openExternalIfSafe(`${REPOSITORY_URL}/issues/new`) },
+        // macOS has About in the app menu.
+        ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'about' as const }])
+      ]
+    }
   ];
 
   return Menu.buildFromTemplate(template);
@@ -179,7 +269,7 @@ function createWindow(): void {
   void refreshMenu();
   // A recent project's folder may have gone (or come back) meanwhile.
   mainWindow.on('focus', () => void refreshMenu());
-  documentState.set(mainWindow, { closeConfirmed: false, edited: false, quitAfterClose: false });
+  documentState.set(mainWindow, { closeConfirmed: false, edited: false, hasProject: false, onDisk: false, quitAfterClose: false });
 
   // With unsaved changes the renderer asks Save / Don't Save / Cancel, then confirms via window:close-confirmed.
   mainWindow.on('close', event => {
@@ -237,16 +327,31 @@ app.whenReady().then(() => {
     return nativeTheme.shouldUseDarkColors;
   });
 
-  ipcMain.handle('window:set-document', (event, document: { edited?: unknown; title?: unknown }) => {
+  ipcMain.handle('window:set-document', (event, document: { edited?: unknown; onDisk?: unknown; title?: unknown }) => {
     if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
     const window = BrowserWindow.fromWebContents(event.sender);
     const state = window && documentState.get(window);
     if (!window || !state) return;
-    const { edited, title } = document ?? {};
-    if (typeof edited !== 'boolean' || (title !== null && typeof title !== 'string')) throw new Error('invalid document state');
+    const { edited, onDisk = false, title } = document ?? {};
+    if (typeof edited !== 'boolean' || typeof onDisk !== 'boolean' || (title !== null && typeof title !== 'string')) throw new Error('invalid document state');
     state.edited = edited;
+    // The File menu enables its project items by these.
+    const hasProject = title !== null;
+    if (state.hasProject !== hasProject || state.onDisk !== onDisk) {
+      Object.assign(state, { hasProject, onDisk });
+      void refreshMenu();
+    }
     window.setTitle(title ? `${title.slice(0, MAX_TITLE_LENGTH)} — ${APP_TITLE}` : APP_TITLE);
     if (process.platform === 'darwin') window.setDocumentEdited(edited);
+  });
+
+  // Edit menu commands on a focused text field (the renderer decides: see menu:command).
+  const NATIVE_EDITS = ['undo', 'redo', 'cut', 'copy', 'paste', 'delete', 'selectAll'] as const;
+  ipcMain.handle('window:native-edit', (event, edit: unknown) => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    const command = NATIVE_EDITS.find(candidate => candidate === edit);
+    if (!command) throw new Error('unknown edit command');
+    event.sender[command]();
   });
 
   ipcMain.handle('window:close-confirmed', event => {

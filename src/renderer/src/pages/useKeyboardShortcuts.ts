@@ -22,11 +22,14 @@ export interface ShortcutHandlers {
   zoomControlsRef: RefObject<ZoomControls | null>;
 }
 
-function isEditableTarget(target: Element | null): boolean {
+export function isEditableTarget(target: Element | null): boolean {
   if (!target) return false;
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true;
   return (target as HTMLElement).isContentEditable;
 }
+
+// A dialog, menu or popover (all MUI modals): it takes priority over the canvas's shortcuts and commands.
+export const modalOpen = () => Boolean(document.querySelector('[role="dialog"], .MuiModal-root:not(.MuiModal-hidden)'));
 
 // n8n-style bare zoom keys, plus Ctrl/Cmd +/-/0 (the app has no page zoom: they zoom the canvas).
 function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null, withCommand = false) {
@@ -72,7 +75,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       const current = handlersRef.current;
       if (current.locked) return;
       // A dialog, menu or popover (all MUI modals) takes priority, even with focus on its own buttons.
-      if (document.querySelector('[role="dialog"], .MuiModal-root:not(.MuiModal-hidden)')) return;
+      if (modalOpen()) return;
       if (event.key === 'Escape') return current.onEscape();
       // ⌘S saves even while typing in a field.
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {

@@ -18,6 +18,10 @@ const projectSlice = createSlice({
         return { payload: { description, id: crypto.randomUUID(), masterfiles, moduleName: moduleName ?? moduleNameFor(name), name, path, type } };
       }
     },
+    // Back to the start screen: the root reducer resets every slice and the undo history on it.
+    projectClosed() {
+      return null;
+    },
     // An existing project opened from disk: every content slice takes its part of `content`.
     projectLoaded: {
       reducer(_state, action: PayloadAction<{ content: ProjectContentState; project: Project }>) {
@@ -40,5 +44,5 @@ const projectSlice = createSlice({
   }
 });
 
-export const { projectCreated, projectLoaded, projectLocated, projectTypeChanged } = projectSlice.actions;
+export const { projectClosed, projectCreated, projectLoaded, projectLocated, projectTypeChanged } = projectSlice.actions;
 export default projectSlice.reducer;

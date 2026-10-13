@@ -6,6 +6,7 @@ import { AgentActivityBar } from './components/agent/AgentActivityBar';
 import { AgentLock } from './components/agent/AgentLock';
 import { AgentLogPanel } from './components/agent/AgentLogPanel';
 import { ConnectAgentDialog } from './components/dialogs/ConnectAgentDialog';
+import { KeyboardShortcutsDialog } from './components/dialogs/KeyboardShortcutsDialog';
 import { NewProjectDialog, useMasterfilesVersions } from './components/dialogs/NewProjectDialog';
 import { ProjectSettingsDialog } from './components/dialogs/ProjectSettingsDialog';
 import { UnsavedChangesDialog } from './components/dialogs/UnsavedChangesDialog';
@@ -13,9 +14,12 @@ import { isWorking, useAgentActivity } from './mcp/activity';
 import { useMcpTools } from './mcp/useMcpTools';
 import NoProjectScreen from './pages/NoProjectScreen';
 import ProjectView from './pages/ProjectView';
+import { runMenuCommand } from './pages/menuCommands';
 import { useProjectSession } from './project/useProjectSession';
 
 type Session = ReturnType<typeof useProjectSession>;
+type MenuAction = Parameters<Parameters<NonNullable<Window['api']>['onMenuAction']>[0]>[0];
+type MenuHandlers = Partial<Record<MenuAction, () => unknown>>;
 
 // A menu's Save while a dialog is up would act behind it.
 const modalOpen = () => Boolean(document.querySelector('[role="dialog"]'));
@@ -42,21 +46,34 @@ export default function App() {
   const [recentsVersion, setRecentsVersion] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [connectAgentOpen, setConnectAgentOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const masterfilesVersions = useMasterfilesVersions();
 
   useEffect(
     () =>
-      window.api?.onMenuAction((action, path) => {
+      window.api?.onMenuAction((action, argument) => {
         const current = sessionRef.current;
-        if (action === 'new-project') current.newProject();
-        else if (action === 'try-demo') current.startDemo();
-        else if (action === 'save' && !modalOpen()) current.save();
-        else if (action === 'close-requested') current.requestClose();
-        else if (action === 'open-project' && !modalOpen()) current.openProject();
-        else if (action === 'open-recent' && path && !modalOpen()) current.openProject(path);
-        else if (action === 'recents-changed') setRecentsVersion(version => version + 1);
-        else if (action === 'project-settings' && current.project && !modalOpen()) setSettingsOpen(true);
-        else if (action === 'connect-agent' && !modalOpen()) setConnectAgentOpen(true);
+        const path = current.project?.path;
+        const always: MenuHandlers = {
+          command: () => argument && runMenuCommand(argument),
+          'close-requested': () => current.requestClose(),
+          'keyboard-shortcuts': () => !modalOpen() && setShortcutsOpen(true),
+          'new-project': () => current.newProject(),
+          'recents-changed': () => setRecentsVersion(version => version + 1),
+          'show-project-folder': () => path && window.api?.revealProject(path).catch(() => {}),
+          'try-demo': () => current.startDemo()
+        };
+        // Not while a dialog is up: they would act behind it.
+        const whenIdle: MenuHandlers = {
+          'close-project': () => current.project && current.closeProject(),
+          'connect-agent': () => setConnectAgentOpen(true),
+          'open-project': () => current.openProject(),
+          'open-recent': () => argument && current.openProject(argument),
+          'project-settings': () => current.project && setSettingsOpen(true),
+          'reload-project': () => path && current.revertProject(),
+          save: () => current.save()
+        };
+        (always[action] ?? (modalOpen() ? undefined : whenIdle[action]))?.();
       }),
     []
   );
@@ -85,8 +102,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    window.api?.setDocument({ edited: dirty, title: project?.name ?? null }).catch(() => {});
-  }, [dirty, project?.name]);
+    window.api?.setDocument({ edited: dirty, onDisk: Boolean(project?.path), title: project?.name ?? null }).catch(() => {});
+  }, [dirty, project?.name, project?.path]);
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -117,6 +134,7 @@ export default function App() {
         <AgentLogPanel activity={activity} open={logOpen} onToggle={() => setLogOpen(open => !open)} />
       )}
       {connectAgentOpen && <ConnectAgentDialog onClose={() => setConnectAgentOpen(false)} />}
+      {shortcutsOpen && <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {project && settingsOpen && (
         <ProjectSettingsDialog
           project={project}

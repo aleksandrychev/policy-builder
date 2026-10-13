@@ -126,10 +126,11 @@ import {
 } from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
+import { routeProjectCommand, useProjectMenuCommands } from './menuCommands';
 import { definedNames } from './pasteCopies';
 import { useClipboardActions } from './useClipboardActions';
 import { useGroupActions } from './useGroupActions';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { isEditableTarget, modalOpen, useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useSelection } from './useSelection';
 
 const UNDO_KEY = navigator.platform.startsWith('Mac') ? '⌘Z' : 'Ctrl+Z';
@@ -764,6 +765,45 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     showTests: () => setActiveTab(2)
   });
 
+  // ⌘G groups the selection; ⌘⇧G ungroups the selected group (or the selected block's).
+  const groupSelection = () => createGroup(selectionOf(multiSelectedIds, selectedInstanceId));
+  const ungroupSelection = () => {
+    const groupId = selectedGroup?.id ?? instances.find(instance => instance.instanceId === selectedInstanceId)?.groupId;
+    if (groupId) ungroup(groupId);
+  };
+
+  const pasteBlock = () => {
+    if (!clipboard.snapshot) return false;
+    handlePasteBlock();
+    return true;
+  };
+
+  // The Edit and View menus, clicked (keys are useKeyboardShortcuts'): see routeProjectCommand.
+  useProjectMenuCommands(command =>
+    routeProjectCommand(command, {
+      blocked: locked || modalOpen(),
+      canvasShowing: activeTab === 0,
+      textFocused: isEditableTarget(document.activeElement),
+      edit: {
+        copy: () => copyOrCutKey(handleCopyBlock),
+        cut: () => copyOrCutKey(handleCutBlock),
+        delete: handleDeleteKey,
+        group: groupSelection,
+        paste: pasteBlock,
+        redo: () => handleHistoryKey(true),
+        selectAll: () => handleMultiSelect(instances.map(instance => instance.instanceId)),
+        undo: () => handleHistoryKey(false),
+        ungroup: ungroupSelection
+      },
+      view: {
+        showTab: setActiveTab,
+        tidy: () => setTidyConfirmOpen(true),
+        toggleMaximized: () => setMaximized(current => !current),
+        zoom: control => zoomControlsRef.current?.[control]()
+      }
+    })
+  );
+
   useKeyboardShortcuts({
     locked,
     canvasActive: activeTab === 0,
@@ -773,19 +813,11 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onDelete: handleDeleteKey,
     onUndo: () => handleHistoryKey(false),
     onRedo: () => handleHistoryKey(true),
-    // ⌘G groups the selection; ⌘⇧G ungroups the selected group (or the selected block's).
-    onGroup: () => createGroup(selectionOf(multiSelectedIds, selectedInstanceId)),
-    onUngroup: () => {
-      const groupId = selectedGroup?.id ?? instances.find(instance => instance.instanceId === selectedInstanceId)?.groupId;
-      if (groupId) ungroup(groupId);
-    },
+    onGroup: groupSelection,
+    onUngroup: ungroupSelection,
     onCopy: () => copyOrCutKey(handleCopyBlock),
     onCut: () => copyOrCutKey(handleCutBlock),
-    onPaste: () => {
-      if (!clipboard.snapshot) return false;
-      handlePasteBlock();
-      return true;
-    }
+    onPaste: pasteBlock
   });
 
   // New handlers re-render every draggable (the palette's rows) through dnd-kit's context.

@@ -13,6 +13,7 @@ import type {
   MasterfilesVersions,
   McpPermissions,
   McpStatus,
+  NativeEdit,
   OpenedProject,
   OperationResult,
   ProjectContent,
@@ -45,7 +46,20 @@ interface LayoutSettings {
 }
 
 export type MenuAction =
-  'close-requested' | 'connect-agent' | 'new-project' | 'open-project' | 'open-recent' | 'project-settings' | 'recents-changed' | 'save' | 'try-demo';
+  | 'close-project'
+  | 'close-requested'
+  | 'command'
+  | 'connect-agent'
+  | 'keyboard-shortcuts'
+  | 'new-project'
+  | 'open-project'
+  | 'open-recent'
+  | 'project-settings'
+  | 'recents-changed'
+  | 'reload-project'
+  | 'save'
+  | 'show-project-folder'
+  | 'try-demo';
 
 const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:new-project': 'new-project',
@@ -56,6 +70,12 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:project-settings': 'project-settings',
   'menu:connect-agent': 'connect-agent',
   'menu:try-demo': 'try-demo',
+  'menu:close-project': 'close-project',
+  'menu:keyboard-shortcuts': 'keyboard-shortcuts',
+  'menu:reload-project': 'reload-project',
+  'menu:show-project-folder': 'show-project-folder',
+  // Carries the command (Edit and View menus): see the renderer's menuCommands.ts.
+  'menu:command': 'command',
   // Not a menu item: main asking whether a window with unsaved changes may close.
   'window:close-requested': 'close-requested',
   'window:recents-changed': 'recents-changed'
@@ -65,9 +85,9 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
 // buildApplicationMenu), so the renderer hears about them as events rather
 // than a request/response — unlike everything else in `api`, which the
 // renderer calls to ask main to do something.
-function onMenuAction(callback: (action: MenuAction, path?: string) => void): () => void {
+function onMenuAction(callback: (action: MenuAction, argument?: string) => void): () => void {
   const listeners = Object.entries(MENU_CHANNELS).map(([channel, action]) => {
-    const listener = (_event: unknown, path?: unknown) => callback(action, typeof path === 'string' ? path : undefined);
+    const listener = (_event: unknown, argument?: unknown) => callback(action, typeof argument === 'string' ? argument : undefined);
     ipcRenderer.on(channel, listener);
     return { channel, listener };
   });
@@ -163,7 +183,8 @@ const api = {
   gitSync: (path: string, mode: 'force' | 'rebase'): Promise<OperationResult<{ pulled: boolean; status: GitStatus }>> => invoke('git:sync', path, mode),
 
   /** Sets the window title (null: no project) and the unsaved-changes state. */
-  setDocument: (document: { edited: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
+  setDocument: (document: { edited: boolean; onDisk?: boolean; title: string | null }): Promise<void> => invoke('window:set-document', document),
+  nativeEdit: (command: NativeEdit): Promise<void> => invoke('window:native-edit', command),
 
   /** Tells main the user agreed to close the window despite unsaved changes. */
   confirmWindowClose: (): Promise<void> => invoke('window:close-confirmed'),

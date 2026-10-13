@@ -7,7 +7,7 @@ import { DEMO_ENVIRONMENT_ID } from '../demo/nginxDemoProject';
 import { createAppStore } from '../store';
 import { blockMoved } from '../store/canvasSlice';
 import { fileRenamed, fileSelected } from '../store/filesSlice';
-import { projectCreated } from '../store/projectSlice';
+import { projectCreated, projectLocated } from '../store/projectSlice';
 import { addBlock, addFile } from '../store/test/storeTestUtils';
 import { installApi, uninstallApi } from '../test/render';
 import { isEdited, useProjectSession } from './useProjectSession';
@@ -71,6 +71,91 @@ describe('useProjectSession', () => {
 
     act(() => result.current.startDemo());
     expect(store.getState().testEnvironments[0].id).toBe(DEMO_ENVIRONMENT_ID);
+  });
+
+  describe('the unsaved-changes prompt', () => {
+    // A project in /p with an edit since it was saved.
+    const editedProject = async (api: Parameters<typeof installApi>[0] = {}) => {
+      installApi(api);
+      const store = createAppStore();
+      const result = render(store);
+      const values = { description: '', folderName: 'web', git: false, masterfiles: 'no', name: 'Web', parent: null, type: 'module' as const };
+      await act(async () => void (await result.current.tools.create(values)));
+      act(() => {
+        store.dispatch(projectLocated({ description: '', masterfiles: null, moduleName: 'web', name: 'Web', path: '/p', type: 'module' }));
+        addFile(store, 'Edited');
+      });
+      expect(result.current.dirty).toBe(true);
+      return { store, result };
+    };
+
+    it('closes a clean project without asking, leaving nothing of it', async () => {
+      const { store, result } = await editedProject({ saveProject: vi.fn(async () => ({ ok: true as const, masterfiles: null })) });
+      await act(async () => void (await result.current.save()));
+      expect(result.current.dirty).toBe(false);
+      act(() => result.current.closeProject());
+      expect(result.current.unsavedPrompt).toBeFalsy();
+      // Every slice and the undo history back to a fresh store's: nothing to undo back into view.
+      expect(store.getState()).toEqual(createAppStore().getState());
+    });
+
+    it('asks before closing an edited project; Cancel keeps it open', async () => {
+      const { store, result } = await editedProject();
+      act(() => result.current.closeProject());
+      expect(result.current.unsavedPrompt).toBeTruthy();
+      expect(store.getState().project).not.toBeNull();
+      act(() => result.current.unsavedPrompt!.onCancel());
+      expect(result.current.unsavedPrompt).toBeFalsy();
+      expect(store.getState().project?.name).toBe('Web');
+      expect(result.current.dirty).toBe(true);
+    });
+
+    it('Don’t Save closes it without saving', async () => {
+      const saveProject = vi.fn();
+      const { store, result } = await editedProject({ saveProject });
+      act(() => result.current.closeProject());
+      act(() => result.current.unsavedPrompt!.onDiscard());
+      expect(store.getState().project).toBeNull();
+      expect(result.current.dirty).toBe(false);
+      expect(saveProject).not.toHaveBeenCalled();
+    });
+
+    it('Save closes it once saved', async () => {
+      const saveProject = vi.fn(async () => ({ ok: true as const, masterfiles: null }));
+      const { store, result } = await editedProject({ saveProject });
+      act(() => result.current.closeProject());
+      await act(async () => void (await result.current.unsavedPrompt!.onSave()));
+      expect(saveProject).toHaveBeenCalledWith('/p', expect.anything(), expect.anything());
+      expect(store.getState().project).toBeNull();
+    });
+
+    it('Save that fails keeps the project open, edited, and says why', async () => {
+      const saveProject = vi.fn(async () => ({ ok: false as const, message: 'disk full', details: '' }));
+      const { store, result } = await editedProject({ saveProject });
+      act(() => result.current.closeProject());
+      await act(async () => void (await result.current.unsavedPrompt!.onSave()));
+      expect(store.getState().project?.name).toBe('Web');
+      expect(result.current.dirty).toBe(true);
+      expect(result.current.error).toMatch(/disk full/);
+    });
+
+    it('Reload from Disk drops the edits only after asking', async () => {
+      const openProject = vi.fn(async () => null);
+      const { result } = await editedProject({ openProject });
+      act(() => result.current.revertProject());
+      expect(openProject).not.toHaveBeenCalled();
+      await act(async () => result.current.unsavedPrompt!.onDiscard());
+      expect(openProject).toHaveBeenCalledWith({ path: '/p' });
+    });
+
+    it('closing the window asks too, and confirms only after the choice', async () => {
+      const confirmWindowClose = vi.fn(async () => undefined);
+      const { result } = await editedProject({ confirmWindowClose });
+      act(() => result.current.requestClose());
+      expect(confirmWindowClose).not.toHaveBeenCalled();
+      act(() => result.current.unsavedPrompt!.onDiscard());
+      expect(confirmWindowClose).toHaveBeenCalled();
+    });
   });
 });
 

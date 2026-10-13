@@ -435,3 +435,72 @@ def test_a_test_reports_every_runs_problems_with_the_runs_they_came_up_in():
     cfpb_testenv.add_problems(problems, [{**failed_restart}], 3)
 
     assert list(problems.values()) == [{**failed_restart, "count": 2, "runs": [1, 3]}]
+
+
+def test_dotenv_reads_keys_and_values_as_shells_write_them(tmp_path: Path):
+    dotenv = tmp_path / ".env"
+    dotenv.write_text(
+        "# credentials for the hub\n"
+        "\n"
+        "PLAIN=value\n"
+        "export EXPORTED=yes\n"
+        'DOUBLE="with spaces"\n'
+        "SINGLE='a # not a comment'\n"
+        "URL=https://user:pass@host/?a=b\n"
+        "  PADDED  =  trimmed  \n"
+        'MISMATCHED="open\n'
+        "no equals sign\n"
+        "EMPTY=\n",
+        encoding="utf-8",
+    )
+
+    assert cfpb_testenv.read_dotenv(str(dotenv)) == {
+        "PLAIN": "value",
+        "EXPORTED": "yes",
+        "DOUBLE": "with spaces",
+        "SINGLE": "a # not a comment",
+        "URL": "https://user:pass@host/?a=b",
+        "PADDED": "trimmed",
+        "MISMATCHED": '"open',
+        "EMPTY": "",
+    }
+
+
+def test_a_missing_dotenv_is_empty(tmp_path: Path):
+    assert cfpb_testenv.read_dotenv(None) == {}
+    assert cfpb_testenv.read_dotenv(str(tmp_path / "absent.env")) == {}
+    assert cfpb_testenv.read_dotenv(str(tmp_path)) == {}
+
+
+class _Engine:
+    """Answers the one command _compliance runs in a container with `line`."""
+
+    def __init__(self, line: str):
+        self.line = line
+        self.api = self
+
+    def exec_create(self, _container_id, _command):
+        return {"Id": "exec"}
+
+    def exec_start(self, _exec_id):
+        return self.line.encode()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "1760000000,1760000005: Outcome of version Promises.cf (agent-0): Promises observed to be kept 98.36%, Promises repaired 1.64%, Promises not repaired 0.00%\n",
+        "Total promise compliance: 98.36% kept, 1.64% repaired, 0.00% not kept\n",
+    ],
+)
+def test_compliance_is_read_from_either_summary_format(line: str):
+    container = type("Container", (), {"id": "c1"})()
+    assert cfpb_testenv._compliance(_Engine(line), container) == {"kept": 98.36, "repaired": 1.64, "notKept": 0.0}
+
+
+def test_no_summary_means_no_compliance():
+    container = type("Container", (), {"id": "c1"})()
+    assert cfpb_testenv._compliance(_Engine(""), container) is None
+    assert (
+        cfpb_testenv._compliance(_Engine("cat: /var/cfengine/promise_summary.log: No such file\n"), container) is None
+    )
