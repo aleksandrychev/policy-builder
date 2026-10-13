@@ -38,7 +38,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"scripts/**/*.mjs\"",
     "test": "vitest run --project renderer --project components --project main",
     "test:fast": "vitest run --project renderer --project main",
-    "test:coverage": "vitest run --project renderer --project components --project main --coverage",
+    "test:coverage": "vitest run --project renderer --project components --project main --project integration --coverage",
     "test:integration": "vitest run --project integration",
     "test:watch": "vitest --project renderer --project main",
     "test:e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts"
