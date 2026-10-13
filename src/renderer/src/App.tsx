@@ -6,6 +6,7 @@ import { AgentActivityBar } from './components/agent/AgentActivityBar';
 import { AgentLock } from './components/agent/AgentLock';
 import { AgentLogPanel } from './components/agent/AgentLogPanel';
 import { ConnectAgentDialog } from './components/dialogs/ConnectAgentDialog';
+import { KeyboardShortcutsDialog } from './components/dialogs/KeyboardShortcutsDialog';
 import { NewProjectDialog, useMasterfilesVersions } from './components/dialogs/NewProjectDialog';
 import { ProjectSettingsDialog } from './components/dialogs/ProjectSettingsDialog';
 import { UnsavedChangesDialog } from './components/dialogs/UnsavedChangesDialog';
@@ -45,6 +46,7 @@ export default function App() {
   const [recentsVersion, setRecentsVersion] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [connectAgentOpen, setConnectAgentOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const masterfilesVersions = useMasterfilesVersions();
 
   useEffect(
@@ -55,6 +57,7 @@ export default function App() {
         const always: MenuHandlers = {
           command: () => argument && runMenuCommand(argument),
           'close-requested': () => current.requestClose(),
+          'keyboard-shortcuts': () => !modalOpen() && setShortcutsOpen(true),
           'new-project': () => current.newProject(),
           'recents-changed': () => setRecentsVersion(version => version + 1),
           'show-project-folder': () => path && window.api?.revealProject(path).catch(() => {}),
@@ -131,6 +134,7 @@ export default function App() {
         <AgentLogPanel activity={activity} open={logOpen} onToggle={() => setLogOpen(open => !open)} />
       )}
       {connectAgentOpen && <ConnectAgentDialog onClose={() => setConnectAgentOpen(false)} />}
+      {shortcutsOpen && <KeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {project && settingsOpen && (
         <ProjectSettingsDialog
           project={project}

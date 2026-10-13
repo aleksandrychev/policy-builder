@@ -12,6 +12,7 @@ type MenuAction =
   | 'close-requested'
   | 'command'
   | 'connect-agent'
+  | 'keyboard-shortcuts'
   | 'new-project'
   | 'open-project'
   | 'open-recent'

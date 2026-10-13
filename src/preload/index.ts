@@ -50,6 +50,7 @@ export type MenuAction =
   | 'close-requested'
   | 'command'
   | 'connect-agent'
+  | 'keyboard-shortcuts'
   | 'new-project'
   | 'open-project'
   | 'open-recent'
@@ -70,6 +71,7 @@ const MENU_CHANNELS: Record<string, MenuAction> = {
   'menu:connect-agent': 'connect-agent',
   'menu:try-demo': 'try-demo',
   'menu:close-project': 'close-project',
+  'menu:keyboard-shortcuts': 'keyboard-shortcuts',
   'menu:reload-project': 'reload-project',
   'menu:show-project-folder': 'show-project-folder',
   // Carries the command (Edit and View menus): see the renderer's menuCommands.ts.

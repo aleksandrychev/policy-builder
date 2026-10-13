@@ -14,6 +14,7 @@ import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProje
 import { registerTestEnvHandlers } from './testenv';
 
 const APP_TITLE = 'CFEngine Policy Builder';
+const REPOSITORY_URL = 'https://github.com/cfengine/policy-builder';
 const MAX_TITLE_LENGTH = 200;
 
 // Per window, from window:set-document: unsaved changes, whether a project is open (and has a folder), and
@@ -211,7 +212,20 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { role: 'togglefullscreen' }
       ]
     },
-    ...(isMac ? [{ role: 'windowMenu' as const }] : [])
+    ...(isMac ? [{ role: 'windowMenu' as const }] : []),
+    // role 'help' gets macOS's menu search field.
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Keyboard Shortcuts', click: send('menu:keyboard-shortcuts') },
+        { type: 'separator' },
+        { label: 'CFEngine Documentation', click: () => openExternalIfSafe('https://docs.cfengine.com/') },
+        { label: 'Policy Builder on GitHub', click: () => openExternalIfSafe(REPOSITORY_URL) },
+        { label: 'Report an Issue…', click: () => openExternalIfSafe(`${REPOSITORY_URL}/issues/new`) },
+        // macOS has About in the app menu.
+        ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'about' as const }])
+      ]
+    }
   ];
 
   return Menu.buildFromTemplate(template);
