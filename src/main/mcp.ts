@@ -1,5 +1,3 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { BrowserWindow, type IpcMainInvokeEvent, type WebContents, type WebFrameMain, app, ipcMain } from 'electron';
 import { promises as fs } from 'fs';
@@ -7,7 +5,6 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import type { AddressInfo } from 'net';
 import { join } from 'path';
 
-import { MCP_INSTRUCTIONS, registerBuilderTools } from './mcpTools/index';
 import { type McpPermissions, checkedPermissions, isToolAllowed } from './mcpTools/permissions';
 
 /**
@@ -18,6 +15,7 @@ import { type McpPermissions, checkedPermissions, isToolAllowed } from './mcpToo
 
 const HOST = '127.0.0.1';
 const TOOL_TIMEOUT_MS = 30_000;
+const SERVER_NAME = 'cfengine-policy-builder';
 // Tools that wait on cfbs, Docker or the agent: a test run builds, starts hosts and runs cf-agent.
 const SLOW_TOOLS: Record<string, number> = {
   create_project: 180_000,
@@ -27,7 +25,6 @@ const SLOW_TOOLS: Record<string, number> = {
   run_tests: 900_000,
   stop_test_environment: 300_000
 };
-const SERVER_NAME = 'cfengine-policy-builder';
 
 interface McpSettings {
   enabled: boolean;
@@ -137,16 +134,8 @@ async function handle(req: IncomingMessage, res: ServerResponse, port: number, t
     res.writeHead(404).end();
     return;
   }
-  // Stateless: a server and transport per request.
-  const mcp = new McpServer({ name: SERVER_NAME, version: app.getVersion() }, { instructions: MCP_INSTRUCTIONS });
-  registerBuilderTools(mcp, callWindowTool, permissions);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on('close', () => {
-    void transport.close();
-    void mcp.close();
-  });
-  await mcp.connect(transport);
-  await transport.handleRequest(req, res);
+  const { answerMcpRequest } = await import('./mcpTools/serve');
+  await answerMcpRequest(req, res, { name: SERVER_NAME, version: app.getVersion() }, callWindowTool, permissions);
 }
 
 function listen(port: number, token: string): Promise<number> {
