@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
@@ -75,7 +75,7 @@ function CategoryGroup({ category, blocks, onAdd }: { blocks: BlockDescriptor[];
   );
 }
 
-export function BlockPalette({ onAddBlock }: { onAddBlock: (block: BlockDescriptor) => void }) {
+export const BlockPalette = memo(function BlockPalette({ onAddBlock }: { onAddBlock: (block: BlockDescriptor) => void }) {
   const [search, setSearch] = useState('');
 
   const groups = useMemo(() => {
@@ -119,4 +119,4 @@ export function BlockPalette({ onAddBlock }: { onAddBlock: (block: BlockDescript
       </Box>
     </Box>
   );
-}
+});

@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import { Box, Divider, IconButton, ListItemText, Menu, MenuItem, Typography, useTheme } from '@mui/material';
@@ -8,6 +6,7 @@ import { Handle, type Node, type NodeProps, Position, useStore } from '@xyflow/r
 
 import type { FileConditionRelation } from '../canvas/fileCondition';
 import { GATE_WIDTH, type Gate } from '../canvas/gates';
+import { useMenuAnchor } from '../hooks/useMenuAnchor';
 import { COMPACT_ZOOM, type ConditionSource } from './BlockCard';
 import { stopCanvasEvents } from './stopCanvasEvents';
 
@@ -43,7 +42,7 @@ function GateCaption({ fileRelation, fileLabel }: { fileLabel?: string; fileRela
 export function GateNode({ data, selected }: NodeProps<GateFlowNode>) {
   const { gate, source, fileRelation, onHighlight, onModeChange, onRemove } = data;
   const theme = useTheme();
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   const { mode, className } = gate.condition;
   const blocks = gate.instanceIds.length;
   const compact = useStore(state => state.transform[2] < COMPACT_ZOOM);
@@ -88,7 +87,7 @@ export function GateNode({ data, selected }: NodeProps<GateFlowNode>) {
         </Typography>
         {!compact && <GateCaption fileRelation={fileRelation} fileLabel={source?.fileLabel} />}
       </Box>
-      <IconButton className="nodrag nopan" size="small" title="Change or remove" onClick={event => setMenuAnchor(event.currentTarget)} sx={{ p: 0.25 }}>
+      <IconButton className="nodrag nopan" size="small" title="Change or remove" onClick={event => menu.open(event.currentTarget)} sx={{ p: 0.25 }}>
         <MoreHorizIcon sx={{ fontSize: 18 }} />
       </IconButton>
       <Handle
@@ -98,35 +97,37 @@ export function GateNode({ data, selected }: NodeProps<GateFlowNode>) {
         title="Drag onto another block's left edge to gate it too"
         style={{ width: 10, height: 10, background: theme.palette.text.secondary, border: `2px solid ${theme.palette.background.default}` }}
       />
-      <Menu {...stopCanvasEvents} anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-        <MenuItem
-          selected={mode === 'if'}
-          onClick={() => {
-            onModeChange('if');
-            setMenuAnchor(null);
-          }}
-        >
-          <ListItemText primary="Only if" secondary="Blocks run only while this class is set." slotProps={{ secondary: { sx: { fontSize: 11 } } }} />
-        </MenuItem>
-        <MenuItem
-          selected={mode === 'unless'}
-          onClick={() => {
-            onModeChange('unless');
-            setMenuAnchor(null);
-          }}
-        >
-          <ListItemText primary="Skip if" secondary="Blocks are skipped while this class is set." slotProps={{ secondary: { sx: { fontSize: 11 } } }} />
-        </MenuItem>
-        <Divider />
-        <MenuItem
-          onClick={() => {
-            onRemove();
-            setMenuAnchor(null);
-          }}
-        >
-          <ListItemText primary={blocks > 1 ? `Remove from all ${blocks} blocks` : 'Remove condition'} />
-        </MenuItem>
-      </Menu>
+      {menu.mounted && (
+        <Menu {...stopCanvasEvents} anchorEl={menu.anchor} open={Boolean(menu.anchor)} onClose={menu.close}>
+          <MenuItem
+            selected={mode === 'if'}
+            onClick={() => {
+              onModeChange('if');
+              menu.close();
+            }}
+          >
+            <ListItemText primary="Only if" secondary="Blocks run only while this class is set." slotProps={{ secondary: { sx: { fontSize: 11 } } }} />
+          </MenuItem>
+          <MenuItem
+            selected={mode === 'unless'}
+            onClick={() => {
+              onModeChange('unless');
+              menu.close();
+            }}
+          >
+            <ListItemText primary="Skip if" secondary="Blocks are skipped while this class is set." slotProps={{ secondary: { sx: { fontSize: 11 } } }} />
+          </MenuItem>
+          <Divider />
+          <MenuItem
+            onClick={() => {
+              onRemove();
+              menu.close();
+            }}
+          >
+            <ListItemText primary={blocks > 1 ? `Remove from all ${blocks} blocks` : 'Remove condition'} />
+          </MenuItem>
+        </Menu>
+      )}
     </Box>
   );
 }

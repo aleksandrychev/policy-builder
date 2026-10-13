@@ -1,7 +1,6 @@
-import { useState } from 'react';
-
 import { Box, Button, Divider, ListItemText, Menu, MenuItem, Typography, useTheme } from '@mui/material';
 
+import { useMenuAnchor } from '../hooks/useMenuAnchor';
 import type { BlockInstance } from '../store/canvasSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 
@@ -23,7 +22,7 @@ export function BlockGroupRow({
   onOpen: (groupId: string) => void;
 }) {
   const theme = useTheme();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   const group = groups.find(candidate => candidate.id === instance.groupId);
   const others = groups.filter(candidate => candidate.id !== instance.groupId);
 
@@ -41,33 +40,35 @@ export function BlockGroupRow({
           </Button>
         </>
       ) : (
-        <Button size="small" onClick={event => setAnchorEl(event.currentTarget)} sx={{ textTransform: 'none', fontSize: 12, px: 0.5 }}>
+        <Button size="small" onClick={event => menu.open(event.currentTarget)} sx={{ textTransform: 'none', fontSize: 12, px: 0.5 }}>
           Add to group…
         </Button>
       )}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-        {others.map(candidate => (
+      {menu.mounted && (
+        <Menu anchorEl={menu.anchor} open={Boolean(menu.anchor)} onClose={menu.close}>
+          {others.map(candidate => (
+            <MenuItem
+              key={candidate.id}
+              onClick={() => {
+                onJoin(candidate.id);
+                menu.close();
+              }}
+            >
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: theme.palette[candidate.color].main, mr: 1 }} />
+              <ListItemText primary={candidate.name || 'Untitled group'} slotProps={{ primary: { sx: { fontSize: 13 } } }} />
+            </MenuItem>
+          ))}
+          {others.length > 0 && <Divider />}
           <MenuItem
-            key={candidate.id}
             onClick={() => {
-              onJoin(candidate.id);
-              setAnchorEl(null);
+              onNewGroup();
+              menu.close();
             }}
           >
-            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: theme.palette[candidate.color].main, mr: 1 }} />
-            <ListItemText primary={candidate.name || 'Untitled group'} slotProps={{ primary: { sx: { fontSize: 13 } } }} />
+            <ListItemText primary="New group with this block" slotProps={{ primary: { sx: { fontSize: 13 } } }} />
           </MenuItem>
-        ))}
-        {others.length > 0 && <Divider />}
-        <MenuItem
-          onClick={() => {
-            onNewGroup();
-            setAnchorEl(null);
-          }}
-        >
-          <ListItemText primary="New group with this block" slotProps={{ primary: { sx: { fontSize: 13 } } }} />
-        </MenuItem>
-      </Menu>
+        </Menu>
+      )}
     </Box>
   );
 }

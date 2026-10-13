@@ -1,8 +1,9 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
 
 import { Box, Button, ListItemText, ListSubheader, Menu, MenuItem, Stack, Typography } from '@mui/material';
 
 import type { BlockParameter } from '../../blocks/types';
+import { useMenuAnchor } from '../../hooks/useMenuAnchor';
 
 // `nameParam`: the descriptor's entries.name_param — a defined name, never computed.
 export function isBindable(parameter: BlockParameter, nameParam?: string): boolean {
@@ -21,13 +22,13 @@ export function BindToDataLink({
   onBind: (valueSourceId: string) => void;
   sources: { badge?: string; id: string; label: string }[];
 }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   return (
     <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
       <Typography sx={{ fontSize: 12, color: 'text.muted' }}>or</Typography>
       <Button
         size="small"
-        onClick={event => setAnchor(event.currentTarget)}
+        onClick={event => menu.open(event.currentTarget)}
         // The dark theme's primary is grey, which reads as disabled; primary.light is its link blue.
         sx={{ fontSize: 12, px: 0.5, py: 0, minWidth: 0, textTransform: 'none', textAlign: 'left', justifyContent: 'flex-start', color: 'primary.light' }}
       >
@@ -36,20 +37,22 @@ export function BindToDataLink({
           ⇢ compute <strong>{fieldLabel}</strong> from data…
         </span>
       </Button>
-      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
-        <ListSubheader sx={{ lineHeight: '32px', fontSize: 12 }}>Compute {fieldLabel} from:</ListSubheader>
-        {sources.map(source => (
-          <MenuItem
-            key={source.id}
-            onClick={() => {
-              onBind(source.id);
-              setAnchor(null);
-            }}
-          >
-            <ListItemText primary={source.label} secondary={source.badge} slotProps={{ secondary: { sx: { fontFamily: 'monospace', fontSize: 11 } } }} />
-          </MenuItem>
-        ))}
-      </Menu>
+      {menu.mounted && (
+        <Menu anchorEl={menu.anchor} open={Boolean(menu.anchor)} onClose={menu.close}>
+          <ListSubheader sx={{ lineHeight: '32px', fontSize: 12 }}>Compute {fieldLabel} from:</ListSubheader>
+          {sources.map(source => (
+            <MenuItem
+              key={source.id}
+              onClick={() => {
+                onBind(source.id);
+                menu.close();
+              }}
+            >
+              <ListItemText primary={source.label} secondary={source.badge} slotProps={{ secondary: { sx: { fontFamily: 'monospace', fontSize: 11 } } }} />
+            </MenuItem>
+          ))}
+        </Menu>
+      )}
     </Box>
   );
 }

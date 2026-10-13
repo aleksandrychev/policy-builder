@@ -110,6 +110,25 @@ const filesSlice = createSlice({
       if (!sanitized) return;
       folder.name = uniqueSiblingName(siblingFolderNames(state, folder.parentId, folder.id), sanitized);
     },
+    // A name already taken in the target folder gets a " 2" suffix, as on create.
+    fileMoved(state, action: PayloadAction<{ fileId: string; parentId: string | null }>) {
+      const file = state.files.find(item => item.id === action.payload.fileId);
+      const { parentId } = action.payload;
+      if (!file || file.parentId === parentId || (parentId && !state.folders.some(folder => folder.id === parentId))) return;
+      file.name = uniqueSiblingName(siblingFileNames(state, parentId, file.id), file.name);
+      file.parentId = parentId;
+    },
+    // Ignored when the target is the folder itself or nested inside it.
+    folderMoved(state, action: PayloadAction<{ folderId: string; parentId: string | null }>) {
+      const folder = state.folders.find(item => item.id === action.payload.folderId);
+      const { parentId } = action.payload;
+      if (!folder || folder.parentId === parentId) return;
+      if (parentId && !state.folders.some(item => item.id === parentId)) return;
+      const { folderIds } = collectFolderDescendants(state.files, state.folders, folder.id);
+      if (parentId === folder.id || (parentId && folderIds.includes(parentId))) return;
+      folder.name = uniqueSiblingName(siblingFolderNames(state, parentId, folder.id), folder.name);
+      folder.parentId = parentId;
+    },
     // The caller is responsible for also dispatching
     // canvasSlice's blocksRemovedForFile — this slice doesn't know about blocks.
     fileRemoved(state, action: PayloadAction<{ fileId: string }>) {
@@ -150,6 +169,8 @@ export const {
   fileSelected,
   fileRenamed,
   folderRenamed,
+  fileMoved,
+  folderMoved,
   fileRemoved,
   folderRemoved
 } = filesSlice.actions;

@@ -14,6 +14,7 @@ import { BINDING_TARGET_PREFIX } from '../store/canvasSlice';
 import type { BlockInstance, Condition, DefinitionEntry, ParamBinding } from '../store/canvasSlice/types';
 import type { BlockOutcome } from '../store/edgesSlice/types';
 import type { PolicyFile } from '../store/filesSlice/types';
+import { contentSized, plainTextarea } from './contentSized';
 import { ConditionSection, type ConditionSlot, FileConditionNotice } from './properties/ConditionSection';
 import { EntryList } from './properties/EntryList';
 import type { NewClassDefinition } from './properties/NewClassModal';
@@ -138,8 +139,7 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
         placeholder="Why it's there, or a decision behind it"
         helperText="Kept as the generated promise's comment."
         multiline
-        minRows={1}
-        maxRows={6}
+        slotProps={{ input: plainTextarea, htmlInput: { style: contentSized(1, 6) } }}
         fullWidth
         size="small"
         sx={inputSx}

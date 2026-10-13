@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type HTMLAttributes, type ReactNode, memo, useEffect, useRef, useState } from 'react';
 
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -12,20 +12,21 @@ import { Box, IconButton, Menu, MenuItem, TextField, Tooltip, Typography } from 
 import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 
 import { describeFileCondition } from '../canvas/fileCondition';
-import type { BlockInstance } from '../store/canvasSlice/types';
 import { type FileTreeNode, MAX_NAME_LENGTH, buildFileTree, collectFolderDescendants } from '../store/filesSlice/fileTree';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 
 interface PolicyFileExplorerProps {
+  // Blocks per file id.
+  blockCounts: Record<string, number>;
   currentFileId: string | null;
   files: PolicyFile[];
   folders: PolicyFolder[];
-  instances: BlockInstance[];
   onAddFile: (name: string, parentId: string | null) => void;
   onAddFolder: (name: string, parentId: string | null) => void;
   onDeleteFile: (fileId: string) => void;
   onDeleteFolder: (folderId: string) => void;
+  onMove: (kind: 'file' | 'folder', id: string, parentId: string | null) => void;
   onRenameFile: (fileId: string, name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onSelectFile: (fileId: string) => void;
@@ -52,6 +53,14 @@ interface DeleteTarget {
   id: string;
   kind: 'file' | 'folder';
 }
+
+type DragProps = Pick<HTMLAttributes<HTMLElement>, 'draggable' | 'onDragEnd' | 'onDragOver' | 'onDragStart' | 'onDrop'>;
+
+// The drop target meaning the project's root (null is "no target").
+const ROOT_TARGET = '__root__';
+const DRAG_MIME_TYPE = 'application/x-cfpb-tree-item';
+// Hovering a collapsed folder this long while dragging opens it.
+const EXPAND_DELAY_MS = 600;
 
 function ancestorFolderIds(folders: PolicyFolder[], parentId: string | null): string[] {
   const ids: string[] = [];
@@ -128,6 +137,7 @@ function RowActions({ onRename, onDelete, disabled, name }: { disabled?: boolean
 interface FileRowProps {
   blockCount: number;
   canDelete: boolean;
+  dragProps: DragProps;
   editingName: string;
   file: PolicyFile;
   isEditing: boolean;
@@ -154,11 +164,13 @@ function FileRow({
   onCommitRename,
   onCancelRename,
   onContextMenu,
-  onDeleteRequest
+  onDeleteRequest,
+  dragProps
 }: FileRowProps) {
   const gate = describeFileCondition(file.condition);
   return (
     <Box
+      {...dragProps}
       onClick={() => !isEditing && onSelect()}
       onDoubleClick={onStartRename}
       onContextMenu={onContextMenu}
@@ -220,6 +232,8 @@ function FileRow({
 
 interface FolderRowProps {
   canDelete: boolean;
+  dragProps: DragProps;
+  dropTarget: boolean;
   editingName: string;
   expanded: boolean;
   folder: PolicyFolder;
@@ -245,14 +259,21 @@ function FolderRow({
   onCommitRename,
   onCancelRename,
   onContextMenu,
-  onDeleteRequest
+  onDeleteRequest,
+  dragProps,
+  dropTarget
 }: FolderRowProps) {
   return (
     <Box
+      {...dragProps}
       onClick={() => !isEditing && onToggleExpanded()}
       onDoubleClick={onStartRename}
       onContextMenu={onContextMenu}
-      sx={{ ...rowSx, cursor: isEditing ? 'default' : 'pointer' }}
+      sx={{
+        ...rowSx,
+        cursor: isEditing ? 'default' : 'pointer',
+        ...(dropTarget && { bgcolor: 'action.selected', outline: '1px solid', outlineColor: 'primary.main' })
+      }}
     >
       {expanded ? (
         <FolderOpenOutlinedIcon sx={{ fontSize: 16, color: 'text.muted', flexShrink: 0 }} />
@@ -347,18 +368,19 @@ function DraftRow({ kind, name, onNameChange, onCommit, onCancel }: DraftRowProp
  * namespace (see architecture-plan.md's Namespaces section). Folders are
  * purely organizational — see PolicyFile.parentId.
  */
-export function PolicyFileExplorer({
+export const PolicyFileExplorer = memo(function PolicyFileExplorer({
   files,
   folders,
   currentFileId,
-  instances,
+  blockCounts,
   onSelectFile,
   onAddFile,
   onAddFolder,
   onRenameFile,
   onRenameFolder,
   onDeleteFile,
-  onDeleteFolder
+  onDeleteFolder,
+  onMove
 }: PolicyFileExplorerProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -367,6 +389,9 @@ export function PolicyFileExplorer({
   const [draftName, setDraftName] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [dragging, setDragging] = useState<DeleteTarget | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const expandTimer = useRef<{ folderId: string; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   // Keeps the current file's folder visible after switching files (e.g.
   // loading a project, or a cross-file jump) — same idea as an editor's
@@ -397,7 +422,7 @@ export function PolicyFileExplorer({
     return () => cancelAnimationFrame(frame);
   }, [currentFileId]);
 
-  const blockCountFor = (fileId: string) => instances.filter(instance => instance.fileId === fileId).length;
+  const blockCountFor = (fileId: string) => blockCounts[fileId] ?? 0;
 
   const startRename = (kind: 'file' | 'folder', id: string, name: string) => {
     setEditing({ kind, id, name });
@@ -457,6 +482,71 @@ export function PolicyFileExplorer({
     setDeleteTarget(null);
   };
 
+  const cancelExpandTimer = () => {
+    if (expandTimer.current) clearTimeout(expandTimer.current.timer);
+    expandTimer.current = null;
+  };
+
+  const endDrag = () => {
+    cancelExpandTimer();
+    setDragging(null);
+    setDropTarget(null);
+  };
+
+  // A file can't land where it already is; a folder neither, nor inside itself.
+  const canDropInto = (parentId: string | null) => {
+    if (!dragging) return false;
+    if (dragging.kind === 'file') return files.find(file => file.id === dragging.id)?.parentId !== parentId;
+    if (folders.find(folder => folder.id === dragging.id)?.parentId === parentId) return false;
+    return parentId !== dragging.id && !ancestorFolderIds(folders, parentId).includes(dragging.id);
+  };
+
+  // Hovering a folder opens it after a moment, so a drag can reach its nested folders.
+  const scheduleExpand = (folderId: string) => {
+    if (expandTimer.current?.folderId === folderId) return;
+    cancelExpandTimer();
+    if (expandedItems.includes(folderId)) return;
+    expandTimer.current = {
+      folderId,
+      timer: setTimeout(() => setExpandedItems(current => (current.includes(folderId) ? current : [...current, folderId])), EXPAND_DELAY_MS)
+    };
+  };
+
+  // `item` is what the row drags; `parentId` is where a drop on the row moves things.
+  const dragPropsFor = (item: DeleteTarget, parentId: string | null, isEditing: boolean): DragProps => ({
+    draggable: !isEditing,
+    onDragStart: event => {
+      event.stopPropagation();
+      event.dataTransfer.setData(DRAG_MIME_TYPE, item.id);
+      event.dataTransfer.effectAllowed = 'move';
+      setDragging(item);
+    },
+    onDragEnd: endDrag,
+    onDragOver: event => {
+      if (!dragging) return;
+      event.stopPropagation();
+      if (item.kind === 'folder' && item.id !== dragging.id) scheduleExpand(item.id);
+      else cancelExpandTimer();
+      if (!canDropInto(parentId)) {
+        event.dataTransfer.dropEffect = 'none';
+        setDropTarget(null);
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDropTarget(parentId ?? ROOT_TARGET);
+    },
+    onDrop: event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (dragging && canDropInto(parentId)) {
+        onMove(dragging.kind, dragging.id, parentId);
+        if (parentId) setExpandedItems(current => [...new Set([...current, ...ancestorFolderIds(folders, parentId)])]);
+      }
+      endDrag();
+    }
+  });
+
   function renderChildren(parentId: string | null, nodes: FileTreeNode[]): ReactNode {
     return (
       <>
@@ -496,6 +586,8 @@ export function PolicyFileExplorer({
                       setContextMenu({ mouseX: event.clientX, mouseY: event.clientY, target: { kind: 'folder', id: folder.id } });
                     }}
                     onDeleteRequest={() => setDeleteTarget({ kind: 'folder', id: folder.id })}
+                    dragProps={dragPropsFor({ kind: 'folder', id: folder.id }, folder.id, isEditing)}
+                    dropTarget={dropTarget === folder.id}
                   />
                 }
               >
@@ -530,6 +622,7 @@ export function PolicyFileExplorer({
                     setContextMenu({ mouseX: event.clientX, mouseY: event.clientY, target: { kind: 'file', id: file.id } });
                   }}
                   onDeleteRequest={() => setDeleteTarget({ kind: 'file', id: file.id })}
+                  dragProps={dragPropsFor({ kind: 'file', id: file.id }, file.parentId, isEditing)}
                 />
               }
             />
@@ -562,7 +655,33 @@ export function PolicyFileExplorer({
         </Box>
       </Box>
 
-      <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto', px: 1 }}>
+      <Box
+        ref={listRef}
+        // Only the empty background reaches here — rows stop propagation. It moves things to the root.
+        onDragOver={event => {
+          if (!dragging) return;
+          cancelExpandTimer();
+          if (!canDropInto(null)) {
+            setDropTarget(null);
+            return;
+          }
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          setDropTarget(ROOT_TARGET);
+        }}
+        onDrop={event => {
+          event.preventDefault();
+          if (dragging && canDropInto(null)) onMove(dragging.kind, dragging.id, null);
+          endDrag();
+        }}
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          px: 1,
+          borderRadius: '4px',
+          ...(dropTarget === ROOT_TARGET && { outline: '1px solid', outlineColor: 'primary.main', outlineOffset: -1 })
+        }}
+      >
         <SimpleTreeView
           expandedItems={expandedItems}
           onExpandedItemsChange={(_event, itemIds) => setExpandedItems(itemIds)}
@@ -631,4 +750,4 @@ export function PolicyFileExplorer({
       />
     </Box>
   );
-}
+});

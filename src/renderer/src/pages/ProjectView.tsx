@@ -38,6 +38,7 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
 import { buildClassNameOptions } from '../components/properties/classOptions';
+import { useStableCallback } from '../hooks/useLatest';
 import {
   LEFT_SIDEBAR_MAX,
   LEFT_SIDEBAR_MIN,
@@ -103,10 +104,12 @@ import {
   fileConditionModeChanged,
   fileConditionRemoved,
   fileDescriptionChanged,
+  fileMoved,
   fileRemoved,
   fileRenamed,
   fileSelected,
   folderAdded,
+  folderMoved,
   folderRemoved,
   folderRenamed
 } from '../store/filesSlice';
@@ -281,6 +284,9 @@ interface ProjectViewProps {
   onSave: () => Promise<boolean>;
 }
 
+// A module constant: a new options object each render would make new sensors, and re-render every draggable.
+const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
+
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
 export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
   const dispatch = useAppDispatch();
@@ -399,7 +405,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     }));
   };
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const sensors = useSensors(useSensor(PointerSensor, POINTER_SENSOR_OPTIONS));
 
   const sizeOf = (instance: BlockInstance) =>
     layoutSizes[instance.instanceId] ?? { width: NODE_WIDTH, height: estimateNodeHeight(instance, blockDescriptorsById.get(instance.blockId)) };
@@ -445,6 +451,10 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
   const handleRenameFolder = (folderId: string, name: string) => {
     dispatch(folderRenamed({ folderId, name }));
+  };
+
+  const handleMove = (kind: 'file' | 'folder', id: string, parentId: string | null) => {
+    dispatch(kind === 'file' ? fileMoved({ fileId: id, parentId }) : folderMoved({ folderId: id, parentId }));
   };
 
   const handleDeleteFile = (fileId: string) => {
@@ -695,7 +705,12 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
   useEffect(() => () => clearTimeout(statusMessageTimeoutRef.current), []);
 
-  const duplicateKeys = useMemo(() => duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId), [allInstances, currentFileId]);
+  // A new Set only when its keys change: every block card depends on it.
+  const duplicateList = useMemo(
+    () => [...duplicateDefinitionKeys(allInstances, blockDescriptorsById, currentFileId)].sort().join('\n'),
+    [allInstances, currentFileId]
+  );
+  const duplicateKeys = useMemo(() => new Set(duplicateList ? duplicateList.split('\n') : []), [duplicateList]);
 
   const handleEscape = () => {
     if (selectedGroup) setSelectedGroupId(null);
@@ -772,6 +787,34 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
       return true;
     }
   });
+
+  // New handlers re-render every draggable (the palette's rows) through dnd-kit's context.
+  const dndHandlers = {
+    onDragStart: useStableCallback(handleDragStart),
+    onDragEnd: useStableCallback(handleDragEnd),
+    onDragCancel: useStableCallback(() => setDragPreview(null))
+  };
+  // The sidebars are memoized: they get stable callbacks, and counts that change only with them.
+  const paletteAddBlock = useStableCallback((descriptor: BlockDescriptor) => addBlockToCanvas(descriptor));
+  const blockCountsJson = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const instance of allInstances) counts[instance.fileId] = (counts[instance.fileId] ?? 0) + 1;
+    return JSON.stringify(counts);
+  }, [allInstances]);
+  const blockCounts = useMemo(() => JSON.parse(blockCountsJson) as Record<string, number>, [blockCountsJson]);
+  const explorer = {
+    onSelectFile: useStableCallback((fileId: string) => {
+      dispatch(fileSelected({ fileId }));
+      setSelectedInstanceId(null);
+    }),
+    onAddFile: useStableCallback(handleAddFile),
+    onAddFolder: useStableCallback(handleAddFolder),
+    onRenameFile: useStableCallback(handleRenameFile),
+    onRenameFolder: useStableCallback(handleRenameFolder),
+    onDeleteFile: useStableCallback(handleDeleteFile),
+    onDeleteFolder: useStableCallback(handleDeleteFolder),
+    onMove: useStableCallback(handleMove)
+  };
 
   if (!project) return null;
 
@@ -948,7 +991,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   );
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setDragPreview(null)}>
+    <DndContext sensors={sensors} onDragStart={dndHandlers.onDragStart} onDragEnd={dndHandlers.onDragEnd} onDragCancel={dndHandlers.onDragCancel}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', overflow: 'hidden' }}>
         <TopBar
           projectName={project.name}
@@ -982,7 +1025,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                 }}
               >
                 <Box sx={{ height: `${layout.paletteHeightFraction * 100}%`, minHeight: 0, flexShrink: 0 }}>
-                  <BlockPalette onAddBlock={addBlockToCanvas} />
+                  <BlockPalette onAddBlock={paletteAddBlock} />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
                 <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -990,17 +1033,15 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                     files={files}
                     folders={folders}
                     currentFileId={currentFileId}
-                    instances={allInstances}
-                    onSelectFile={fileId => {
-                      dispatch(fileSelected({ fileId }));
-                      setSelectedInstanceId(null);
-                    }}
-                    onAddFile={handleAddFile}
-                    onAddFolder={handleAddFolder}
-                    onRenameFile={handleRenameFile}
-                    onRenameFolder={handleRenameFolder}
-                    onDeleteFile={handleDeleteFile}
-                    onDeleteFolder={handleDeleteFolder}
+                    blockCounts={blockCounts}
+                    onSelectFile={explorer.onSelectFile}
+                    onAddFile={explorer.onAddFile}
+                    onAddFolder={explorer.onAddFolder}
+                    onRenameFile={explorer.onRenameFile}
+                    onRenameFolder={explorer.onRenameFolder}
+                    onDeleteFile={explorer.onDeleteFile}
+                    onDeleteFolder={explorer.onDeleteFolder}
+                    onMove={explorer.onMove}
                   />
                 </Box>
               </Box>

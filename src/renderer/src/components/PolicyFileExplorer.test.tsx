@@ -8,10 +8,12 @@ import {
   fileConditionEnabled,
   fileConditionModeChanged,
   fileDescriptionChanged,
+  fileMoved,
   fileRemoved,
   fileRenamed,
   fileSelected,
   folderAdded,
+  folderMoved,
   folderRemoved,
   folderRenamed
 } from '../store/filesSlice';
@@ -26,17 +28,20 @@ function ConnectedExplorer() {
   const dispatch = useAppDispatch();
   const { files, folders, currentFileId } = useAppSelector(state => state.files);
   const instances = useAppSelector(state => state.canvas);
+  const blockCounts: Record<string, number> = {};
+  for (const instance of instances) blockCounts[instance.fileId] = (blockCounts[instance.fileId] ?? 0) + 1;
   return (
     <PolicyFileExplorer
       files={files}
       folders={folders}
       currentFileId={currentFileId}
-      instances={instances}
+      blockCounts={blockCounts}
       onSelectFile={fileId => dispatch(fileSelected({ fileId }))}
       onAddFile={(name, parentId) => dispatch(fileAdded(name, parentId))}
       onAddFolder={(name, parentId) => dispatch(folderAdded(name, parentId))}
       onRenameFile={(fileId, name) => dispatch(fileRenamed({ fileId, name }))}
       onRenameFolder={(folderId, name) => dispatch(folderRenamed({ folderId, name }))}
+      onMove={(kind, id, parentId) => dispatch(kind === 'file' ? fileMoved({ fileId: id, parentId }) : folderMoved({ folderId: id, parentId }))}
       onDeleteFile={fileId =>
         inOneStep(dispatch, () => {
           dispatch(fileRemoved({ fileId }));
