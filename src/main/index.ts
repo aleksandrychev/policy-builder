@@ -185,11 +185,26 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Ungroup', accelerator: 'Shift+CmdOrCtrl+G', registerAccelerator: false, click: command('ungroup') }
       ]
     },
-    // The default View menu minus page zoom: Ctrl/Cmd +/-/0 zoom the canvas instead (renderer).
-    // Reload and DevTools only in development: a reload drops unsaved changes without asking.
+    // The project's tabs and the canvas's view; no page zoom: Ctrl/Cmd +/-/0 zoom the canvas (renderer, so
+    // shown, not registered). Reload and DevTools only in development: a reload drops unsaved changes unasked.
     {
       label: 'View',
       submenu: [
+        ...['Canvas', 'Generated Policy', 'Tests & Logs', 'Deployment'].map((label, index) => ({
+          label,
+          accelerator: `CmdOrCtrl+${index + 1}`,
+          enabled: hasProject,
+          click: command(`tab-${index}`)
+        })),
+        { type: 'separator' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', registerAccelerator: false, enabled: hasProject, click: command('zoomIn') },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', registerAccelerator: false, enabled: hasProject, click: command('zoomOut') },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', registerAccelerator: false, enabled: hasProject, click: command('zoomReset') },
+        { label: 'Fit to View', accelerator: '1', registerAccelerator: false, enabled: hasProject, click: command('zoomFit') },
+        { type: 'separator' },
+        { label: 'Tidy Up Canvas…', enabled: hasProject, click: command('tidy') },
+        { label: 'Toggle Maximized Canvas', enabled: hasProject, click: command('maximize') },
+        { type: 'separator' },
         ...(app.isPackaged
           ? []
           : [{ role: 'reload' as const }, { role: 'forceReload' as const }, { role: 'toggleDevTools' as const }, { type: 'separator' as const }]),
