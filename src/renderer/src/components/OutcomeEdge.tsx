@@ -1,10 +1,9 @@
-import { useState } from 'react';
-
 import { Box, useTheme } from '@mui/material';
 
 import { BaseEdge, type Edge, EdgeLabelRenderer, type EdgeProps, type InternalNode, Position, getBezierPath, useInternalNode } from '@xyflow/react';
 
 import { describeOutcomes } from '../canvas/outcomes';
+import { useMenuAnchor } from '../hooks/useMenuAnchor';
 import type { BlockOutcome } from '../store/edgesSlice/types';
 import { OutcomeMenu } from './OutcomeMenu';
 
@@ -68,7 +67,7 @@ function floatingEndpoints(source: ReturnType<typeof rectOf>, target: ReturnType
 export function OutcomeEdge(props: EdgeProps<OutcomeFlowEdge>) {
   const { id, source, target, data, selected, markerEnd } = props;
   const theme = useTheme();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   // Until both blocks are measured, fall back to React Flow's handle positions.
@@ -84,7 +83,7 @@ export function OutcomeEdge(props: EdgeProps<OutcomeFlowEdge>) {
       <EdgeLabelRenderer>
         <Box
           className="nodrag nopan"
-          onClick={event => setAnchorEl(event.currentTarget)}
+          onClick={event => menu.open(event.currentTarget)}
           title="Change or remove this arrow"
           sx={{
             position: 'absolute',
@@ -105,7 +104,9 @@ export function OutcomeEdge(props: EdgeProps<OutcomeFlowEdge>) {
           {port.symbol} {port.label}
         </Box>
       </EdgeLabelRenderer>
-      <OutcomeMenu anchorEl={anchorEl} onClose={() => setAnchorEl(null)} outcomes={data.outcomes} onChange={data.onOutcomesChange} onRemove={data.onDelete} />
+      {menu.mounted && (
+        <OutcomeMenu anchorEl={menu.anchor} onClose={menu.close} outcomes={data.outcomes} onChange={data.onOutcomesChange} onRemove={data.onDelete} />
+      )}
     </>
   );
 }

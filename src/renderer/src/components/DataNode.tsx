@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo } from 'react';
 
 import CloseIcon from '@mui/icons-material/Close';
 import DataObjectIcon from '@mui/icons-material/DataObject';
@@ -12,6 +12,7 @@ import { currentChainType, decoratorsById } from '../blocks/decorators';
 import type { DecoratorValue } from '../blocks/evaluateDecorator';
 import { runDecoratorChain } from '../blocks/runDecoratorChain';
 import { DATA_NODE_WIDTH, type DataChain } from '../canvas/dataChains';
+import { useMenuAnchor } from '../hooks/useMenuAnchor';
 import { AddDecoratorButton } from './PropertiesPanel';
 import { stopCanvasEvents } from './stopCanvasEvents';
 
@@ -35,27 +36,29 @@ function formatValue(value: DecoratorValue): string {
 const oneLine = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as const;
 
 function StepMenu({ index, count, onMove, onRemove }: { count: number; index: number; onMove: (to: number) => void; onRemove: () => void }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const menu = useMenuAnchor();
   const close = (action: () => void) => () => {
     action();
-    setAnchor(null);
+    menu.close();
   };
   return (
     <>
-      <IconButton className="nodrag nopan" size="small" title="Move or remove this step" onClick={event => setAnchor(event.currentTarget)} sx={{ p: 0 }}>
+      <IconButton className="nodrag nopan" size="small" title="Move or remove this step" onClick={event => menu.open(event.currentTarget)} sx={{ p: 0 }}>
         <MoreHorizIcon sx={{ fontSize: 16 }} />
       </IconButton>
-      <Menu {...stopCanvasEvents} anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
-        <MenuItem disabled={index === 0} onClick={close(() => onMove(index - 1))}>
-          <ListItemText primary="Move up" />
-        </MenuItem>
-        <MenuItem disabled={index === count - 1} onClick={close(() => onMove(index + 1))}>
-          <ListItemText primary="Move down" />
-        </MenuItem>
-        <MenuItem onClick={close(onRemove)}>
-          <ListItemText primary="Remove step" />
-        </MenuItem>
-      </Menu>
+      {menu.mounted && (
+        <Menu {...stopCanvasEvents} anchorEl={menu.anchor} open={Boolean(menu.anchor)} onClose={menu.close}>
+          <MenuItem disabled={index === 0} onClick={close(() => onMove(index - 1))}>
+            <ListItemText primary="Move up" />
+          </MenuItem>
+          <MenuItem disabled={index === count - 1} onClick={close(() => onMove(index + 1))}>
+            <ListItemText primary="Move down" />
+          </MenuItem>
+          <MenuItem onClick={close(onRemove)}>
+            <ListItemText primary="Remove step" />
+          </MenuItem>
+        </Menu>
+      )}
     </>
   );
 }
