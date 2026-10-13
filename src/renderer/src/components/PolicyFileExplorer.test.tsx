@@ -28,12 +28,14 @@ function ConnectedExplorer() {
   const dispatch = useAppDispatch();
   const { files, folders, currentFileId } = useAppSelector(state => state.files);
   const instances = useAppSelector(state => state.canvas);
+  const blockCounts: Record<string, number> = {};
+  for (const instance of instances) blockCounts[instance.fileId] = (blockCounts[instance.fileId] ?? 0) + 1;
   return (
     <PolicyFileExplorer
       files={files}
       folders={folders}
       currentFileId={currentFileId}
-      instances={instances}
+      blockCounts={blockCounts}
       onSelectFile={fileId => dispatch(fileSelected({ fileId }))}
       onAddFile={(name, parentId) => dispatch(fileAdded(name, parentId))}
       onAddFolder={(name, parentId) => dispatch(folderAdded(name, parentId))}

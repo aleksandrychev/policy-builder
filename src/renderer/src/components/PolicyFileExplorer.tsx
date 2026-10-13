@@ -1,4 +1,4 @@
-import { type HTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type HTMLAttributes, type ReactNode, memo, useEffect, useRef, useState } from 'react';
 
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -12,16 +12,16 @@ import { Box, IconButton, Menu, MenuItem, TextField, Tooltip, Typography } from 
 import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 
 import { describeFileCondition } from '../canvas/fileCondition';
-import type { BlockInstance } from '../store/canvasSlice/types';
 import { type FileTreeNode, MAX_NAME_LENGTH, buildFileTree, collectFolderDescendants } from '../store/filesSlice/fileTree';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 
 interface PolicyFileExplorerProps {
+  // Blocks per file id.
+  blockCounts: Record<string, number>;
   currentFileId: string | null;
   files: PolicyFile[];
   folders: PolicyFolder[];
-  instances: BlockInstance[];
   onAddFile: (name: string, parentId: string | null) => void;
   onAddFolder: (name: string, parentId: string | null) => void;
   onDeleteFile: (fileId: string) => void;
@@ -368,11 +368,11 @@ function DraftRow({ kind, name, onNameChange, onCommit, onCancel }: DraftRowProp
  * namespace (see architecture-plan.md's Namespaces section). Folders are
  * purely organizational — see PolicyFile.parentId.
  */
-export function PolicyFileExplorer({
+export const PolicyFileExplorer = memo(function PolicyFileExplorer({
   files,
   folders,
   currentFileId,
-  instances,
+  blockCounts,
   onSelectFile,
   onAddFile,
   onAddFolder,
@@ -422,7 +422,7 @@ export function PolicyFileExplorer({
     return () => cancelAnimationFrame(frame);
   }, [currentFileId]);
 
-  const blockCountFor = (fileId: string) => instances.filter(instance => instance.fileId === fileId).length;
+  const blockCountFor = (fileId: string) => blockCounts[fileId] ?? 0;
 
   const startRename = (kind: 'file' | 'folder', id: string, name: string) => {
     setEditing({ kind, id, name });
@@ -750,4 +750,4 @@ export function PolicyFileExplorer({
       />
     </Box>
   );
-}
+});
