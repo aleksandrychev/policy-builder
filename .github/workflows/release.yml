@@ -1,19 +1,68 @@
 name: Release
 
-# A version tag (v0.1.0, matching package.json) builds the installers for every platform and
-# attaches them to a draft prerelease: only people with write access see it until it's published.
-# Run by hand, it builds the same installers as workflow artifacts, without a release.
+# Releases a version: its tag on the commit, the installers for every platform, and a GitHub
+# release they're attached to (a draft pre-release unless asked otherwise). Started by
+# - merging a "Version X.Y.Z" pull request from Prepare release (its release- branch): the merge
+#   commit is tagged vX.Y.Z, with that run's pre-release / publish choices;
+# - pushing a vX.Y.Z tag by hand: a draft pre-release;
+# - running it by hand: the installers as workflow artifacts only, no tag or release.
 on:
   push:
     tags: ['v*']
+  pull_request:
+    types: [closed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  setup:
+    name: What to release
+    if: github.event_name != 'pull_request' || (github.event.pull_request.merged && startsWith(github.event.pull_request.head.ref, 'release-'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      tag: ${{ steps.plan.outputs.tag }}
+      sha: ${{ steps.plan.outputs.sha }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(node -p 'require("./package.json").version')"
+          release=true prerelease=true publish=false
+          case "$EVENT" in
+            push)
+              [ "$GITHUB_REF_NAME" = "$tag" ] || { echo "::error::Tag $GITHUB_REF_NAME, but package.json says $tag"; exit 1; } ;;
+            pull_request)
+              # The choices Prepare release left in the pull request.
+              grep -q 'prerelease=false' <<<"$BODY" && prerelease=false
+              grep -q 'publish=true' <<<"$BODY" && publish=true
+              if existing=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+                [ "$existing" = "$SHA" ] || { echo "::error::$tag already tags $existing"; exit 1; }
+              else
+                gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" >/dev/null
+              fi ;;
+            *) release=false ;;
+          esac
+          echo "release=$release tag=$tag sha=$SHA prerelease=$prerelease publish=$publish"
+          { echo "release=$release"; echo "tag=$tag"; echo "sha=$SHA"; echo "prerelease=$prerelease"; echo "publish=$publish"; } >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.name }}
+    needs: setup
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -26,6 +75,8 @@ jobs:
           - { name: Windows x64, runner: windows-latest, target: --win --x64, unpacked: win-unpacked/resources }
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -33,10 +84,6 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - name: Tag matches the app's version
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
       - name: rpm tooling
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
@@ -75,31 +122,49 @@ jobs:
           retention-days: 14
 
   release:
-    name: Draft release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    name: Release
+    needs: [setup, build]
+    if: needs.setup.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: ${{ needs.setup.outputs.tag }}
+      PRERELEASE: ${{ needs.setup.outputs.prerelease }}
+      PUBLISH: ${{ needs.setup.outputs.publish }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
       - uses: actions/download-artifact@v8
         with:
           path: installers
           merge-multiple: true
       # A draft prepared by hand for this tag gets the installers, keeping its title and notes.
-      - name: Draft prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Attach the installers
         run: |
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.draft and .tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
+          draft() { gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -1; }
+          id=$(draft)
           if [ -z "$id" ]; then
-            gh release create "$GITHUB_REF_NAME" installers/* --draft --prerelease --title "$GITHUB_REF_NAME (preview, not production-ready)" --generate-notes --notes-file .github/release-notes.md
-            exit 0
+            title="$TAG" flags=()
+            notes=.github/release-notes.md
+            if [ "$PRERELEASE" = true ]; then
+              title="$TAG (preview, not production-ready)" flags=(--prerelease)
+            else
+              # The "not ready for production" box is for previews only.
+              grep -v '^>' .github/release-notes.md | sed '/./,$!d' > /tmp/notes.md && notes=/tmp/notes.md
+            fi
+            gh release create "$TAG" installers/* --draft "${flags[@]}" --title "$title" --generate-notes --notes-file "$notes"
+            id=$(draft)
+          else
+            # The tag goes along: a draft's update without one clears it.
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -f tag_name="$TAG" -F prerelease="$PRERELEASE" >/dev/null
+            for file in installers/*; do
+              gh api --method POST -H "Content-Type: application/octet-stream" --input "$file" \
+                "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$id/assets?name=$(basename "$file")" >/dev/null
+            done
           fi
-          # The tag goes along: a draft's update without one clears it.
-          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -f tag_name="$GITHUB_REF_NAME" -F prerelease=true >/dev/null
-          for file in installers/*; do
-            gh api --method POST -H "Content-Type: application/octet-stream" --input "$file" \
-              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$id/assets?name=$(basename "$file")" >/dev/null
-          done
+          if [ "$PUBLISH" = true ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -f tag_name="$TAG" -F draft=false >/dev/null
+          fi

@@ -89,8 +89,13 @@ and tests on every push and PR.
 
 ## Releases
 
-Pushing a tag that matches `package.json`'s version (`v0.1.0`) runs
-[.github/workflows/release.yml](.github/workflows/release.yml): it builds the
-installers for macOS (arm64 and x64), Linux and Windows and attaches them to a
-draft prerelease, visible only to the repository's maintainers until published.
+Run **Actions → Prepare release → Run workflow** with the version (e.g. `0.2.0`),
+whether it's a pre-release and whether to publish it straight away. It opens a
+pull request "Version 0.2.0" bumping `package.json`; close and reopen it once to
+run the checks (pull requests opened by a workflow don't start them). Merging it
+runs [.github/workflows/release.yml](.github/workflows/release.yml): the merge
+commit is tagged `v0.2.0`, the installers for macOS (arm64 and x64), Linux and
+Windows are built and attached to the release, a draft unless publishing was
+asked for. Pushing a `v0.2.0` tag by hand does the same as a draft pre-release.
+
 The builds aren't code-signed yet; the release notes say how to open them.
