@@ -1,0 +1,75 @@
+name: Prepare release
+
+# Run by hand: opens a pull request "Version X.Y.Z" bumping package.json. Merging it releases that
+# version (release.yml): the merge commit is tagged vX.Y.Z and its installers go to a release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release, e.g. 0.2.0
+        required: true
+        type: string
+      prerelease:
+        description: Pre-release (the app is still a preview)
+        type: boolean
+        default: true
+      publish:
+        description: Publish once the installers are attached (else it stays a draft)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: Version bump pull request
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      PRERELEASE: ${{ inputs.prerelease }}
+      PUBLISH: ${{ inputs.publish }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: The version is new and higher
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$VERSION isn't a version like 0.2.0"; exit 1; }
+          current=$(node -p 'require("./package.json").version')
+          if [ "$current" = "$VERSION" ] || [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
+            echo "::error::$VERSION isn't higher than the current $current"; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::v$VERSION is tagged already"; exit 1
+          fi
+      - name: Bump, commit and push a release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git switch -c "release-$VERSION"
+          npm version "$VERSION" --no-git-tag-version
+          git commit -s -am "Version $VERSION"
+          git push origin "release-$VERSION"
+      - name: Open the pull request
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          kind=$([ "$PRERELEASE" = true ] && echo "a pre-release" || echo "a full release")
+          when=$([ "$PUBLISH" = true ] && echo "published once they're attached" || echo "left as a draft")
+          {
+            echo "Merging this releases **v$VERSION**: the merge commit is tagged, and the installers for every platform are attached to $kind, $when."
+            echo
+            echo "Pull requests opened by a workflow don't start the checks: close and reopen this one to run them."
+            echo
+            echo "Changes since ${last:-the first commit}:"
+            git log --no-merges --format='- %s' ${last:+"$last"..}HEAD~1
+            echo
+            echo "<!-- release: prerelease=$PRERELEASE publish=$PUBLISH -->"
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "release-$VERSION" --title "Version $VERSION" --body-file "$RUNNER_TEMP/body.md"
