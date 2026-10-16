@@ -252,6 +252,10 @@ async function readBuilderProject(folder: string, cfbs: Record<string, unknown>)
 }
 
 async function checkTarget(parent: string, folderName: string): Promise<TargetCheck> {
+  const parentExists = await fs.stat(parent).then(
+    () => true,
+    () => false
+  );
   let parentWritable = await isDirectory(parent);
   if (parentWritable)
     parentWritable = await fs.access(parent, constants.W_OK).then(
@@ -266,7 +270,7 @@ async function checkTarget(parent: string, folderName: string): Promise<TargetCh
   } catch {
     targetState = 'new';
   }
-  return { parentWritable, targetState };
+  return { parentExists, parentWritable, targetState };
 }
 
 // Highest `major.minor.*` masterfiles release in the build index, e.g. "3.27" → "3.27.1".
@@ -569,7 +573,13 @@ async function createProject(request: CreateProjectRequest) {
     checkedContent({ project: request.project, modules: request.modules, provided: request.provided, testEnvironments: request.testEnvironments })
   );
   const type = checkedStorage({ type: request.type, masterfiles: null }).type;
-  const check = await checkTarget(parent, folderName);
+  if (request.createParent !== undefined && typeof request.createParent !== 'boolean') throw new InvalidRequest('Invalid createParent option');
+  let check = await checkTarget(parent, folderName);
+  if (!check.parentExists && request.createParent) {
+    await fs.mkdir(parent, { recursive: true });
+    check = await checkTarget(parent, folderName);
+  }
+  if (!check.parentExists) throw new InvalidRequest(`${parent} doesn't exist`);
   if (!check.parentWritable) throw new InvalidRequest(`Can't write to ${parent}`);
   if (check.targetState === 'nonEmpty') throw new InvalidRequest(`A folder named '${folderName}' already exists and isn't empty.`);
 

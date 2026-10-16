@@ -180,6 +180,8 @@ export interface ProjectStorage {
 }
 
 export interface CreateProjectRequest extends ProjectContent {
+  // Create the parent folder when it's missing (AI agents can't make folders otherwise).
+  createParent?: boolean;
   description: string;
   folderName: string;
   git: boolean;
@@ -284,6 +286,7 @@ export interface RecentProject {
 }
 
 export interface TargetCheck {
+  parentExists: boolean;
   parentWritable: boolean;
   targetState: 'empty' | 'new' | 'nonEmpty';
 }

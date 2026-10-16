@@ -34,6 +34,8 @@ type MasterfilesChoice = 'latest' | 'master';
 type TargetCheck = Awaited<ReturnType<NonNullable<Window['api']>['checkProjectTarget']>>;
 
 export interface ProjectFormValues {
+  // Create the parent folder if it's missing (AI agents; the dialog picks an existing one).
+  createParent?: boolean;
   description: string;
   // The first policy file's name (and so its namespace); the project's name when not given.
   firstFile?: string;
@@ -96,7 +98,7 @@ function useTargetCheck(parent: string | null, folderName: string): TargetCheck 
     const timer = setTimeout(() => {
       window.api
         ?.checkProjectTarget(parent, folderName)
-        .catch((): TargetCheck => ({ parentWritable: false, targetState: 'new' }))
+        .catch((): TargetCheck => ({ parentExists: false, parentWritable: false, targetState: 'new' }))
         .then(result => !cancelled && setCheck({ key: `${parent}\0${folderName}`, result }));
     }, 250);
     return () => {
