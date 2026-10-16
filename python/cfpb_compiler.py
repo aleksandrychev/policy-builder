@@ -568,8 +568,12 @@ class FileCompiler:
     companions: dict[str, str] = field(default_factory=dict)
     # (block or group id, its `# ...` comment) in output order, for source_map.
     chunks: list[tuple[str, str]] = field(default_factory=list)
-    # Custom CFEngine blocks' bundles and the bodies and bundles they use, written as given.
+    # Custom CFEngine blocks' bundles and the bodies and bundles they use, written as given,
+    # with their comments for source_map (added after the entry and group bundles', in file order).
     custom_sections: list[str] = field(default_factory=list)
+    custom_chunks: list[tuple[str, str]] = field(default_factory=list)
+    # Chunks that run to the next one, not to the end of their first bundle or body.
+    spans: set[str] = field(default_factory=set)
     # Block or group id -> its [first, last] line ranges (1-based) in the compiled file.
     source_map: dict[str, list[list[int]]] = field(default_factory=dict)
 
@@ -600,11 +604,13 @@ class FileCompiler:
         if sequenced:
             sections.append(self.entry_bundle(sequenced, names, groups))
             sections.extend(self.group_bundle(group, sequenced, names) for group in groups.values())
-        sections.extend(self.custom_sections)
         sections.extend(self.builder_body(name) for name in sorted(self.bodies))
+        # Last: a custom block's bodies run to the next block's section, or the end.
+        sections.extend(self.custom_sections)
+        self.chunks += self.custom_chunks
         body = in_own_namespace("\n\n".join(sections[1:]), self.ns)
         policy = format_policy(sections[0] + "\n\n" + body + "\n")
-        self.source_map = locate_chunks(policy, self.chunks)
+        self.source_map = locate_chunks(policy, self.chunks, self.spans)
         return policy
 
     def header(self) -> str:
@@ -1031,12 +1037,16 @@ class FileCompiler:
         problem = syntax_error(promises, definitions, self.ns)
         if problem:
             raise Skip(problem)
-        comment = f'Custom CFEngine "{one_line(block.get("label") or "custom")}", run as one step of main.'
-        self.chunks.append((block["instanceId"], comment))
+        label = one_line(block.get("label") or "custom")
+        comment = f'Custom CFEngine "{label}", run as one step of main.'
+        self.custom_chunks.append((block["instanceId"], comment))
         self.custom_sections.append(f"# {comment}\nbundle agent {name}\n{{\n{promises.rstrip()}\n}}")
         # A copied block brings the same bodies: written once, or the file defines them twice.
-        if definitions.strip() and definitions.strip() not in self.custom_sections:
-            self.custom_sections.append(definitions.strip())
+        if definitions.strip() and not any(section.endswith(definitions.strip()) for section in self.custom_sections):
+            used = f'Bodies and bundles of Custom CFEngine "{label}".'
+            self.custom_chunks.append((block["instanceId"], used))
+            self.spans.add(used)
+            self.custom_sections.append(f"# {used}\n{definitions.strip()}")
         return name
 
     def computed_parameters(
@@ -1173,19 +1183,24 @@ def format_policy(text: str) -> str:
     return out.getvalue()
 
 
-def locate_chunks(policy: str, chunks: list[tuple[str, str]]) -> dict[str, list[list[int]]]:
+def locate_chunks(
+    policy: str, chunks: list[tuple[str, str]], spans: set[str] = frozenset()
+) -> dict[str, list[list[int]]]:
     """Where each chunk landed after formatting: from its comment to the next chunk's (or its
-    bundle's end), without trailing blank lines or bare section headers. 1-based, inclusive."""
+    bundle's end), without trailing blank lines or bare section headers. 1-based, inclusive.
+    A chunk in `spans` runs to the next chunk, or the end: several bodies and bundles."""
     lines = policy.splitlines()
     starts, at = [], 0
     for owner, text in chunks:
         found = next((i for i in range(at, len(lines)) if lines[i].strip() == f"# {text}"), None)
         if found is not None:
-            starts.append((owner, found))
+            starts.append((owner, found, text))
             at = found + 1
     ranges: dict[str, list[list[int]]] = {}
-    for index, (owner, start) in enumerate(starts):
+    for index, (owner, start, text) in enumerate(starts):
         close = next((i for i in range(start + 1, len(lines)) if lines[i] == "}"), len(lines) - 1)
+        if text in spans:
+            close = starts[index + 1][1] - 1 if index + 1 < len(starts) else len(lines) - 1
         # A comment above a bundle covers the whole bundle, blocks and all.
         top_level = not lines[start].startswith(" ")
         end = close if top_level else close - 1

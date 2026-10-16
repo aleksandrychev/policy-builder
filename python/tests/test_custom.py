@@ -101,3 +101,22 @@ def test_a_custom_block_that_doesnt_parse_is_left_out_with_why():
 
     assert '# Skipped "Broken": a syntax error in its promises, line 1.' in policy
     assert "bundle agent broken" not in policy
+
+
+def test_blocks_around_a_custom_one_keep_their_lines():
+    report = {"instanceId": "r", "blockId": "report-message", "label": "After it", "params": {"message": "done"}}
+    source_map: dict = {}
+    policy = compile_project(_project(_custom("c", "Mirror the site"), report), source_map=source_map)["./site.cf"]
+    lines = policy.splitlines()
+    ranges = source_map["./site.cf"]
+
+    texts = [lines[first - 1].strip() for first, _last in ranges["c"]]
+    assert texts == [
+        "# Mirror the site",
+        '# Custom CFEngine "Mirror the site", run as one step of main.',
+        '# Bodies and bundles of Custom CFEngine "Mirror the site".',
+    ]
+    # The bodies run to the end of the file: every line of them.
+    assert lines[ranges["c"][2][1] - 1] == "}"
+    [[first, last]] = ranges["r"]
+    assert lines[first - 1].strip() == "# After it" and '"done"' in "\n".join(lines[first - 1 : last])
