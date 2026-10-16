@@ -701,7 +701,9 @@ class FileCompiler:
                 kind, lines = self.entry_promises(block, descriptor, entry)
                 if first[kind]:
                     label = one_line(block.get("label") or descriptor["name"])
-                    lines = [f"# {label}", *lines]
+                    # A Define block's note, once above its entries (not as each one's comment).
+                    note = one_line(block.get("note") or "")
+                    lines = [f"# {label}", *([f"# Note: {note}"] if note else []), *lines]
                     chunks[kind].append((block["instanceId"], label))
                     first[kind] = False
                 sections[kind].extend(lines)
@@ -751,7 +753,7 @@ class FileCompiler:
             class_refs=entry.get("classRefs") or [],
             local_classes=self.local_classes,
         )
-        extra = noted(block)
+        extra = []
         if entry.get("inventory", {}).get("attributeName", "").strip():
             extra.append(
                 f'meta => {{ "inventory", {quote("attribute_name=" + entry["inventory"]["attributeName"].strip())} }}'
@@ -760,7 +762,7 @@ class FileCompiler:
         if kind != "vars":
             return kind, promise(
                 quote(ctx.substitute(step["promiser"])),
-                [*attributes_of(step, ctx), *noted(block), *condition_attributes(conditions)],
+                [*attributes_of(step, ctx), *condition_attributes(conditions)],
             )
 
         [(value_type, value)] = step["attributes"].items()

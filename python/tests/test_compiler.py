@@ -104,7 +104,7 @@ def test_a_files_own_variables_are_referenced_with_its_namespace():
     assert '"$(webserver:vars.a) ${webserver:vars.b} $(common:vars.c) $(myvars.d)"' in policy
 
 
-def test_a_blocks_note_is_its_promises_comment():
+def test_a_blocks_note_is_its_promises_comment_or_a_define_blocks_comment():
     meta = _demo()
     report = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "report-message")
     report["note"] = 'Daily, not "weekly":\nthe old one was too slow'
@@ -114,8 +114,9 @@ def test_a_blocks_note_is_its_promises_comment():
     files = compile_project(meta)
 
     assert 'comment => "Daily, not \\"weekly\\": the old one was too slow"' in _block(files[WEBSERVER], report["label"])
-    # Every entry's promises: a chained one compiles to more than one.
-    assert files[COMMON].count('comment => "Sized for the demo VM"') >= len(settings["entries"])
+    # A Define block's note: once, above its entries.
+    assert files[COMMON].count("# Note: Sized for the demo VM") == 1
+    assert 'comment => "Sized for the demo VM"' not in files[COMMON]
 
 
 def test_a_line_naming_a_list_brings_that_list_in():
