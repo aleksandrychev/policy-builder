@@ -57,6 +57,12 @@ const blocks = `# Blocks, arrows and groups
 - group_blocks puts blocks into a frame that runs as one step (its own bundle). Arrows into and out of the group attach to its frame; an arrow out of a group reads the group's combined outcome.
 - Use groups for a set of blocks that belong together ("Configure nginx"), and set_group_condition to gate them all.
 
+## Custom CFEngine (hand-written promises)
+- For what no block covers (a custom body, a promise type without a block, an attribute no block offers), the Custom CFEngine block (custom-cfengine) holds CFEngine text: \`promises\` (promise sections as in a bundle agent, e.g. \`files:\` then its promises) and \`definitions\` (the bodies and bundles they use). It runs as a bundle of its own, in order, with the block's condition, arrows, How often and note like any block.
+- **Ask the user before using it**, and only for the part no block covers: the rest stays in blocks they can read and edit. Say in the block's note what it does and why it's hand-written.
+- The text is in the file's namespace: the standard library's bodies and bundles need \`default:\` (\`default:recurse("inf")\`, \`default:mog(…)\`), another file's \`<ns>:\`, while bodies in \`definitions\` are used bare. \`$(vars.x)\` reads this file's variables.
+- Check it with get_warnings: customText lists the linter's findings by field and line, notCompiled a syntax error (the block is then left out of the policy). Read get_generated_policy for what it became.
+
 ## Layout
 - New blocks are stacked under the lowest block. After adding or connecting several, call **tidy_file**: it lays the file out by run order, like the canvas's Tidy button (one undo step).`;
 
@@ -162,7 +168,7 @@ A function call in \`vars:\` or \`classes:\` is usually a value source of Define
 - A package method (\`package_module\`) or architecture.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.
 
-For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
+For these, ask the user: write that part in a Custom CFEngine block (see the blocks guide), call a hand-written bundle from elsewhere (Call Method), leave it out, or approximate it with blocks (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
 
 const pitfalls = `# Pitfalls
 
@@ -173,7 +179,8 @@ const pitfalls = `# Pitfalls
 - **Namespaces don't follow renames**: reference variables and classes the way list_variables / list_classes show them.
 - **The user can undo or delete your changes** in the app: if a block id is suddenly unknown, read the file again (get_file).
 - **The user may stop you**: a "Stopped by the user" answer means stop and ask.
-- **One change at a time** is easier for the user to follow and undo than a large rewrite.`;
+- **One change at a time** is easier for the user to follow and undo than a large rewrite.
+- **Custom CFEngine is the last resort**, after asking: a block the user can't edit visually. Standard library names in it need \`default:\`.`;
 
 export const GUIDE: Record<string, GuidePage> = {
   workflow: { title: 'Workflow', summary: 'How to work in Policy Builder, step by step (start here)', text: workflow },

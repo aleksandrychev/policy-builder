@@ -36,6 +36,9 @@ SAMPLES = {
     "bundle_name": "some_bundle",
     "message": "hello from $(sys.fqhost)",
     "template_content": "{{{vars.all_vars.literal}}} {{#classes.always_true}}yes{{/classes.always_true}}",
+    # Custom CFEngine: a promise using a body of its own, and a standard library one.
+    "promises": 'files:\n  "/tmp/cfpb-test/custom"\n    create => "true",\n    perms => default:mog("644", "root", "root"),\n    changes => watched;',
+    "definitions": 'body changes watched\n{\n  report_changes => "content";\n}',
 }
 # Value-source references point at entries defined below.
 FROM_VARIABLE = {

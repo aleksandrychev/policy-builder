@@ -5,6 +5,8 @@ import type {
   BuildResult,
   CompiledPolicy,
   CreateProjectRequest,
+  CustomProblem,
+  CustomText,
   DockerStatus,
   GitStatus,
   HubProbe,
@@ -226,6 +228,7 @@ const api = {
   /** Formats CFEngine policy text with the bundled `cfengine format` engine. */
   formatPolicy: (source: string): Promise<string> => invoke('policy:format', source),
   compilePolicy: (project: object): Promise<CompiledPolicy> => invoke('policy:compile', project),
+  lintCustom: (blocks: CustomText[]): Promise<Record<string, CustomProblem[]>> => invoke('policy:lint-custom', blocks),
 
   /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
   importTextFile: (): Promise<{ content: string; fileName: string } | null> => invoke('file:import-text'),

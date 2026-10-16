@@ -1,0 +1,73 @@
+"""Custom CFEngine blocks: their hand-written text checked with cfengine_cli's linter, offline.
+
+A block holds promises (the body of a bundle of its own) and the bodies and bundles they use.
+They're checked as the compiler places them: in the file's namespace, the promises in a bundle,
+the definitions after it. Names from other namespaces (default:, the standard library; other
+files) can't be checked here; an unqualified name the block doesn't define is most likely the
+standard library's, which a namespaced file only reaches as default:<name>.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import os
+import re
+import tempfile
+
+PROBLEM = re.compile(r"^Error: (?P<message>.*) at .*?:(?P<line>\d+):(?P<column>\d+)$")
+UNKNOWN = re.compile(r"Call to unknown function / bundle / body '(?P<name>[^']+)'")
+BUNDLE = "custom_check"
+
+
+def wrapped(promises: str, definitions: str, namespace: str) -> tuple[str, int, int]:
+    """The text as it's compiled, and the lines where the promises and the definitions start."""
+    head = [f'body file control {{ namespace => "{namespace}"; }}', f"bundle agent {BUNDLE}", "{"]
+    promise_lines = promises.splitlines() or [""]
+    text = "\n".join([*head, *promise_lines, "}", definitions, ""])
+    return text, len(head) + 1, len(head) + len(promise_lines) + 2
+
+
+def _lint(text: str) -> list[str]:
+    from cfengine_cli.lint import lint_args
+
+    with tempfile.TemporaryDirectory() as directory:
+        path = os.path.join(directory, "custom.cf")
+        with open(path, "w") as file:
+            file.write(text)
+        out = io.StringIO()
+        # The linter prints its findings, and may look for a cfbs.json around the working directory.
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()), contextlib.chdir(directory):
+            lint_args([path])
+        return out.getvalue().splitlines()
+
+
+def check(promises: str, definitions: str, namespace: str) -> list[dict]:
+    """The text's problems: {field: promises | definitions, line, column, message}."""
+    text, promises_at, definitions_at = wrapped(promises, definitions, namespace)
+    problems = []
+    for output in _lint(text):
+        found = PROBLEM.match(output.strip())
+        if not found:
+            continue
+        message, line = found["message"], int(found["line"])
+        unknown = UNKNOWN.search(message)
+        if unknown:
+            name = unknown["name"]
+            if ":" in name:
+                continue
+            message = f"{name} isn't defined in this block: from the standard library, write default:{name}"
+        field, first = ("definitions", definitions_at) if line >= definitions_at else ("promises", promises_at)
+        if line < promises_at:
+            field, first = "promises", line
+        problems.append({"field": field, "line": line - first + 1, "column": int(found["column"]), "message": message})
+    return problems
+
+
+def syntax_error(promises: str, definitions: str, namespace: str) -> str | None:
+    """The first syntax error, if any, as the compiler reports a skipped block."""
+    for problem in check(promises, definitions, namespace):
+        if problem["message"].startswith("Syntax error"):
+            where = "promises" if problem["field"] == "promises" else "bodies and bundles"
+            return f"a syntax error in its {where}, line {problem['line']}"
+    return None

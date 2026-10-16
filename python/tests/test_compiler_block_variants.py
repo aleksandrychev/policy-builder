@@ -19,8 +19,20 @@ TRICKY_PATHS = ['/tmp/with space/say "hi"', "/tmp/$(sys.fqhost)/x\\y"]
 LISTS = ["/tmp/a\n/tmp/b", "one\ntwo\n\nthree"]
 
 
+# Custom CFEngine text: other valid snippets (any other text is meant to be skipped).
+CUSTOM = {
+    "promises": [
+        'reports:\n  "say \\"hi\\" from $(sys.fqhost)";',
+        'commands:\n  "/bin/true"\n    contain => default:in_shell;',
+    ],
+    "definitions": [""],
+}
+
+
 def _values(param: dict) -> list[str]:
     """The values to try for one parameter, besides its sample."""
+    if param["name"] in CUSTOM:
+        return CUSTOM[param["name"]]
     options = [o if isinstance(o, str) else o["value"] for o in param.get("options", [])]
     if options:
         return options

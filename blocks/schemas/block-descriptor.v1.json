@@ -62,6 +62,10 @@
       "maxLength": 80,
       "description": "One short sentence, shown under the name and matched by palette search."
     },
+    "custom": {
+      "type": "boolean",
+      "description": "Custom CFEngine: its promises and definitions parameters are CFEngine text, compiled into a bundle of the block's own ({\"custom_bundle\": true} names it) and checked with the linter."
+    },
     "category": {
       "type": "string",
       "description": "Palette grouping."

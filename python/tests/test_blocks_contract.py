@@ -178,6 +178,9 @@ def _check_descriptor(path: Path, problems: list[str]):
     if "steps" in block:
         _check_parameters(shared, where, problems)
         used = _check_steps(block["steps"], shared, where, problems)
+        # A Custom CFEngine block's text goes into a bundle of its own, not a {{placeholder}}.
+        if block.get("custom"):
+            used |= {"promises", "definitions"}
         for name in {param["name"] for param in shared} - used:
             problems.append(f"{where}: parameter {name} is never used")
         if block.get("outcome_step", 0) >= len(block["steps"]):

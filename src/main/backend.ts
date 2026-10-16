@@ -3,7 +3,7 @@ import { app } from 'electron';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 
-import type { BuildResult, CompiledPolicy } from '../preload/api';
+import type { BuildResult, CompiledPolicy, CustomProblem, CustomText } from '../preload/api';
 
 /**
  * Runs the bundled Python sidecar (see `python/`): one short-lived process per
@@ -318,6 +318,20 @@ export async function compilePolicy(project: unknown): Promise<CompiledPolicy> {
     return { files: parsed.files, sourceMap: parsed.source_map ?? {} };
   } catch {
     throw Object.assign(new Error('Python backend returned an unreadable compile result'), { details: result.stdout });
+  }
+}
+
+/** Custom CFEngine blocks' text checked with the bundled linter (cfpb_custom.py): problems by block id. */
+export async function lintCustom(blocks: CustomText[]): Promise<Record<string, CustomProblem[]>> {
+  const result = await runSidecar(['lint-custom'], JSON.stringify({ blocks }), COMPILE_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, COMPILE_TIMEOUT_MS);
+  try {
+    const parsed = JSON.parse(result.stdout) as { problems?: Record<string, CustomProblem[]> };
+    if (typeof parsed.problems !== 'object' || parsed.problems === null) throw new Error('no problems');
+    return parsed.problems;
+  } catch {
+    throw Object.assign(new Error('Python backend returned an unreadable check result'), { details: result.stdout });
   }
 }
 

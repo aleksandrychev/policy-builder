@@ -324,6 +324,19 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "custom_bundle"
+          ],
+          "description": "Custom CFEngine only: the name of the block's own bundle, holding its promises.",
+          "properties": {
+            "custom_bundle": {
+              "const": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
             "if_true",
             "value"
           ],

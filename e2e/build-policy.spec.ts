@@ -287,3 +287,41 @@ test('Define Variable: a literal value and a computed one', async ({ window, con
   expect(policy).toContain('"home_upper" string => string_upcase(getenv("HOME", "1024"));');
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
+
+// Replaces a text parameter's content in its editor dialog (inserted as a whole: typing would auto-close brackets).
+async function editText(window: Page, label: string, text: string) {
+  await window.getByLabel(label, { exact: true }).click();
+  const editor = window.getByRole('dialog', { name: label });
+  await editor.locator('.cm-content').click();
+  await window.keyboard.press('ControlOrMeta+a');
+  await window.keyboard.insertText(text);
+  await editor.getByRole('button', { name: 'Save' }).click();
+  await expect(editor).toBeHidden();
+}
+
+test('Custom CFEngine: hand-written promises, checked as you type', async ({ window, consoleErrors }) => {
+  await newProject(window, 'Custom E2E');
+  await addBlock(window, 'Custom CFEngine', 'Mirror site');
+
+  await test.step('a standard library body without default: is pointed out', async () => {
+    await editText(window, 'Promises', 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    perms => mog("644", "root", "root");');
+    await editText(window, 'Bodies and bundles it uses', 'body copy_from mirror(from)\n{\n  source => "$(from)";\n  purge => "true";\n}');
+    await expect(window.getByText(/^Promises, line 4: mog isn't defined in this block: from the standard library, write default:mog$/)).toBeVisible({
+      timeout: SAVE_TIMEOUT_MS
+    });
+  });
+
+  await test.step('fixed, it shows on the canvas as hand-written', async () => {
+    await editText(window, 'Promises', 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    perms => default:mog("644", "root", "root");');
+    await expect(window.getByText(/^Promises, line/)).toHaveCount(0, { timeout: SAVE_TIMEOUT_MS });
+    await expect(cardOf(window, 'Mirror site').getByText('CUSTOM')).toBeVisible();
+    await expect(cardOf(window, 'Mirror site').getByText(/"\/var\/www\/site"/)).toBeVisible();
+  });
+
+  const policy = await generatedPolicy(window);
+  expect(policy).toContain('"Mirror site" usebundle => mirror_site;');
+  expect(policy).toContain('bundle agent mirror_site');
+  expect(policy).toContain('perms => default:mog("644", "root", "root");');
+  expect(policy).toContain('body copy_from mirror(from)');
+  expect(consoleErrors, 'console errors during the run').toEqual([]);
+});

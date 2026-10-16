@@ -23,6 +23,10 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
     "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
+    "custom-cfengine": {
+        "promises": 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    depth_search => default:recurse("inf");',
+        "definitions": 'body copy_from mirror(from)\n{\n  source => "$(from)";\n  purge => "true";\n}',
+    },
     "create-directory": {"path": "/var/www/html\n/var/www/uploads", "owner": "www-data", "group": "www-data"},
     "create-edit-file": {"path": "/etc/app.conf", "content": 'name = "app"\nport = 8080\n'},
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},

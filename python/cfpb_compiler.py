@@ -225,6 +225,8 @@ class Context:
     computed: dict[str, str] = field(default_factory=dict)
     # Classes the file defines: everything else bare is `default:`.
     local_classes: set[str] = field(default_factory=set)
+    # A Custom CFEngine block's own bundle, which its methods promise calls.
+    custom_bundle: str = ""
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -300,6 +302,10 @@ def compile_value(expr, ctx: Context) -> str:
         return compile_value(expr["value"] if ctx.params.get(expr["if_set"], "").strip() else expr["else"], ctx)
     if "if_true" in expr:
         return compile_value(expr["value"], ctx)
+    if "custom_bundle" in expr:
+        if not ctx.custom_bundle:
+            raise CompileError("{custom_bundle} outside a Custom CFEngine block")
+        return ctx.custom_bundle
     if "choose" in expr:
         picked = ctx.params.get(expr["choose"], "")
         if picked not in expr["cases"]:
@@ -562,6 +568,8 @@ class FileCompiler:
     companions: dict[str, str] = field(default_factory=dict)
     # (block or group id, its `# ...` comment) in output order, for source_map.
     chunks: list[tuple[str, str]] = field(default_factory=list)
+    # Custom CFEngine blocks' bundles and the bodies and bundles they use, written as given.
+    custom_sections: list[str] = field(default_factory=list)
     # Block or group id -> its [first, last] line ranges (1-based) in the compiled file.
     source_map: dict[str, list[list[int]]] = field(default_factory=dict)
 
@@ -592,6 +600,7 @@ class FileCompiler:
         if sequenced:
             sections.append(self.entry_bundle(sequenced, names, groups))
             sections.extend(self.group_bundle(group, sequenced, names) for group in groups.values())
+        sections.extend(self.custom_sections)
         sections.extend(self.builder_body(name) for name in sorted(self.bodies))
         body = in_own_namespace("\n\n".join(sections[1:]), self.ns)
         policy = format_policy(sections[0] + "\n\n" + body + "\n")
@@ -970,6 +979,7 @@ class FileCompiler:
         if len(steps) != 1:
             raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
         step = inline_computed_template(steps[0], computed)
+        custom_bundle = self.custom_block(block, name, params) if descriptor.get("custom") else ""
         to_root = "../" * self.file["path"][2:].count("/")
         ctx = Context(
             self.vars_name,
@@ -983,6 +993,7 @@ class FileCompiler:
             owner=owner,
             computed={param: kind for param, (_lines, kind) in computed.items()},
             local_classes=self.local_classes,
+            custom_bundle=custom_bundle,
         )
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
         variables, promiser_params = [line for lines, _kind in computed.values() for line in lines], dict(params)
@@ -1010,6 +1021,23 @@ class FileCompiler:
             variables += template_data
             attributes.append(f"template_data => @({prefix}template_data)")
         return variables, step["promise_type"], quote(promiser), attributes
+
+    def custom_block(self, block: dict, name: str, params: dict[str, str]) -> str:
+        """A Custom CFEngine block's text: its promises as a bundle named after the block, then
+        the bodies and bundles they use. Skipped, with the reason, if the text doesn't parse."""
+        from cfpb_custom import syntax_error
+
+        promises, definitions = params.get("promises", ""), params.get("definitions", "")
+        problem = syntax_error(promises, definitions, self.ns)
+        if problem:
+            raise Skip(problem)
+        comment = f'Custom CFEngine "{one_line(block.get("label") or "custom")}", run as one step of main.'
+        self.chunks.append((block["instanceId"], comment))
+        self.custom_sections.append(f"# {comment}\nbundle agent {name}\n{{\n{promises.rstrip()}\n}}")
+        # A copied block brings the same bodies: written once, or the file defines them twice.
+        if definitions.strip() and definitions.strip() not in self.custom_sections:
+            self.custom_sections.append(definitions.strip())
+        return name
 
     def computed_parameters(
         self, block: dict, bundle: str, prefix: str = ""

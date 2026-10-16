@@ -170,6 +170,8 @@ export interface BlockDescriptor {
   category: string;
   // own_bundle: sequenced (arrows, outcomes); file_vars: the file's shared vars bundle.
   compile_target: 'file_vars' | 'own_bundle';
+  // Custom CFEngine: its promises and definitions parameters are CFEngine text.
+  custom?: boolean;
   description?: string;
   entries?: BlockEntriesConfig;
   id: string;

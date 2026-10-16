@@ -6,6 +6,7 @@ import { blockAdvice } from '../canvas/advice';
 import { executionOrder, isSequenced, wouldCreateCycle } from '../canvas/executionOrder';
 import { nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
+import { describeProblem } from '../components/properties/CustomTextProblems';
 import { toCfbsProject } from '../project/cfbsProject';
 import { compiledPart } from '../project/useCompiledPolicy';
 import type { RootState } from '../store';
@@ -153,8 +154,24 @@ async function skippedParts(state: RootState): Promise<Map<string, string[]>> {
   return skipped;
 }
 
+// Custom CFEngine blocks' text, checked with the bundled linter: problems by block id.
+async function customProblems(state: RootState): Promise<Record<string, string[]>> {
+  const namespaces = new Map(state.files.files.map(file => [file.id, file.namespace]));
+  const blocks = state.canvas
+    .filter(block => blockDescriptorsById.get(block.blockId)?.custom)
+    .map(block => ({
+      id: block.instanceId,
+      namespace: namespaces.get(block.fileId) ?? 'custom',
+      promises: block.params.promises ?? '',
+      definitions: block.params.definitions ?? ''
+    }));
+  if (!blocks.length || !window.api) return {};
+  const found = await window.api.lintCustom(blocks);
+  return Object.fromEntries(Object.entries(found).map(([id, problems]) => [id, problems.map(describeProblem)]));
+}
+
 async function warnings(state: RootState) {
-  const skipped = await skippedParts(state);
+  const [skipped, custom] = await Promise.all([skippedParts(state), customProblems(state)]);
   const missing = state.canvas.flatMap(block => {
     const descriptor = blockDescriptorsById.get(block.blockId);
     if (!descriptor) return [];
@@ -168,7 +185,8 @@ async function warnings(state: RootState) {
       return problem ? [`${param.name} ${problem}`] : [];
     });
     const advice = blockAdvice(block, state.edges);
-    return empty.length || invalid.length || notCompiled || advice.length
+    const customText = custom[block.instanceId]?.length ? custom[block.instanceId] : undefined;
+    return empty.length || invalid.length || notCompiled || advice.length || customText
       ? [
           {
             blockId: block.instanceId,
@@ -177,7 +195,8 @@ async function warnings(state: RootState) {
             ...(empty.length ? { missing: empty } : {}),
             ...(invalid.length ? { invalid } : {}),
             ...(notCompiled ? { notCompiled } : {}),
-            ...(advice.length ? { advice } : {})
+            ...(advice.length ? { advice } : {}),
+            ...(customText ? { customText } : {})
           }
         ]
       : [];

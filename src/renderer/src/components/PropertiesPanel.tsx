@@ -16,6 +16,7 @@ import type { BlockOutcome } from '../store/edgesSlice/types';
 import type { PolicyFile } from '../store/filesSlice/types';
 import { contentSized, plainTextarea } from './contentSized';
 import { ConditionSection, type ConditionSlot, FileConditionNotice } from './properties/ConditionSection';
+import { CustomTextProblems } from './properties/CustomTextProblems';
 import { EntryList } from './properties/EntryList';
 import type { NewClassDefinition } from './properties/NewClassModal';
 import { type IncomingArrow, RunsWhenSection } from './properties/RunsWhenSection';
@@ -213,6 +214,14 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
           showInventory={false}
           paramSlot={paramSlot}
         />
+        {descriptor.custom && (
+          <CustomTextProblems
+            id={instance.instanceId}
+            namespace={filesById.get(instance.fileId)?.namespace ?? 'custom'}
+            promises={instance.params.promises ?? ''}
+            definitions={instance.params.definitions ?? ''}
+          />
+        )}
         {!descriptor.parameters?.some(parameter => parameter.name === 'run_interval') && (
           <ParameterField parameter={RUN_INTERVAL} value={instance.runInterval ?? ''} onChange={props.onRunIntervalChange} />
         )}

@@ -1,0 +1,11 @@
+### example
+# Custom CFEngine "Case 0", run as one step of main.
+bundle agent case_0
+{
+  files:
+    "/var/www/site"
+      copy_from => mirror("/srv/site"),
+      depth_search => default:recurse("inf");
+}
+
+### body copy_from mirror(from)

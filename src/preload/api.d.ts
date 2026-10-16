@@ -152,6 +152,21 @@ export type TestEnvEvent =
 
 // The generated files by project path (.cf and ./templates/), and where each block or group
 // landed in each .cf: id → [first, last] line ranges, 1-based.
+// A Custom CFEngine block's text, and what the linter found in it (line within its field).
+export interface CustomText {
+  definitions: string;
+  id: string;
+  namespace: string;
+  promises: string;
+}
+
+export interface CustomProblem {
+  column: number;
+  field: 'definitions' | 'promises';
+  line: number;
+  message: string;
+}
+
 export interface CompiledPolicy {
   files: Record<string, string>;
   sourceMap: Record<string, Record<string, [number, number][]>>;
@@ -351,6 +366,8 @@ declare global {
       hubState: (url: string) => Promise<OperationResult<{ state: HubState }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
+      /** Checks Custom CFEngine blocks' text offline: problems by block id. */
+      lintCustom: (blocks: CustomText[]) => Promise<Record<string, CustomProblem[]>>;
       /** Turns the MCP server Claude Code connects to on or off. */
       mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
       /** What AI agents may do: tools that are off aren't offered to them. */
