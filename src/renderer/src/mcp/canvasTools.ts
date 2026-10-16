@@ -28,6 +28,7 @@ import type { BlockOutcome } from '../store/edgesSlice/types';
 import { changeMembership } from '../store/groupArrows';
 import { groupFramesFitted } from '../store/groupsSlice';
 import { inOneStep } from '../store/history';
+import { dependenciesOnSave } from './moduleTools';
 import { asRecord, checkedParams, parameterView, valueProblem } from './params';
 import { type CanvasEnv, type Input, type Tool, ToolError, canvasOf, optionalStr, str } from './shared';
 
@@ -462,7 +463,11 @@ function tidyFile(env: CanvasEnv, input: Input) {
 }
 
 export const CANVAS_TOOLS: Record<string, Tool> = {
-  get_project_overview: env => projectOverview(env.getState(), canvasOf(env)),
+  get_project_overview: async env => {
+    const overview = projectOverview(env.getState(), canvasOf(env));
+    const pending = await dependenciesOnSave(env.getState());
+    return pending.length ? { ...overview, modulesAddedOnSave: pending } : overview;
+  },
   get_file: (env, input) => fileDetail(env.getState(), str(input, 'fileId')),
   list_block_types: () =>
     blockDescriptors.map(({ id, name, category, description, requires_module }) => ({ id, name, category, description, requiresModule: requires_module })),

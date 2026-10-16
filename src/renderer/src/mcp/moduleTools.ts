@@ -25,6 +25,23 @@ function catalog() {
   return catalogRequest;
 }
 
+/** The dependencies saving will add (cfbs add brings them) that the project doesn't list yet: a block's module. */
+export async function dependenciesOnSave(state: RootState): Promise<{ addedFor: string; name: string }[]> {
+  const known = await catalog().catch(() => null);
+  if (!known) return [];
+  return state.modules.flatMap(module =>
+    module.addedBy
+      ? []
+      : modulesToAdd(
+          known.byName,
+          module.name,
+          state.modules.filter(other => other !== module)
+        )
+          .slice(1)
+          .map(dependency => ({ name: dependency.name, addedFor: module.name }))
+  );
+}
+
 async function moduleOf(name: string) {
   const { byName } = await catalog();
   const module = byName.get(name);

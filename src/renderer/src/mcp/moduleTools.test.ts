@@ -2,6 +2,7 @@ import { undone } from '../store/history';
 import { projectCreated, projectTypeChanged } from '../store/projectSlice';
 import { type TestStore, addBlock, addFile, makeStore } from '../store/test/storeTestUtils';
 import { installApi, uninstallApi } from '../test/render';
+import { dependenciesOnSave } from './moduleTools';
 import type { SessionTools, ToolEnv } from './shared';
 import { answerTool } from './tools';
 
@@ -96,6 +97,11 @@ describe('module tools', () => {
     addBlock(store, fileId, { blockId: 'git-checkout', label: 'Clone app' });
     expect(await refusal('remove_module', { name: 'promise-type-git' })).toMatch(/used by Clone app/);
     expect(await refusal('remove_module', { name: 'library-for-promise-types-in-python' })).toMatch(/came with promise-type-git/);
+  });
+
+  it('name the dependencies saving will add for a block’s module', async () => {
+    addBlock(store, addFile(store), { blockId: 'git-checkout' });
+    expect(await dependenciesOnSave(store.getState())).toEqual([{ name: 'library-for-promise-types-in-python', addedFor: 'promise-type-git' }]);
   });
 
   it('refuse a module project', async () => {

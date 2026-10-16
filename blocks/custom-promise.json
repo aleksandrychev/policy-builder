@@ -73,7 +73,7 @@
           "label": "ansible"
         }
       ],
-      "help": "Adds its module (promise-type-…) to the project. Its README on the module's page lists the attributes."
+      "help": "Adds its module (promise-type-…) to the project. Its README lists the attributes: on the module's page, or get_module for AI agents."
     },
     {
       "name": "promiser",

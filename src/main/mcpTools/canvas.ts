@@ -16,7 +16,7 @@ const condition = z
 const note = z
   .string()
   .describe(
-    'Why the block is there, or a decision behind it (e.g. “daily, not weekly: the old run took too long”): shown in Properties, compiled to the promise’s comment'
+    'Why the block is there, or a decision behind it (e.g. “daily, not weekly: the old run took too long”): shown in Properties, compiled to the promise’s comment (a # Note: line above a module’s promise type, which refuses comment)'
   );
 
 const runInterval = z
