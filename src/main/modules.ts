@@ -10,6 +10,10 @@ const INDEX_TIMEOUT_MS = 15_000;
 
 const cachePath = () => join(app.getPath('userData'), 'module-index.json');
 
+// End-to-end tests (development builds only): the index and details from a folder, not the internet.
+const fixtures = () => (!app.isPackaged && process.env.CFPB_MODULE_DATA) || null;
+const fixture = async (file: string): Promise<unknown> => JSON.parse(await fs.readFile(join(fixtures()!, file), 'utf-8'));
+
 interface CachedIndex {
   fetchedAt: string;
   index: Record<string, unknown>;
@@ -27,6 +31,7 @@ async function readCache(): Promise<CachedIndex | null> {
 }
 
 async function download(): Promise<CachedIndex> {
+  if (fixtures()) return { fetchedAt: new Date().toISOString(), index: ((await fixture('index.json')) as { index: Record<string, unknown> }).index };
   const response = await fetch(INDEX_URL, { signal: AbortSignal.timeout(INDEX_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const body: unknown = await response.json();
@@ -60,6 +65,7 @@ let detailsRequest: Promise<{ error?: string; modules: Record<string, unknown> |
 
 async function allDetails() {
   try {
+    if (fixtures()) return { modules: (await fixture('details.json')) as Record<string, unknown>, offline: false };
     const response = await fetch(DETAILS_URL, { signal: AbortSignal.timeout(INDEX_TIMEOUT_MS * 2) });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const modules: unknown = await response.json();

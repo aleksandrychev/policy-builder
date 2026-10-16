@@ -1,0 +1,170 @@
+{
+ "delete-files": {
+  "2.0.0": {
+   "author": {
+    "image": "https://avatars.githubusercontent.com/u/202896?v=4",
+    "name": "Nick Anderson",
+    "url": "https://github.com/nickanderson"
+   },
+   "versions": {
+    "0.0.1": {
+     "date": "Nov 1, 2022",
+     "latest": false
+    },
+    "1.0.0": {
+     "date": "Dec 21, 2022",
+     "latest": false
+    },
+    "2.0.0": {
+     "date": "Jun 30, 2023",
+     "latest": true
+    }
+   },
+   "updated": "Jun 30, 2023",
+   "downloads": 89,
+   "repo": "https://github.com/nickanderson/cfengine-delete-files",
+   "documentation": null,
+   "website": null,
+   "commit": "84cce7c5653b6a5f2b5a28ebb33c697ffc676dd4",
+   "discussion": "https://github.com/cfengine/core/discussions/new?category=modules&title=delete-files&body=I+have+a+question+regarding...",
+   "discussionSearch": "https://github.com/cfengine/core/discussions/categories/modules?discussions_q=is%3Aopen+category%3AModules+delete-files",
+   "version": "2.0.0",
+   "readme": "\n<p>A simple module to delete specific files.</p>\n<p>\nIt allows you to specify a list of files you want deleted on hosts in your infrastructure. When this module is deployed as part of your policy set, every time CFEngine runs, it will check if those files exist, and delete them if they do.</p>\n<p>\n<strong>Recommendation:</strong> Enforce the removal of files known to be malicious or indicating insecure configuration.\nExamples of such files are `~/.shosts` files, `/etc/cron.deny`, etc.</p>\n<div id=\"outline-container-headline-1\" class=\"outline-2\">\n<h2 id=\"headline-1\">\nConfiguration\n</h2>\n<div id=\"outline-text-headline-1\" class=\"outline-text-2\">\n<div id=\"outline-container-headline-2\" class=\"outline-3\">\n<h3 id=\"headline-2\">\nModule input\n</h3>\n<div id=\"outline-text-headline-2\" class=\"outline-text-3\">\n<p>\nThis module accepts input.\nBoth the cfbs CLI and Mission Portal (3.21 and beyond) allow you to specify the files you want deleted.\nHere is an example of what it looks like in Mission Portal:</p>\n<p>\n<img src=\"https://raw.githubusercontent.com/nickanderson/cfengine-delete-files/main/delete-files-example-input-mp.png\" alt=\"https://raw.githubusercontent.com/nickanderson/cfengine-delete-files/main/delete-files-example-input-mp.png\" title=\"https://raw.githubusercontent.com/nickanderson/cfengine-delete-files/main/delete-files-example-input-mp.png\"></p>\n</div>\n</div>\n<div id=\"outline-container-headline-3\" class=\"outline-3\">\n<h3 id=\"headline-3\">\nVariables\n</h3>\n<div id=\"outline-text-headline-3\" class=\"outline-text-3\">\n<dl>\n<dt>\n<code class=\"verbatim\">delete_files:delete_files.files</code>\n</dt>\n<dd>\n<p>Array of dicts having <code class=\"verbatim\">path</code> and <code class=\"verbatim\">why</code> keys.</p>\n<ul>\n<li><code class=\"verbatim\">path</code> must be a regular expression matching the fully qualified path to a file</li>\n<li><code class=\"verbatim\">why</code>  should explain why the file being absent is important</li>\n</ul>\n<figure>\n<div class=\"src src-json\">\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-json\" data-lang=\"json\"><span class=\"line\"><span class=\"cl\">   <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">     <span class=\"nt\">\"variables\"</span><span class=\"p\">:</span> <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">       <span class=\"nt\">\"delete_files:delete_files.files\"</span><span class=\"p\">:</span> <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">         <span class=\"nt\">\"comment\"</span><span class=\"p\">:</span> <span class=\"s2\">\"Files and their required permissions\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">         <span class=\"nt\">\"value\"</span><span class=\"p\">:</span> <span class=\"p\">[</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"why\"</span><span class=\"p\">:</span> <span class=\"s2\">\"The file lists remote hosts and users that are trusted by the local system when using the rshd daemon and can allow unauthenticated access to the system. Reccomended by CIS  CCE-84145-2.\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"path\"</span><span class=\"p\">:</span> <span class=\"s2\">\"/etc/hosts.equiv\"</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">},</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"why\"</span><span class=\"p\">:</span> <span class=\"s2\">\"The file lists remote hosts and users that are trusted by the local system when using the rshd daemon and can allow unauthenticated access to the system. Reccomended by CIS  CCE-84145-2.\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"path\"</span><span class=\"p\">:</span> <span class=\"s2\">\"/home/.*/.rhosts\"</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">},</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"why\"</span><span class=\"p\">:</span> <span class=\"s2\">\"The file lists remote hosts and users that are trusted by the local system when using the rshd daemon and can allow unauthenticated access to the system. Reccomended by CIS  CCE-84145-2.\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">             <span class=\"nt\">\"path\"</span><span class=\"p\">:</span> <span class=\"s2\">\"/root/.rhosts\"</span>\n</span></span><span class=\"line\"><span class=\"cl\">           <span class=\"p\">}</span>\n</span></span><span class=\"line\"><span class=\"cl\">         <span class=\"p\">]</span>\n</span></span><span class=\"line\"><span class=\"cl\">       <span class=\"p\">}</span>\n</span></span><span class=\"line\"><span class=\"cl\">     <span class=\"p\">}</span>\n</span></span><span class=\"line\"><span class=\"cl\">   <span class=\"p\">}</span></span></span></code></pre></div>\n</div>\n<figcaption>\nExample Augments configuration\n</figcaption>\n</figure>\n<p>\n<strong>Notes:</strong></p>\n<ul>\n<li>Running with class <code class=\"verbatim\">delete_files:DEBUG</code> or <code class=\"verbatim\">default:DEBUG</code> define results in DEBUG reports from policy.</li>\n<li>A list or array of files is also supported.</li>\n<li>An array with filenames and dicts having <code class=\"verbatim\">path</code>  and <code class=\"verbatim\">why</code> keys is supported.</li>\n<li>Absence of <code class=\"verbatim\">why</code> key is supported.</li>\n<li>A simple string is supported (but as indicated by DEBUG reports, likely a mis-configuration).</li>\n<li>Directories are <strong>not</strong> deleted.</li>\n</ul>\n</dd>\n</dl>\n</div>\n</div>\n</div>\n</div>\n<div id=\"outline-container-headline-4\" class=\"outline-2\">\n<h2 id=\"headline-4\">\nHistory\n</h2>\n<div id=\"outline-text-headline-4\" class=\"outline-text-2\">\n<ul>\n<li>DEBUG reports added in version 2.0.0.</li>\n<li>Support for simple list specification added in version 2.0.0.</li>\n<li>Support for mixed data array specification added in version 2.0.0.</li>\n<li>Support for absence of <code class=\"verbatim\">why</code> key added in version 2.0.0.</li>\n</ul>\n</div>\n</div>\n"
+  }
+ },
+ "clamav": {
+  "0.1.0": {
+   "author": {
+    "image": "https://avatars.githubusercontent.com/u/16775360?v=4",
+    "name": "Igor Aleksandrychev",
+    "url": "https://github.com/aleksandrychev"
+   },
+   "versions": {
+    "0.0.1": {
+     "date": "Aug 28, 2026",
+     "latest": false
+    },
+    "0.0.2": {
+     "date": "Aug 31, 2026",
+     "latest": false
+    },
+    "0.0.3": {
+     "date": "Sep 1, 2026",
+     "latest": false
+    },
+    "0.1.0": {
+     "date": "Sep 4, 2026",
+     "latest": true
+    }
+   },
+   "updated": "Sep 4, 2026",
+   "downloads": 2,
+   "repo": "https://github.com/aleksandrychev/cfengine-clamav",
+   "documentation": null,
+   "website": null,
+   "commit": "6ebb89d7d54966b4a8cdbe8d68e510e47086fba8",
+   "discussion": "https://github.com/cfengine/core/discussions/new?category=modules&title=clamav&body=I+have+a+question+regarding...",
+   "discussionSearch": "https://github.com/cfengine/core/discussions/categories/modules?discussions_q=is%3Aopen+category%3AModules+clamav",
+   "version": "0.1.0",
+   "readme": "<h1 id=\"cfengine-clamav\">cfengine-clamav</h1>\n<p><a href=\"https://github.com/aleksandrychev/cfengine-clamav/actions/workflows/ci.yml\"><img src=\"https://github.com/aleksandrychev/cfengine-clamav/actions/workflows/ci.yml/badge.svg\" alt=\"CI\"></a></p>\n<p>CFEngine build module that installs <a href=\"https://www.clamav.net/\">ClamAV</a> from upstream packages, keeps its signatures fresh, runs periodic scans, and reports the results as CFEngine Enterprise inventory.</p>\n<p><img src=\"https://raw.githubusercontent.com/aleksandrychev/cfengine-clamav/main/inventory.png\" alt=\"Mission Portal inventory\"></p>\n<h2 id=\"what-it-does\">What it does</h2>\n<ul>\n<li>Installs the upstream ClamAV <code>.deb</code>/<code>.rpm</code> from clamav.net (Debian/Ubuntu and RHEL-family, x86_64/aarch64) and creates the <code>clamav</code> user.</li>\n<li>Runs <code>freshclam</code> when signatures are older than 2 days (configurable).</li>\n<li>Runs <code>clamscan</code> over <code>/home</code>, <code>/root</code>, <code>/tmp</code>, <code>/var/tmp</code> when the last report is older than 3 days (configurable).</li>\n<li>Parses the scan log and inventories: engine version, signature count, scanned files, infected files, data scanned, last scan time, signature freshness, and detected threats. Infections are reported as an alert on every run.</li>\n</ul>\n<p>Only Linux is supported. Windows support is coming soon.</p>\n<h2 id=\"installation\">Installation</h2>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-bash\" data-lang=\"bash\"><span class=\"line\"><span class=\"cl\">cfbs add clamav\n</span></span><span class=\"line\"><span class=\"cl\">cfbs build\n</span></span></code></pre></div><h2 id=\"configuration\">Configuration</h2>\n<p>Scan intervals, scan targets, and excluded directories can be set interactively with <code>cfbs input clamav</code>. Any default can also be overridden via <a href=\"https://docs.cfengine.com/docs/lts/reference/language-concepts/augments\">augments</a>, e.g.:</p>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-json\" data-lang=\"json\"><span class=\"line\"><span class=\"cl\"><span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">  <span class=\"nt\">\"variables\"</span><span class=\"p\">:</span> <span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nt\">\"clamav:globals.clamav_version\"</span><span class=\"p\">:</span> <span class=\"s2\">\"1.5.4\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nt\">\"clamav:globals.max_age_days\"</span><span class=\"p\">:</span> <span class=\"s2\">\"1\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nt\">\"clamav:globals.signature_max_age_days\"</span><span class=\"p\">:</span> <span class=\"s2\">\"1\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nt\">\"clamav:globals.scan_target\"</span><span class=\"p\">:</span> <span class=\"p\">[</span><span class=\"s2\">\"/home\"</span><span class=\"p\">,</span> <span class=\"s2\">\"/srv\"</span><span class=\"p\">],</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nt\">\"clamav:globals.exclude_dirs\"</span><span class=\"p\">:</span> <span class=\"p\">[</span><span class=\"s2\">\"/proc\"</span><span class=\"p\">,</span> <span class=\"s2\">\"/sys\"</span><span class=\"p\">,</span> <span class=\"s2\">\"/dev\"</span><span class=\"p\">,</span> <span class=\"s2\">\"/run\"</span><span class=\"p\">,</span> <span class=\"s2\">\"/srv/backup\"</span><span class=\"p\">]</span>\n</span></span><span class=\"line\"><span class=\"cl\">  <span class=\"p\">}</span>\n</span></span><span class=\"line\"><span class=\"cl\"><span class=\"p\">}</span>\n</span></span></code></pre></div><p>Entries in <code>exclude_dirs</code> are directory paths without a trailing slash. The module anchors each one and passes it to <code>clamscan --exclude-dir</code>, which matches it as a path prefix, so <code>/dev</code> also covers <code>/dev/shm</code>. Setting the list replaces the built-in one (<code>/proc</code>, <code>/sys</code>, <code>/dev</code>, <code>/run</code>, <code>/var/lib/clamav</code>, <code>/var/cfengine</code>), so include any of those you still want.</p>\n<p>Trigger actions immediately:</p>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-bash\" data-lang=\"bash\"><span class=\"line\"><span class=\"cl\">cf-agent -KI --define clamav:want_scan_now      <span class=\"c1\"># force a scan</span>\n</span></span><span class=\"line\"><span class=\"cl\">cf-agent -KI --define clamav:want_freshen_now   <span class=\"c1\"># force a signature update</span>\n</span></span></code></pre></div><h2 id=\"compliance-report\">Compliance report</h2>\n<p>This module contains a ready-made Mission Portal compliance report covering infections, scan recency, and signature freshness - see <a href=\"https://github.com/aleksandrychev/cfengine-clamav/blob/main/compliance-report/README.md\">compliance-report/README.md</a>.</p>\n<h2 id=\"notes\">Notes</h2>\n<ul>\n<li><code>clamscan</code> and <code>freshclam</code> load the full signature database into memory, ensure at least <strong>~2 GB of available RAM</strong> on scanned hosts. On hosts with less memory, add a swap file with the <a href=\"https://build.cfengine.com/modules/manage-swap/\">manage-swap</a> module.</li>\n<li>On Debian/Ubuntu, the distro\u2019s <code>clamav-freshclam</code> daemon locks the signature database while running, which causes the module\u2019s <code>freshclam</code> runs to fail. Disable it with <code>systemctl disable --now clamav-freshclam</code> if CFEngine should manage updates.</li>\n</ul>\n"
+  }
+ },
+ "promise-type-git": {
+  "0.2.6": {
+   "author": {
+    "image": "https://avatars.githubusercontent.com/u/1295287?v=4",
+    "name": "Fabio Tranchitella",
+    "url": "https://github.com/tranchitella"
+   },
+   "versions": {
+    "0.1.0": {
+     "date": "Oct 26, 2021",
+     "latest": false
+    },
+    "0.1.1": {
+     "date": "Nov 1, 2021",
+     "latest": false
+    },
+    "0.2.2": {
+     "date": "Feb 8, 2023",
+     "latest": false
+    },
+    "0.2.3": {
+     "date": "Mar 5, 2024",
+     "latest": false
+    },
+    "0.2.4": {
+     "date": "Jun 18, 2024",
+     "latest": false
+    },
+    "0.2.5": {
+     "date": "Sep 2, 2024",
+     "latest": false
+    },
+    "0.2.6": {
+     "date": "Oct 28, 2024",
+     "latest": true
+    }
+   },
+   "updated": "Oct 28, 2024",
+   "downloads": 8938,
+   "repo": "https://github.com/cfengine/modules",
+   "documentation": null,
+   "website": null,
+   "commit": "3055538003b5dc88c80547703368da33fd43a5a9",
+   "discussion": "https://github.com/cfengine/core/discussions/new?category=modules&title=promise-type-git&body=I+have+a+question+regarding...",
+   "discussionSearch": "https://github.com/cfengine/core/discussions/categories/modules?discussions_q=is%3Aopen+category%3AModules+promise-type-git",
+   "version": "0.2.6",
+   "readme": "<p>The <code>git</code> promise type enables writing concise policy for cloning a git repo and keeping it updated.</p>\n<h2 id=\"requirements\">Requirements</h2>\n<ul>\n<li>git (the command line tool)</li>\n</ul>\n<h2 id=\"attributes\">Attributes</h2>\n<table>\n\t<thead>\n\t\t\t<tr>\n\t\t\t\t\t<th>Name</th>\n\t\t\t\t\t<th>Type</th>\n\t\t\t\t\t<th>Description</th>\n\t\t\t\t\t<th>Mandatory</th>\n\t\t\t\t\t<th>Default</th>\n\t\t\t</tr>\n\t</thead>\n\t<tbody>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>destination</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Destination path</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>Promiser</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>repository</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Git repository URL</td>\n\t\t\t\t\t<td>Yes</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>bare</code></td>\n\t\t\t\t\t<td><code>boolean</code></td>\n\t\t\t\t\t<td>If <code>true</code>, clones the repository as bare repository</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>clone</code></td>\n\t\t\t\t\t<td><code>boolean</code></td>\n\t\t\t\t\t<td>If <code>true</code>, clones the repository if it doesn\u2019t exist at the destination path</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>depth</code></td>\n\t\t\t\t\t<td><code>integer</code></td>\n\t\t\t\t\t<td>Create a shallow clone with a history truncated to the specified number or revisions. Set to 0 to perform a full clone.</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>0</code></td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>executable</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Path to the <code>git</code> executable</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>git</code></td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>force</code></td>\n\t\t\t\t\t<td><code>boolean</code></td>\n\t\t\t\t\t<td>If <code>true</code>, discard any local changes to the repository before updating it</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>recursive</code></td>\n\t\t\t\t\t<td><code>boolean</code></td>\n\t\t\t\t\t<td>If <code>true</code>, use the <code>--recursive</code> git option</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>yes</code></td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>reference</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>If set, use the <code>--reference</code> git option with the given value</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>remote</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Name of the git remote</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>origin</code></td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>ssh_executable</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Path to the <code>ssh</code> executable</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>ssh</code></td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>ssh_options</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>Additional options for the <code>git</code> command, e.g. <code>-o StrictHostKeyChecking=no</code></td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>update</code></td>\n\t\t\t\t\t<td><code>boolean</code></td>\n\t\t\t\t\t<td>If <code>true</code>, updates the repository if it already exists at the destination path</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td>-</td>\n\t\t\t</tr>\n\t\t\t<tr>\n\t\t\t\t\t<td><code>version</code></td>\n\t\t\t\t\t<td><code>string</code></td>\n\t\t\t\t\t<td>The version of the repository to checkout. It can be a branch name, a tag name or a SHA-1 hash.</td>\n\t\t\t\t\t<td>No</td>\n\t\t\t\t\t<td><code>HEAD</code></td>\n\t\t\t</tr>\n\t</tbody>\n</table>\n<h2 id=\"examples\">Examples</h2>\n<p>Check out a git repository in a given destination path:</p>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-cfengine3\" data-lang=\"cfengine3\"><span class=\"line\"><span class=\"cl\"><span class=\"k\">bundle</span> <span class=\"k\">agent</span> <span class=\"nf\">main</span>\n</span></span><span class=\"line\"><span class=\"cl\"><span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">  <span class=\"kd\">git</span><span class=\"p\">:</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"s\">\"starter_pack_repo\"</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">repository</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"https://github.com/cfengine/starter_pack\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">destination</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"/northern.tech/cfengine/starter-pack\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">version</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"master\"</span><span class=\"p\">;</span>\n</span></span><span class=\"line\"><span class=\"cl\"><span class=\"p\">}</span>\n</span></span></code></pre></div><p>Full example with almost all the attributes:</p>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-cfengine3\" data-lang=\"cfengine3\"><span class=\"line\"><span class=\"cl\"><span class=\"k\">bundle</span> <span class=\"k\">agent</span> <span class=\"nf\">main</span>\n</span></span><span class=\"line\"><span class=\"cl\"><span class=\"p\">{</span>\n</span></span><span class=\"line\"><span class=\"cl\">  <span class=\"kd\">git</span><span class=\"p\">:</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"s\">\"starter_pack_repo\"</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">destination</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"/northern.tech/cfengine/starter_pack\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">repository</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"https://github.com/cfengine/starter_pack\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">bare</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"true\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">clone</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"true\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">depth</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"1\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">executable</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"/bin/git\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">force</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"true\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">recursive</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"true\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">remote</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"origin\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">ssh_options</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"UserKnownHostsFile=/dev/null\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">update</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"true\"</span><span class=\"p\">,</span>\n</span></span><span class=\"line\"><span class=\"cl\">      <span class=\"kr\">version</span> <span class=\"o\">=&gt;</span> <span class=\"s\">\"master\"</span><span class=\"p\">;</span>\n</span></span><span class=\"line\"><span class=\"cl\"><span class=\"p\">}</span>\n</span></span></code></pre></div><h2 id=\"authentication\">Authentication</h2>\n<p>This module will set the <code>HOME</code> environment variable if it is not set already based on the user running <code>cf-agent</code>, typically <code>root</code>.</p>\n<p>In order to add authentication you can use <a href=\"https://git-scm.com/docs/gitcredentials\">gitcredentials</a>.</p>\n<p>An example of this usage would be to have two files in <code>$HOME</code>: <code>.gitconfig</code> and <code>.git-credentials</code>.</p>\n<ul>\n<li><code>.gitconfig</code></li>\n</ul>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-sh\" data-lang=\"sh\"><span class=\"line\"><span class=\"cl\"><span class=\"o\">[</span>credential<span class=\"o\">]</span>\n</span></span><span class=\"line\"><span class=\"cl\">    <span class=\"nv\">helper</span> <span class=\"o\">=</span> store\n</span></span></code></pre></div><ul>\n<li><code>.git-credentials</code></li>\n</ul>\n<p>Using the <code>store</code> helper places the username and password in plaintext in <code>$HOME/.git-credentials</code>.</p>\n<p>Here is an explanation of that file <a href=\"https://git-scm.com/docs/git-credential-store#_storage_format\">storage format</a>:</p>\n<blockquote>\n<p>The <code>.git-credentials</code> file is stored in plaintext. Each credential is stored on its own line as a URL like:</p>\n</blockquote>\n<div class=\"highlight\"><pre tabindex=\"0\" class=\"chroma\"><code class=\"language-text\" data-lang=\"text\"><span class=\"line\"><span class=\"cl\">https://user:pass@example.com\n</span></span></code></pre></div><blockquote>\n<p>No other kinds of lines (e.g. empty lines or comment lines) are allowed in the file, even though some may be silently ignored. Do not view or edit the file with editors.</p>\n</blockquote>\n<h2 id=\"authors\">Authors</h2>\n<p>This software was created by the team at <a href=\"https://northern.tech\">Northern.tech</a>, with many contributions from the community.\nThanks everyone!</p>\n<h2 id=\"contribute\">Contribute</h2>\n<p>Feel free to open pull requests to expand this documentation, add features or fix problems.\nYou can also pick up an existing task or file an issue in <a href=\"https://tracker.mender.io/issues/\">our bug tracker</a>.</p>\n<h2 id=\"license\">License</h2>\n<p>This software is licensed under the MIT License. See LICENSE in the root of the repository for the full license text.</p>\n"
+  }
+ },
+ "library-for-promise-types-in-python": {
+  "0.3.1": {
+   "author": {
+    "image": "https://avatars.githubusercontent.com/u/1239823?v=4",
+    "name": "CFEngine",
+    "url": "https://github.com/cfengine"
+   },
+   "versions": {
+    "0.1.0": {
+     "date": "Oct 26, 2021",
+     "latest": false
+    },
+    "0.1.1": {
+     "date": "Nov 1, 2021",
+     "latest": false
+    },
+    "0.2.1": {
+     "date": "Feb 8, 2023",
+     "latest": false
+    },
+    "0.2.2": {
+     "date": "Mar 5, 2024",
+     "latest": false
+    },
+    "0.2.3": {
+     "date": "Jun 19, 2024",
+     "latest": false
+    },
+    "0.3.0": {
+     "date": "Jul 15, 2025",
+     "latest": false
+    },
+    "0.3.1": {
+     "date": "Apr 1, 2026",
+     "latest": true
+    }
+   },
+   "updated": "Apr 1, 2026",
+   "downloads": 9072,
+   "repo": "https://github.com/cfengine/modules",
+   "documentation": null,
+   "website": null,
+   "commit": "679c6c0b18cdb517c7595b1701c3707f47106da5",
+   "discussion": "https://github.com/cfengine/core/discussions/new?category=modules&title=library-for-promise-types-in-python&body=I+have+a+question+regarding...",
+   "discussionSearch": "https://github.com/cfengine/core/discussions/categories/modules?discussions_q=is%3Aopen+category%3AModules+library-for-promise-types-in-python",
+   "version": "0.3.1",
+   "readme": "<p>A library for CFEngine custom promise types implemented in Python.\nIt provides the <code>PromiseModule</code> base class and many helper values and mechanisms that facilitates creation of custom promises.</p>\n<p>If you\u2019d like to develop new promise types (or other modules) for CFEngine, we recommend finishing our getting started tutorial:</p>\n<p><a href=\"https://docs.cfengine.com/docs/3.21/getting-started.html\">https://docs.cfengine.com/docs/3.21/getting-started.html</a></p>\n<p>(The last part shows implementing your first module).</p>\n<p>If you feel comfortable with using CFEngine and writing Python code already, there is a template project you can just copy and start editing:</p>\n<p><a href=\"https://github.com/cfengine/promise-type-template\">https://github.com/cfengine/promise-type-template</a></p>\n<p>For more detailed information about how custom promise types work, see our documentation:</p>\n<p><a href=\"https://docs.cfengine.com/docs/3.21/reference-promise-types-custom.html\">https://docs.cfengine.com/docs/3.21/reference-promise-types-custom.html</a></p>\n"
+  }
+ }
+}

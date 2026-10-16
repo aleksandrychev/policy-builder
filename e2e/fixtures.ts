@@ -73,6 +73,8 @@ export async function launch(userDataDir: string): Promise<ElectronApplication> 
   >;
   if (HIDDEN_RUN) env.CFPB_E2E_HIDDEN = '1';
   env.CFPB_E2E = '1';
+  // The module index and details from e2e/modules/, offline; the network journeys use build.cfengine.com's.
+  if (!process.env.CFPB_NETWORK_TESTS) env.CFPB_MODULE_DATA = join(__dirname, 'modules');
   return electron.launch({ args: [appEntry, `--user-data-dir=${userDataDir}`], env });
 }
 

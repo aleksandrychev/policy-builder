@@ -1,0 +1,156 @@
+{
+  "name": "index",
+  "type": "index",
+  "index": {
+    "delete-files": {
+      "description": "Allows you to specify a list of files you want deleted on hosts in your infrastructure. When this module is deployed as part of your policy set, every time CFEngine runs, it will check if those files exist, and delete them if they do.",
+      "tags": [
+        "supported",
+        "management"
+      ],
+      "repo": "https://github.com/nickanderson/cfengine-delete-files",
+      "by": "https://github.com/nickanderson",
+      "version": "2.0.0",
+      "commit": "84cce7c5653b6a5f2b5a28ebb33c697ffc676dd4",
+      "steps": [
+        "copy delete-files.cf services/cfbs/modules/delete-files/delete-files.cf",
+        "input delete-files/input.json def.json",
+        "bundles delete_files:delete_files",
+        "policy_files services/cfbs/modules/delete-files/delete-files.cf"
+      ],
+      "input": [
+        {
+          "type": "list",
+          "variable": "files",
+          "namespace": "delete_files",
+          "bundle": "delete_files",
+          "label": "Files",
+          "subtype": [
+            {
+              "key": "path",
+              "type": "string",
+              "label": "Path",
+              "question": "Path to file"
+            },
+            {
+              "key": "why",
+              "type": "string",
+              "label": "Why",
+              "question": "Why should this file be deleted?",
+              "default": "Unknown"
+            }
+          ],
+          "while": "Specify another file you want deleted on your hosts?"
+        }
+      ]
+    },
+    "clamav": {
+      "description": "Automates the installation, scanning, and reporting of ClamAV antivirus software.",
+      "tags": [
+        "compliance",
+        "experimental",
+        "inventory",
+        "security"
+      ],
+      "repo": "https://github.com/aleksandrychev/cfengine-clamav",
+      "by": "https://github.com/aleksandrychev",
+      "version": "0.1.0",
+      "commit": "6ebb89d7d54966b4a8cdbe8d68e510e47086fba8",
+      "dependencies": [
+        "compliance-report-imports"
+      ],
+      "steps": [
+        "copy policy/main.cf services/cfbs/modules/clamav/main.cf",
+        "json cfbs/def.json def.json",
+        "input ./input.json def.json",
+        "copy ./compliance-report/compliance_report_clamav.json .no-distrib/compliance-report-definitions/compliance_report_clamav.json"
+      ],
+      "input": [
+        {
+          "type": "string",
+          "variable": "max_age_days",
+          "namespace": "clamav",
+          "bundle": "globals",
+          "label": "Scan interval (days)",
+          "question": "How many days may an existing scan report age before a new clamscan run is forced?",
+          "default": "3"
+        },
+        {
+          "type": "string",
+          "variable": "signature_max_age_days",
+          "namespace": "clamav",
+          "bundle": "globals",
+          "label": "Signature update interval (days)",
+          "question": "How many days may pass between freshclam signature updates?",
+          "default": "2"
+        },
+        {
+          "type": "list",
+          "variable": "scan_target",
+          "namespace": "clamav",
+          "bundle": "globals",
+          "label": "Scan targets",
+          "subtype": {
+            "type": "string",
+            "label": "Directory",
+            "question": "Directory for clamscan to scan recursively (defaults: /home /root /tmp /var/tmp)"
+          },
+          "while": "Add another directory to scan?"
+        },
+        {
+          "type": "list",
+          "variable": "exclude_dirs",
+          "namespace": "clamav",
+          "bundle": "globals",
+          "label": "Excluded directories",
+          "subtype": {
+            "type": "string",
+            "label": "Directory",
+            "question": "Directory clamscan should skip, without trailing slash. Answering replaces the whole default list (/proc /sys /dev /run /var/lib/clamav /var/cfengine), so re-add any you want to keep"
+          },
+          "while": "Add another exclusion?"
+        }
+      ]
+    },
+    "promise-type-git": {
+      "description": "Promise type to manage git repos.",
+      "tags": [
+        "supported",
+        "promise-type"
+      ],
+      "repo": "https://github.com/cfengine/modules",
+      "by": "https://github.com/tranchitella",
+      "version": "0.2.6",
+      "commit": "3055538003b5dc88c80547703368da33fd43a5a9",
+      "subdirectory": "promise-types/git",
+      "dependencies": [
+        "library-for-promise-types-in-python"
+      ],
+      "steps": [
+        "copy git.py modules/promises/",
+        "append enable.cf services/init.cf"
+      ]
+    },
+    "library-for-promise-types-in-python": {
+      "description": "Library enabling promise types implemented in python.",
+      "tags": [
+        "supported",
+        "library"
+      ],
+      "repo": "https://github.com/cfengine/modules",
+      "by": "https://github.com/cfengine",
+      "version": "0.3.1",
+      "commit": "679c6c0b18cdb517c7595b1701c3707f47106da5",
+      "subdirectory": "libraries/python",
+      "steps": [
+        "copy cfengine_module_library.py modules/promises/cfengine_module_library.py",
+        "replace_version 2 0.0.0 modules/promises/cfengine_module_library.py",
+        "copy cfengine_module_library.py modules/promises/cfengine.py",
+        "replace_version 2 0.0.0 modules/promises/cfengine.py"
+      ]
+    },
+    "git": {
+      "alias": "promise-type-git"
+    }
+  }
+}
