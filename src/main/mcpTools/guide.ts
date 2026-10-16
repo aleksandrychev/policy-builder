@@ -139,6 +139,21 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`storage:\` \`mount\` | Mount Storage |
 | Iterating over a list | A list in $(…) in a parameter repeats the promise per item; parameters with allowList take one value per line |
 
+## Functions in vars and classes
+A function call in \`vars:\` or \`classes:\` is usually a value source of Define Variable / Define Class, or a transformer on the value (list_value_sources, list_transformers):
+| Function | Where |
+| --- | --- |
+| \`execresult()\` | Define Variable › Command output |
+| \`returnszero()\` | Define Class › Command succeeds |
+| \`readfile()\`, \`readstringlist()\`, \`readjson()\`, \`filestat()\`, \`getenv()\` | Define Variable › File content, File lines, Structured data (JSON), File metadata, Environment variable |
+| \`parsejson()\` | Define Variable › Structured data (literal) |
+| \`fileexists()\`, \`isdir()\`, \`isvariable()\`, \`regcmp()\`, \`strcmp()\`, \`isgreaterthan()\`, \`islessthan()\` | Define Class › File exists, Directory exists, Variable is defined, Value matches pattern, Values are equal, Value is greater / less than |
+| \`ifelse()\` | Define Variable › Per condition |
+| \`and()\`, \`or()\`, \`not()\`, class expressions | Define Class › All of / Any of these classes, Custom expression |
+| \`regex_replace()\`, \`string_replace()\`, \`string_split()\`/\`splitstring()\`, \`join()\`, \`grep()\`, \`filter()\`, \`maplist()\`, \`sort()\`, \`unique()\`, \`difference()\`, \`nth()\`, \`length()\`, \`format()\`, \`lastnode()\`, \`string_head()\`/\`string_tail()\`, \`string_upcase()\`/\`string_downcase()\` | Transformers on the value (add_transformer) |
+
+**Before calling something unsupported, check list_value_sources and list_transformers**, and say which one you'd use. Don't invent a block, parameter or value source that the catalog doesn't list.
+
 ## No block yet (say so, don't drop silently)
 - \`copy_from\` options beyond a remote copy compared by content (\`encrypt\`, \`purge\`, \`compare => "mtime"\`).
 - \`ifelapsed\` on blocks other than Run Command, Report Message and Signal Process.
