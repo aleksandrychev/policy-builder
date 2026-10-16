@@ -561,3 +561,40 @@ def test_a_promiser_matches_the_most_specific_promise():
     policy = "\n".join(['    "$(common:vars.webserver_package)"', '    "/bin/echo periodic"'])
     assert cfpb_testenv._promiser_at("/bin/echo periodic", {"./web.cf": policy}) == ("./web.cf", 2)
     assert cfpb_testenv._promiser_at("nginx", {"./web.cf": policy}) == ("./web.cf", 1)
+
+
+def test_a_policy_the_hub_refuses_is_traced_to_its_block():
+    project = {
+        "files": [
+            {
+                "id": "f",
+                "path": "./site.cf",
+                "namespace": "site",
+                "order": ["mark"],
+                "blocks": [
+                    {
+                        "instanceId": "mark",
+                        "blockId": "custom-cfengine",
+                        "label": "Mark the app",
+                        "params": {
+                            "promises": 'files:\n  "/srv/app/.managed"\n    create => "true",\n    perms => owned;',
+                            "definitions": 'body perms owned\n{\n  owners => "root";\n  rxdirs => "false";\n}',
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    from cfpb_compiler import compile_project
+
+    policy = compile_project(project)["./site.cf"].splitlines()
+    line = next(number for number, text in enumerate(policy, 1) if 'owners => "root"' in text)
+    lines = [
+        "   /var/cfengine/masterfiles/promises.cf:1:1: warning: something unrelated",
+        f"/var/cfengine/masterfiles/services/cfbs/site.cf:{line}:19: error: Attempted to give a scalar to a non-scalar type",
+    ]
+
+    [problem] = cfpb_testenv.validation_problems(lines, project)
+
+    assert (problem["block"], problem["fileId"], problem["file"], problem["line"]) == ("mark", "f", "./site.cf", line)
+    assert problem["message"] == "Attempted to give a scalar to a non-scalar type"

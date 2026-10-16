@@ -674,6 +674,72 @@ def _ip(engine, container, env: dict) -> str:
     return container.attrs["NetworkSettings"]["Networks"][network_name(env)]["IPAddress"]
 
 
+class ValidationFailed(RunnerError):
+    """cf-promises refused the policy on the hub: its output, to trace the errors to blocks."""
+
+    def __init__(self, message: str, lines: list[str]):
+        super().__init__(message)
+        self.lines = lines
+
+
+# cf-promises on the hub: "/var/cfengine/masterfiles/services/cfbs/site.cf:93:19: error: …"
+VALIDATION_ERROR = re.compile(r"(?P<path>\S+?\.cf):(?P<line>\d+):\d+: error: (?P<message>.*)")
+# Where cfbs puts the project's own files in the policy set.
+DEPLOYED = "services/cfbs/"
+
+
+def validation_problems(lines: list[str], project: dict) -> list[dict]:
+    """The hub's validation errors, each traced to its block where it's in the project's policy."""
+    from cfpb_compiler import compile_project
+
+    source_map: dict = {}
+    try:
+        compile_project(project, source_map=source_map)
+    except Exception:  # the build compiled it already; without a map the errors keep their place
+        source_map = {}
+    block_files = {
+        item: file["id"]
+        for file in project.get("files", [])
+        for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
+    }
+    problems: dict[tuple, dict] = {}
+    for raw in lines:
+        found = VALIDATION_ERROR.search(raw.strip())
+        if not found:
+            continue
+        deployed, line = found["path"], int(found["line"])
+        path = "./" + deployed.split(DEPLOYED, 1)[1] if DEPLOYED in deployed else deployed
+        block = _block_at(source_map.get(path, {}), line)
+        key = (path, line, found["message"])
+        if key not in problems:
+            problems[key] = {
+                "message": found["message"],
+                "cause": [],
+                "count": 1,
+                "block": block,
+                "fileId": block_files.get(block) if block else None,
+                "bundle": None,
+                "file": path,
+                "line": line,
+            }
+    return list(problems.values())
+
+
+def _deploy_checked(engine, hub, masterfiles: str, hub_host: dict, project: dict) -> None:
+    """_deploy, with a policy the hub refuses reported as the hub's problems, traced to blocks."""
+    try:
+        _deploy(engine, hub, masterfiles, hub_host["id"])
+    except ValidationFailed as failure:
+        problems = validation_problems(failure.lines, project)
+        emit("problems", host=hub_host["id"], problems=problems)
+        emit("host", host=hub_host["id"], state="failed", converged=False)
+        if problems:
+            first = problems[0]
+            where = f"{first['file']}:{first['line']}"
+            raise RunnerError(f"The hub refused the policy: {first['message']} ({where})") from failure
+        raise
+
+
 def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
     """Replaces the hub's /var/cfengine/masterfiles with the built policy set, and tags it."""
     import io
@@ -687,8 +753,10 @@ def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
         raise RunnerError("Couldn't copy the policy to the hub")
     # Clients' update.cf (and a bootstrap) needs masterfiles/cf_promises_validated, which clearing
     # removed and only the hub's own run writes again: tag it now, which also validates the policy.
-    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", host_id, "setup")
-    _check(tagged, "Validating the policy on the hub")
+    output: list[str] = []
+    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", host_id, "setup", keep=output)
+    if tagged != 0:
+        raise ValidationFailed(f"Validating the policy on the hub failed (exit {tagged})", output)
 
 
 # What build_policy takes: an exact release or master (it names a cache folder).
@@ -826,7 +894,7 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
             elif host["id"] in stale and kept:
                 _forget_hub(engine, container, host["id"])
         hub = containers[hub_host["id"]]
-        _deploy(engine, hub, masterfiles_dir, hub_host["id"])
+        _deploy_checked(engine, hub, masterfiles_dir, hub_host, (request.get("content") or {}).get("project") or {})
         hub_ip = _ip(engine, hub, env)
         for host in order:
             container = containers[host["id"]]
@@ -1045,7 +1113,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     hub = containers[hub_host["id"]]
     with built_policy(request, masterfiles_dir) as built:
-        _deploy(engine, hub, built, hub_host["id"])
+        _deploy_checked(engine, hub, built, hub_host, request["content"]["project"])
     # Where each block's lines are, to trace errors back to blocks.
     from cfpb_compiler import compile_project
 
