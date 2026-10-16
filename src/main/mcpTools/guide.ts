@@ -63,7 +63,7 @@ const blocks = `# Blocks, arrows and groups
 - Modules run before the project's own policy, in their build order; they're not blocks and have no arrows.
 
 ## Blocks from CFEngine Build modules
-- Git Checkout (git-checkout), Systemd Unit (systemd-unit), HTTP Request (http-request) and Run Ansible Playbook (ansible-playbook) are custom promise types (git:, systemd:, http:, ansible:). Adding one adds its module (promise-type-git…) to the project; saving installs it with cfbs (needs the internet once). Hosts need python3, and git or Ansible for those blocks.
+- Git Checkout (git-checkout), Systemd Unit (systemd-unit), HTTP Request (http-request) and Run Ansible Playbook (ansible-playbook) are custom promise types (git:, systemd:, http:, ansible:). Adding one adds its module (promise-type-git…) to the project; saving installs it with cfbs (needs the internet once). Hosts need python3 (test hosts have it; get_warnings advises an Install Package block for python3 before the first such block until the project has one), and git or Ansible for those blocks.
 - Custom Promise (custom-promise) is any other module promise type (json, yaml, groups, sshd, symlinks, docker_compose, appstreams, assert): pick promise_type, set the promiser and attributes as \`name = value\` lines (a list: \`name = { "a", "b" }\`); its module is added the same way. Its README (the module's page) lists the attributes.
 - Use them rather than Run Command for cloning repositories, systemd units, HTTP requests and playbooks: they report kept/repaired properly, so arrows and How often work.
 

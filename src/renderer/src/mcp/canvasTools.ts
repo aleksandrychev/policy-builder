@@ -190,7 +190,7 @@ async function warnings(state: RootState) {
       const problem = param.type === 'cases' || !value ? undefined : valueProblem(param, value);
       return problem ? [`${param.name} ${problem}`] : [];
     });
-    const advice = blockAdvice(block, state.edges);
+    const advice = blockAdvice(block, state.edges, state.canvas);
     const customText = custom[block.instanceId]?.length ? custom[block.instanceId] : undefined;
     return empty.length || invalid.length || notCompiled || advice.length || customText
       ? [

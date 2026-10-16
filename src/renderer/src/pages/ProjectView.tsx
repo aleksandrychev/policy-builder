@@ -8,9 +8,10 @@ import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, Pointe
 import type { ReactFlowInstance } from '@xyflow/react';
 
 import { duplicateDefinitionKeys, newDefinitionEntry } from '../blocks/definitionEntries';
+import { initialParams } from '../blocks/initialParams';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
-import { primaryPromiseType, resolveBlockShape } from '../blocks/resolveBlockShape';
+import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
 import { blockAdvice } from '../canvas/advice';
 import type { ChainOwner } from '../canvas/dataChains';
@@ -136,6 +137,7 @@ import { useClipboardActions } from './useClipboardActions';
 import { useGroupActions } from './useGroupActions';
 import { isEditableTarget, modalOpen, useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { useProjectModules } from './useProjectModules';
+import { usePythonAdvice } from './usePythonAdvice';
 import { useSelection } from './useSelection';
 import { useSideBar } from './useSideBar';
 
@@ -188,11 +190,6 @@ function OtherTab({
   if (tab === 3)
     return <DeploymentView compiled={policy.compiled} dirty={dirty} onOpenTests={onOpenTests} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
   return <TestResultsView onShowBlock={onShowBlock} />;
-}
-
-function initialParams(descriptor: BlockDescriptor): Record<string, string> {
-  const { parameters } = resolveBlockShape(descriptor, undefined);
-  return Object.fromEntries(parameters.map(parameter => [parameter.name, String(parameter.default ?? '')]));
 }
 
 // The Properties panel with nothing selected: the open file's settings.
@@ -357,6 +354,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const [maximized, setMaximized] = useState(false);
   const sideBar = useSideBar({ activeTab, maximized, setActiveTab, setMaximized });
   const modules = useProjectModules(sideBar.activeView === 'modules', PROJECT_TABS[activeTab]);
+  const pythonAdvice = usePythonAdvice(allInstances);
   // Another tab, or the canvas's file or a block: the module page closes.
   const showTab = (tab: number) => {
     modules.close();
@@ -993,7 +991,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
-            advice={blockAdvice(selectedInstance, allEdges)}
+            advice={blockAdvice(selectedInstance, allEdges, allInstances)}
+            adviceAction={pythonAdvice(selectedInstance)}
             onRunIntervalChange={runInterval => selectedInstance && dispatch(blockRunIntervalChanged({ instanceId: selectedInstance.instanceId, runInterval }))}
             onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}
             onParamChange={(paramName, value, entryId) =>

@@ -35,6 +35,8 @@ export type { NewClassDefinition } from './properties/NewClassModal';
 interface PropertiesPanelProps {
   // Valid settings that are probably not meant (canvas/advice.ts).
   advice?: string[];
+  // A fix one piece of advice offers, as a button on it.
+  adviceAction?: { label: string; onClick: () => void; text: string };
   allInstances: BlockInstance[];
   currentFileId: string | null;
   descriptor: BlockDescriptor | undefined;
@@ -141,7 +143,18 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   const labelField = (
     <>
       {props.advice?.map(text => (
-        <Alert key={text} severity="warning" sx={{ fontSize: 12 }}>
+        <Alert
+          key={text}
+          severity="warning"
+          sx={{ fontSize: 12 }}
+          action={
+            props.adviceAction?.text === text ? (
+              <Button color="inherit" size="small" onClick={props.adviceAction.onClick} sx={{ whiteSpace: 'nowrap' }}>
+                {props.adviceAction.label}
+              </Button>
+            ) : undefined
+          }
+        >
           {text}
         </Alert>
       ))}

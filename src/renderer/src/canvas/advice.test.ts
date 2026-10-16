@@ -1,6 +1,6 @@
 import type { BlockInstance } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
-import { blockAdvice } from './advice';
+import { PYTHON_ADVICE, blockAdvice, needsPython } from './advice';
 
 const block = (blockId: string, params: Record<string, string>, extra: Partial<BlockInstance> = {}): BlockInstance => ({
   instanceId: 'b',
@@ -34,5 +34,21 @@ describe('block advice', () => {
     expect(blockAdvice({ ...restart, groupId: 'g' }, [arrow('g', ['repaired'])])).toEqual([]);
     expect(blockAdvice(block('manage-service', { service_name: 'nginx', action: 'start' }), [])).toEqual([]);
     expect(blockAdvice(undefined, [])).toEqual([]);
+  });
+});
+
+describe('python3 for promise modules', () => {
+  const clone = block('git-checkout', { destination: '/srv/a' });
+
+  it('is advised on a block whose promise type runs with Python, until something installs it', () => {
+    expect(blockAdvice(clone, [], [clone])).toEqual([PYTHON_ADVICE]);
+    const install = block('install-package', { package_name: 'curl\npython3' }, { instanceId: 'p' });
+    expect(blockAdvice(clone, [], [clone, install])).toEqual([]);
+  });
+
+  it('isn’t for promise types without Python, or blocks of CFEngine’s own', () => {
+    expect(needsPython(block('custom-promise', { promise_type: 'docker_compose' }), [])).toBe(false);
+    expect(needsPython(block('custom-promise', { promise_type: 'json' }), [])).toBe(true);
+    expect(needsPython(block('install-package', { package_name: 'git' }), [])).toBe(false);
   });
 });

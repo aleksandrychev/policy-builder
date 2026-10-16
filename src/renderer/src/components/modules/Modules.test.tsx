@@ -5,6 +5,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import App from '../../App';
 import { AppThemeProvider } from '../../ThemeProvider';
 import { projectFilesInitialized } from '../../store/filesSlice';
+import { undone } from '../../store/history';
 import { projectCreated, projectTypeChanged } from '../../store/projectSlice';
 import { type TestStore, makeStore } from '../../store/test/storeTestUtils';
 import { installApi, uninstallApi } from '../../test/render';
@@ -132,6 +133,20 @@ describe('the Modules view', () => {
 });
 
 describe('modules from the Blocks palette', () => {
+  it('advises python3 for a promise-type block, and adds it with an arrow in one step', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByText(/^Git Checkout$/));
+    expect(screen.getByText(/runs with python3 on the host/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Install python3 before it' }));
+    const [clone, install] = store.getState().canvas;
+    expect(install).toMatchObject({ blockId: 'install-package', label: 'Install python3', params: { package_name: 'python3' } });
+    expect(store.getState().edges).toMatchObject([{ source: install.instanceId, target: clone.instanceId, outcomes: ['kept', 'repaired'] }]);
+    expect(screen.queryByText(/runs with python3 on the host/)).not.toBeInTheDocument();
+    store.dispatch(undone());
+    expect(store.getState().canvas).toHaveLength(1);
+    expect(store.getState().edges).toEqual([]);
+  });
+
   it('points a search no block matches at the modules that do', async () => {
     await renderApp();
     fireEvent.change(screen.getByPlaceholderText('Search blocks…'), { target: { value: 'clamav' } });
