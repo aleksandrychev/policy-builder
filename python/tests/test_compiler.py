@@ -728,3 +728,20 @@ def test_a_custom_promise_takes_attribute_rows_as_strings_or_quoted_lists():
     assert "Skipped" in _custom_promise("json", "not a row")
     assert "set by the block itself" in _custom_promise("json", "classes = x")
     assert "isn't a promise type name" in _custom_promise("files: x", "")
+
+
+def test_a_promise_modules_block_note_is_a_policy_comment():
+    # Promise modules refuse a comment attribute: "Unknown attribute 'comment' for git promise".
+    block = {
+        "instanceId": "g",
+        "blockId": "git-checkout",
+        "label": "Clone",
+        "note": "Why we clone",
+        "params": {"destination": "/srv/a", "repository": "https://x/y", "version": "main"},
+    }
+    project = {
+        "files": [{"id": "f", "name": "S", "namespace": "s", "path": "./s.cf", "blocks": [block], "order": ["g"]}]
+    }
+    policy = compile_project(project)["./s.cf"]
+    assert "  # Note: Why we clone\n  git:" in policy
+    assert "comment =>" not in policy

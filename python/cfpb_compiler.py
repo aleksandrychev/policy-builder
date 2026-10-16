@@ -540,10 +540,19 @@ def run_interval(block: dict, descriptor: dict) -> list[str]:
     return [f'action => default:if_elapsed("{minutes}")']
 
 
-def noted(block: dict) -> list[str]:
-    """A block's note, as its promises' comment (one line: CFEngine prints it in reports)."""
+# The promise types CFEngine itself runs; others come from promise modules (git, http…).
+BUILT_IN_TYPES = {"vars", "classes", "users", "files", "packages", "methods", "processes", "services", "commands"}
+BUILT_IN_TYPES |= {"storage", "reports", "guest_environments", "databases", "defaults", "meta"}
+
+
+def noted(block: dict, promise_type: str | None = None) -> list[str]:
+    """A block's note, as its promises' comment (one line: CFEngine prints it in reports). A
+    promise module refuses a comment attribute (Unknown attribute 'comment'): its note is a
+    policy comment above the promise instead."""
     note = one_line(block.get("note") or "")
-    return [f"comment => {quote(note)}"] if note else []
+    if not note or (promise_type and promise_type not in BUILT_IN_TYPES):
+        return []
+    return [f"comment => {quote(note)}"]
 
 
 def one_line(text: str) -> str:
@@ -945,13 +954,15 @@ class FileCompiler:
         variables, promise_type, promiser, attributes = parts
         self.chunks.append((block["instanceId"], label))
         body = [f"  # {label}"]
+        if promise_type not in BUILT_IN_TYPES and one_line(block.get("note") or ""):
+            body.append(f"  # Note: {one_line(block['note'])}")
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
         lines = promise(
             promiser,
             [
                 *attributes,
-                *noted(block),
+                *noted(block, promise_type),
                 *run_interval(block, self.descriptor(block)),
                 *self.gating(block, names, edges),
             ],
