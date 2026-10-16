@@ -38,7 +38,11 @@ SAMPLES = {
     "template_content": "{{{vars.all_vars.literal}}} {{#classes.always_true}}yes{{/classes.always_true}}",
 }
 # Value-source references point at entries defined below.
-FROM_VARIABLE = {"variable": "vars.literal", "list-variable": "vars.list"}
+FROM_VARIABLE = {
+    "variable": "vars.literal",
+    "list-variable": "vars.list",
+    "data-variable": "vars.structured_data_literal",
+}
 
 
 def _sample(param: dict, override: str | None = None) -> str:
@@ -73,7 +77,9 @@ def _variables() -> dict:
         entries.append(_entry(name, "variable_name", name, source_id, _params(source["parameters"], **overrides)))
     # Every decorator, fed a value of its input type.
     for decorator_id, decorator in LIBRARY.decorators.items():
-        source_id = "file-lines" if decorator["input_type"] == "slist" else "command-output"
+        source_id = {"slist": "file-lines", "data": "structured-data-json"}.get(
+            decorator["input_type"], "command-output"
+        )
         name = f"via_{decorator_id.replace('-', '_')}"
         step = {"id": name, "decoratorId": decorator_id, "params": _params(decorator.get("parameters", []))}
         params = _params(sources[source_id]["parameters"])

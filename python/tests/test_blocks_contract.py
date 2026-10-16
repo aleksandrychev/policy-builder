@@ -78,8 +78,11 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
                         expr[branch], top_level=False, in_decorator=in_decorator, problems=problems, where=where
                     )
             return
-    if "previous" in expr and not in_decorator:
-        problems.append(f"{where}: previous is only allowed in decorators")
+    for key in ("previous", "field"):
+        if key in expr and not in_decorator:
+            problems.append(f"{where}: {key} is only allowed in decorators")
+    if "field" in expr:
+        yield from PLACEHOLDER.findall(expr["field"])
     if "body" in expr:
         lib = expr.get("lib", "stdlib")
         known = STDLIB_BODIES if lib == "stdlib" else _builder_bodies()
@@ -241,7 +244,9 @@ def test_decorators_are_consistent():
             used = set(
                 _walk(decorator["expression"], top_level=False, in_decorator=True, problems=problems, where=where)
             )
-            if '"previous"' not in json.dumps(decorator["expression"]):
+            if '"previous"' not in json.dumps(decorator["expression"]) and '"field"' not in json.dumps(
+                decorator["expression"]
+            ):
                 problems.append(f"{where}: the expression never uses the incoming value")
         else:
             used = {name for template in decorator["fallback"].values() for name in PLACEHOLDER.findall(template)}

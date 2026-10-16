@@ -82,3 +82,19 @@ describe('runDecoratorChain', () => {
     expect(results[1].output).toBe('1001');
   });
 });
+
+describe('a data chain', () => {
+  const step = (id: string, decoratorId: string, params: Record<string, string> = {}) => ({ id, decoratorId, params });
+
+  it('reads the sample as JSON', () => {
+    const [keys, joined] = runDecoratorChain([step('a', 'data-keys'), step('b', 'join', { glue: ',' })], '{"web": 1, "db": 2}', 'data');
+    expect(keys.output).toEqual(['web', 'db']);
+    expect(joined.output).toBe('web,db');
+  });
+
+  it('says on its first step when the sample isn’t JSON', () => {
+    expect(runDecoratorChain([step('a', 'data-keys'), step('b', 'join')], '{web', 'data')).toEqual([
+      expect.objectContaining({ id: 'a', error: 'The sample isn’t valid JSON.' })
+    ]);
+  });
+});

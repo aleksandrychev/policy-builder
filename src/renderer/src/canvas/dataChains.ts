@@ -45,7 +45,7 @@ export interface DataChain {
 // (steps can't transform it) and typed-in values (no chain at all).
 export function sourceBaseType(source: BlockValueSource | undefined): DecoratorValueType | undefined {
   if (!source || source.literal) return undefined;
-  return source.value_type === 'slist' || source.value_type === 'string' ? source.value_type : undefined;
+  return source.value_type === 'slist' || source.value_type === 'string' || source.value_type === 'data' ? source.value_type : undefined;
 }
 
 const sourceOf = (descriptor: BlockDescriptor, valueSourceId: string | undefined) =>

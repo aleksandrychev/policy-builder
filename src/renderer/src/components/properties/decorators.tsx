@@ -6,7 +6,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { Box, Button, IconButton, ListItemText, Menu, MenuItem, Stack, TextField, Typography } from '@mui/material';
 
-import { decorators } from '../../blocks/decorators';
+import { type DecoratorValueType, decorators } from '../../blocks/decorators';
 import { useMenuAnchor } from '../../hooks/useMenuAnchor';
 import type { DecoratorInstance } from '../../store/canvasSlice/types';
 import { ParameterField } from './paramFields';
@@ -66,12 +66,13 @@ export function DecoratorRow({
   );
 }
 
-const DECORATOR_GROUPS: { label: string; note: string; type: 'slist' | 'string' }[] = [
-  { type: 'string', label: 'String transforms', note: 'Convert back to a string first — Join into a string, Pick entry by index, or Count entries.' },
-  { type: 'slist', label: 'List transforms', note: 'Convert to a list first with “Split into a list”.' }
+const DECORATOR_GROUPS: { label: string; note: string; type: DecoratorValueType }[] = [
+  { type: 'string', label: 'String transforms', note: 'Convert back to a string first — Join into a string, Pick entry by index, Field, or Count entries.' },
+  { type: 'slist', label: 'List transforms', note: 'Convert to a list first with “Split into a list”, Keys or Values.' },
+  { type: 'data', label: 'Data transforms', note: 'For data values: Structured data (JSON), Data variable, or Merge with JSON.' }
 ];
 
-export function AddDecoratorButton({ chainType, onAdd }: { chainType: 'slist' | 'string'; onAdd: (decoratorId: string) => void }) {
+export function AddDecoratorButton({ chainType, onAdd }: { chainType: DecoratorValueType; onAdd: (decoratorId: string) => void }) {
   const menu = useMenuAnchor();
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();

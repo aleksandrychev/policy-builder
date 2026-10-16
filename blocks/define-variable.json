@@ -199,6 +199,41 @@
       ]
     },
     {
+      "id": "data-variable",
+      "label": "Data variable",
+      "summary": "The data in {{from_variable}}",
+      "badge": "mergedata()",
+      "value_type": "data",
+      "help": "A copy of a data container, e.g. one augments (def.json) define, to take keys, values or fields from.",
+      "parameters": [
+        {
+          "name": "from_variable",
+          "label": "Data variable",
+          "type": "string",
+          "required": true,
+          "references": "variable",
+          "help": "E.g. def.services (from augments), vars.config (this file) or common:vars.config (another file's)."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "data": {
+              "call": "mergedata",
+              "args": [
+                {
+                  "variable": "{{from_variable}}",
+                  "as": "name"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "id": "command-output",
       "label": "Command output",
       "summary": "The {{output}} of \"{{command}}\"",

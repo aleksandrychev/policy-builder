@@ -5,7 +5,7 @@ import type { BlockParameter, Expression, Template } from './types';
 // A value flowing through a decorator chain is either a scalar string or a
 // list of strings (CFEngine's slist) — decorators can cross between the two
 // (e.g. "Split into list" is string -> slist, "Join" is slist -> string).
-export type DecoratorValueType = 'slist' | 'string';
+export type DecoratorValueType = 'data' | 'slist' | 'string';
 
 /**
  * A value-transforming CFEngine function chained onto a Define Variable value
@@ -43,7 +43,8 @@ export const decorators: Decorator[] = file.decorators;
 export const decoratorsById = new Map(decorators.map(decorator => [decorator.id, decorator]));
 
 // What a decorator hands the next step: an int counts as a string.
-export const chainOutputType = (decorator: Decorator): DecoratorValueType => (decorator.output_type === 'slist' ? 'slist' : 'string');
+export const chainOutputType = (decorator: Decorator): DecoratorValueType =>
+  decorator.output_type === 'slist' || decorator.output_type === 'data' ? decorator.output_type : 'string';
 
 // `baseType` is what the value source produces before any decorator runs, so
 // the first decorator offered matches what's actually flowing in.

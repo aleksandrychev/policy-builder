@@ -25,29 +25,33 @@
     # Case 5
     "list_variable" slist => { @(snap:vars.list) };
 
-### source command-output
+### source data-variable
     # Case 6
+    "data_variable" data => mergedata("snap:vars.structured_data_literal");
+
+### source command-output
+    # Case 7
     "command_output"
       string => execresult("/bin/echo hello", "noshell", "stdout"),
       if => "agent";
 
 ### source file-lines
-    # Case 7
+    # Case 8
     "file_lines"
       slist => readstringlist("/etc/hosts", "x", "\n", "1000", "1048576");
 
 ### source file-content
-    # Case 8
+    # Case 9
     "file_content" string => readfile("/etc/hosts", "16384");
 
 ### source file-metadata
-    # Case 9
+    # Case 10
     "file_metadata" string => filestat("/etc/hosts", "size");
 
 ### source environment-variable
-    # Case 10
+    # Case 11
     "environment_variable" string => getenv("HOME", "1024");
 
 ### source structured-data-json
-    # Case 11
+    # Case 12
     "structured_data_json" data => readjson("/etc/hosts", "1048576");

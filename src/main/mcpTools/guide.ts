@@ -148,6 +148,8 @@ A function call in \`vars:\` or \`classes:\` is usually a value source of Define
 | \`returnszero()\` | Define Class › Command succeeds |
 | \`readfile()\`, \`readstringlist()\`, \`readjson()\`, \`filestat()\`, \`getenv()\` | Define Variable › File content, File lines, Structured data (JSON), File metadata, Environment variable |
 | \`parsejson()\` | Define Variable › Structured data (literal) |
+| \`mergedata("def.x")\` or a data variable used as a whole | Define Variable › Data variable (e.g. \`def.services\` from augments) |
+| \`getindices()\`, \`getvalues()\`, \`length()\` on data, \`$(x[key][sub])\`, \`mergedata(x, '{…}')\`, \`format("%S", x)\` | Data transformers on a Structured data (JSON) or Data variable value: Keys, Values, Count entries, Field (path web.port), Merge with JSON, As JSON text |
 | \`fileexists()\`, \`isdir()\`, \`isvariable()\`, \`regcmp()\`, \`strcmp()\`, \`isgreaterthan()\`, \`islessthan()\` | Define Class › File exists, Directory exists, Variable is defined, Value matches pattern, Values are equal, Value is greater / less than |
 | \`ifelse()\` | Define Variable › Per condition |
 | \`and()\`, \`or()\`, \`not()\`, class expressions | Define Class › All of / Any of these classes, Custom expression |
@@ -158,7 +160,6 @@ A function call in \`vars:\` or \`classes:\` is usually a value source of Define
 ## No block yet (say so, don't drop silently)
 - \`copy_from\` options beyond a remote copy compared by content (\`encrypt\`, \`purge\`, \`compare => "mtime"\`).
 - A package method (\`package_module\`) or architecture.
-- \`getindices\` and other transformers on data containers: data values take no transformers yet.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.
 
 For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;

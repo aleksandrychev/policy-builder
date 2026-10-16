@@ -67,7 +67,8 @@
         "input_type": {
           "enum": [
             "string",
-            "slist"
+            "slist",
+            "data"
           ],
           "description": "What it takes from the previous step (an int counts as a string)."
         },
@@ -75,7 +76,8 @@
           "enum": [
             "string",
             "slist",
-            "int"
+            "int",
+            "data"
           ],
           "description": "What it produces. int (length) is a string to later steps, but the compiler declares the variable int when it's the last step — string => length(...) is a fatal error on an unresolved list."
         },

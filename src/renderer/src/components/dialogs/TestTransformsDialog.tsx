@@ -3,7 +3,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 
 import type { DecoratorValueType } from '../../blocks/decorators';
-import type { DecoratorValue } from '../../blocks/evaluateDecorator';
+import { DataValue, type DecoratorValue } from '../../blocks/evaluateDecorator';
 import { runDecoratorChain } from '../../blocks/runDecoratorChain';
 import type { DecoratorInstance } from '../../store/canvasSlice/types';
 
@@ -20,6 +20,13 @@ interface TestTransformsDialogProps {
 }
 
 function OutputValue({ value }: { value: DecoratorValue }) {
+  if (value instanceof DataValue) {
+    return (
+      <Typography component="pre" sx={{ m: 0, fontSize: 12, fontFamily: 'monospace', color: 'text.primary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {JSON.stringify(value.json, null, 2)}
+      </Typography>
+    );
+  }
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return <Typography sx={{ fontSize: 12, color: 'text.muted', fontStyle: 'italic' }}>(empty list)</Typography>;
@@ -71,7 +78,7 @@ export function TestTransformsDialog({ open, baseType, decoratorChain, onClose }
 
           <TextField
             autoFocus
-            label={baseType === 'slist' ? 'Sample input (one item per line)' : 'Sample input'}
+            label={baseType === 'slist' ? 'Sample input (one item per line)' : baseType === 'data' ? 'Sample input (JSON)' : 'Sample input'}
             value={sampleInput}
             onChange={event => setSampleInput(event.target.value)}
             helperText={

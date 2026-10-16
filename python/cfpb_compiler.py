@@ -208,6 +208,8 @@ class Context:
     bodies: set[str]
     class_refs: list[dict] = field(default_factory=list)
     previous: str | None = None
+    # The name of a variable holding the previous value, for steps that need one.
+    previous_name: str | None = None
     # Chained values are function arguments: a list can't be a { } literal there.
     as_argument: bool = False
     # A block's own files in ./templates/ ({"template_file": …}), named after the block,
@@ -282,9 +284,18 @@ def compile_value(expr, ctx: Context) -> str:
             return f"{{ @({name}) }}"
         return quote(name)
     if "previous" in expr:
+        if expr["previous"] == "name":
+            if ctx.previous_name is None:
+                raise CompileError("{previous: name} used outside a decorator")
+            return quote(ctx.previous_name)
         if ctx.previous is None:
             raise CompileError("{previous} used outside a decorator")
         return ctx.previous
+    if "field" in expr:
+        if ctx.previous_name is None:
+            raise CompileError("{field} used outside a decorator")
+        keys = [key for key in ctx.substitute(expr["field"]).split(".") if key]
+        return quote(f"$({ctx.previous_name}{''.join(f'[{key}]' for key in keys)})")
     if "if_set" in expr:
         return compile_value(expr["value"] if ctx.params.get(expr["if_set"], "").strip() else expr["else"], ctx)
     if "if_true" in expr:
@@ -457,6 +468,15 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
         return value if len(value) <= SUMMARY_VALUE_LENGTH else value[: SUMMARY_VALUE_LENGTH - 1] + "…"
 
     return PLACEHOLDER.sub(shown, pattern)
+
+
+def needs_name(expr) -> bool:
+    """Whether a decorator's expression takes the previous value by a variable's name."""
+    if isinstance(expr, dict):
+        return expr.get("previous") == "name" or "field" in expr or any(needs_name(value) for value in expr.values())
+    if isinstance(expr, list):
+        return any(needs_name(item) for item in expr)
+    return False
 
 
 def run_interval(block: dict, descriptor: dict) -> list[str]:
@@ -791,7 +811,15 @@ class FileCompiler:
         for index, instance in enumerate(decorators):
             decorator = self.library.decorators[instance["decoratorId"]]
             params = params_with_defaults(decorator.get("parameters", []), instance.get("params") or {})
-            step_ctx = Context(ctx.vars_bundle, params, ctx.bodies, previous=expression, as_argument=True)
+            previous_name = None
+            if needs_name(decorator.get("expression")):
+                # A function that only takes a variable: the steps so far, stored in one.
+                held = f"{name}__{index + 1}"
+                lines += promise(quote(held), [f"{value_type} => {expression}", *condition_attributes(conditions)])
+                previous_name = f"{owner}.{held}"
+            step_ctx = Context(
+                ctx.vars_bundle, params, ctx.bodies, previous=expression, previous_name=previous_name, as_argument=True
+            )
             if "fallback" not in decorator:
                 expression, value_type = compile_value(decorator["expression"], step_ctx), decorator["output_type"]
                 continue
@@ -817,7 +845,10 @@ class FileCompiler:
                 quote(name), [f'{decorator["output_type"]} => {fallback}', *extra, *if_all([*conditions, unset])]
             )
             return lines
-        return promise(quote(name), [f"{value_type} => {expression}", *extra, *condition_attributes(conditions)])
+        return [
+            *lines,
+            *promise(quote(name), [f"{value_type} => {expression}", *extra, *condition_attributes(conditions)]),
+        ]
 
     def gating(self, node: dict, names: dict[str, str], edges: list[dict]) -> list[str]:
         """What runs a block's (or group's) promise: its condition and the arrows it waits for (`if`),

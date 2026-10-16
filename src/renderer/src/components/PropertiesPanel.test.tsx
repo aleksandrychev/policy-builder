@@ -451,7 +451,10 @@ describe('PropertiesPanel', () => {
       expect(screen.queryByRole('button', { name: /Data transformation/ })).not.toBeInTheDocument();
       choose('Value source', /File content/);
       expect(screen.getByRole('button', { name: 'Data transformation (0)' })).toBeInTheDocument();
+      // Data read from a file takes data transforms; typed-in data doesn't.
       choose('Value source', /Structured data \(JSON\)/);
+      expect(screen.getByRole('button', { name: 'Data transformation (0)' })).toBeInTheDocument();
+      choose('Value source', /Structured data \(literal\)/);
       expect(screen.queryByRole('button', { name: /Data transformation/ })).not.toBeInTheDocument();
     });
 

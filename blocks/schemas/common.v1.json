@@ -277,10 +277,26 @@
           "required": [
             "previous"
           ],
-          "description": "Decorators only: the incoming value — the previous step's expression, nested inline. A literal list arrives as inline JSON ('[\"a\",\"b\"]'), a list variable as its qualified name.",
+          "description": "Decorators only: the incoming value — \"value\": the previous step's expression, nested inline (a literal list arrives as inline JSON ('[\"a\",\"b\"]'), a list variable as its qualified name); \"name\": the name of a variable holding it, for functions that only take a variable (format's %S), which makes the compiler store the previous steps in one first.",
           "properties": {
             "previous": {
-              "const": "value"
+              "enum": [
+                "value",
+                "name"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "field"
+          ],
+          "description": "Decorators only, on data: one field of the incoming value by a path of keys (and list indexes) separated by dots, e.g. web.port: \"$(x[web][port])\" on a variable holding it.",
+          "properties": {
+            "field": {
+              "$ref": "#/$defs/template"
             }
           }
         },

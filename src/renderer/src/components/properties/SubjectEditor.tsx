@@ -164,7 +164,7 @@ export function SubjectEditor({
               expanded={transformsExpanded}
               onToggle={() => setTransformsExpanded(current => !current)}
             />
-            <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: 'text.muted' }}>Result: {chainType === 'slist' ? 'list' : 'string'}</Typography>
+            <Typography sx={{ fontSize: 11, fontFamily: 'monospace', color: 'text.muted' }}>Result: {chainType === 'slist' ? 'list' : chainType}</Typography>
           </Box>
           {!transformsExpanded && (
             <Typography sx={{ fontSize: 11, color: 'text.muted', pl: 2.5 }}>Chains functions to transform the value before it&rsquo;s used.</Typography>

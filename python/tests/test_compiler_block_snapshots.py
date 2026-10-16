@@ -95,7 +95,9 @@ def _decorator_cases() -> list[tuple[str, dict]]:
     sources = {s["id"]: s for s in LIBRARY.descriptors["define-variable"]["value_sources"]}
     cases = []
     for i, (decorator_id, decorator) in enumerate(sorted(LIBRARY.decorators.items())):
-        source_id = "file-lines" if decorator["input_type"] == "slist" else "command-output"
+        source_id = {"slist": "file-lines", "data": "structured-data-json"}.get(
+            decorator["input_type"], "command-output"
+        )
         step = {"id": "d", "decoratorId": decorator_id, "params": _params(decorator.get("parameters", []))}
         entry = _entry(
             "v", "variable_name", f"via_{i}", source_id, _params(sources[source_id]["parameters"]), decorators=[step]
