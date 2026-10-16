@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerCanvasTools } from './canvas';
 import { registerDefinitionTools } from './definitions';
 import { registerGuide } from './guideTools';
+import { registerModuleTools } from './modules';
 import { type McpPermissions, gatedServer } from './permissions';
 import { registerProjectTools } from './project';
 import { type CallWindow, answerWith } from './shared';
@@ -16,7 +17,7 @@ import { registerWorkTools } from './work';
 
 export const MCP_INSTRUCTIONS = `This server is CFEngine Policy Builder, a desktop app where CFEngine policy is built visually: policy files hold blocks (each compiles to promises), arrows order them by outcome (kept, repaired, not_kept), groups run blocks as one step, and conditions gate them. Each policy file is a CFEngine namespace.
 
-Change the project only through these tools: the app generates the .cf files and cfbs.json from its blocks on save, so editing those files directly is lost (or refused) on the next save. Each edit shows on the user's canvas and is one undo step there; nothing is written to disk until the project is saved: save only when the user asks or agrees. Read get_guide (the workflow) before your first change, and the other topics when you need them. Call begin_work first with what you're about to do (the user sees it, and the editor is locked so they don't interfere), and end_work when you're done. If a call comes back "Stopped by the user", stop and ask them. Start with get_project_overview, look a block type up with get_block_type before adding or changing one, and read get_generated_policy to check the result. Use the Custom CFEngine block (hand-written promises) only for what no block covers, and ask the user first.`;
+Change the project only through these tools: the app generates the .cf files and cfbs.json from its blocks on save, so editing those files directly is lost (or refused) on the next save. Each edit shows on the user's canvas and is one undo step there; nothing is written to disk until the project is saved: save only when the user asks or agrees. Read get_guide (the workflow) before your first change, and the other topics when you need them. Call begin_work first with what you're about to do (the user sees it, and the editor is locked so they don't interfere), and end_work when you're done. If a call comes back "Stopped by the user", stop and ask them. Start with get_project_overview, look a block type up with get_block_type before adding or changing one, and read get_generated_policy to check the result. Ready-made CFEngine Build modules (search_modules) may already do what's asked. Use the Custom CFEngine block (hand-written promises) only for what no block or module covers, and ask the user first.`;
 
 // Only the tools the user allows (permissions.ts).
 export function registerBuilderTools(mcp: McpServer, call: CallWindow, permissions: McpPermissions) {
@@ -27,5 +28,6 @@ export function registerBuilderTools(mcp: McpServer, call: CallWindow, permissio
   registerProjectTools(server, answer);
   registerCanvasTools(server, answer);
   registerDefinitionTools(server, answer);
+  registerModuleTools(server, answer);
   registerTestTools(server, answer);
 }

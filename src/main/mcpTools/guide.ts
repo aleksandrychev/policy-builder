@@ -57,6 +57,11 @@ const blocks = `# Blocks, arrows and groups
 - group_blocks puts blocks into a frame that runs as one step (its own bundle). Arrows into and out of the group attach to its frame; an arrow out of a group reads the group's combined outcome.
 - Use groups for a set of blocks that belong together ("Configure nginx"), and set_group_condition to gate them all.
 
+## CFEngine Build modules
+- build.cfengine.com has ready-made modules: inventory, compliance reports, hardening, configured tasks (delete-files, allow-hosts, clamav…) and promise types. Before building something from blocks, search_modules for it; get_module shows what one does (its README), its input questions and dependencies.
+- add_module adds it to the project (a policy set); saving installs it with cfbs. A module with input needs every question answered: set_module_input with text, a list of texts, or rows keyed by the list's fields. get_project_overview lists the project's modules.
+- Modules run before the project's own policy, in their build order; they're not blocks and have no arrows.
+
 ## Blocks from CFEngine Build modules
 - Git Checkout (git-checkout), Systemd Unit (systemd-unit), HTTP Request (http-request) and Run Ansible Playbook (ansible-playbook) are custom promise types (git:, systemd:, http:, ansible:). Adding one adds its module (promise-type-git…) to the project; saving installs it with cfbs (needs the internet once). Hosts need python3, and git or Ansible for those blocks.
 - Custom Promise (custom-promise) is any other module promise type (json, yaml, groups, sshd, symlinks, docker_compose, appstreams, assert): pick promise_type, set the promiser and attributes as \`name = value\` lines (a list: \`name = { "a", "b" }\`); its module is added the same way. Its README (the module's page) lists the attributes.

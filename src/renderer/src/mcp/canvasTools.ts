@@ -64,6 +64,8 @@ function projectOverview(state: RootState, env: CanvasEnv) {
   const selected = state.canvas.find(block => block.instanceId === env.selectedInstanceId);
   return {
     project: state.project?.name ?? null,
+    // CFEngine Build modules, in build order (get_module for one).
+    modules: state.modules.map(module => ({ name: module.name, addedFor: module.addedBy })),
     files: files.map(file => {
       const counts: Record<string, number> = {};
       for (const block of state.canvas.filter(item => item.fileId === file.id)) {
