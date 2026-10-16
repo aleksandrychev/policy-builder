@@ -2,7 +2,7 @@ import { type IpcMainInvokeEvent, type WebFrameMain, app, ipcMain } from 'electr
 import { isAbsolute, join } from 'path';
 
 import { type SidecarStream, startSidecarStream, testEnvQuery } from './backend';
-import { isInKnownProject } from './project';
+import { isBuildModule, isInKnownProject } from './project';
 
 /**
  * Test environments (the Test Results & Logs tab): Docker hosts managed by the
@@ -36,7 +36,9 @@ const isBuilderContent = (content: unknown) =>
       module.name.startsWith('./') &&
       Array.isArray(module.steps) &&
       module.steps.every(step => typeof step === 'string' && BUILDER_STEP.test(step))
-  );
+  ) &&
+  // Its CFEngine Build modules: cfbs adds them to the test build.
+  (content.buildModules === undefined || (Array.isArray(content.buildModules) && content.buildModules.every(isBuildModule)));
 
 // What the sidecar gets: the renderer's request, checked, plus where builds and masterfiles are cached.
 async function sidecarRequest(action: string, request: unknown): Promise<Record<string, unknown>> {

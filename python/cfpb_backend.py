@@ -331,6 +331,39 @@ def _run_cfbs(directory: str, argv: list[str], what: str) -> None:
     raise InitFailed(f"cfbs {argv[0]} failed: {errors[-1]}" if errors else f"cfbs {argv[0]} failed (exit {code})")
 
 
+def add_build_modules(directory: str, modules: list) -> list[str]:
+    """Adds the project's CFEngine Build modules to the cfbs project in `directory` (cfbs add
+    brings their dependencies) and writes their input answers. Returns the names added."""
+    names = [
+        m["name"] for m in modules if isinstance(m, dict) and isinstance(m.get("name"), str) and not m.get("addedBy")
+    ]
+    if not all(INDEX_MODULE.match(name) for name in names):
+        raise InitFailed("Invalid module name")
+    if names:
+        _run_cfbs(directory, ["add", *names], ", ".join(names))
+    write_module_inputs(directory, modules)
+    return names
+
+
+def write_module_inputs(directory: str, modules: list) -> None:
+    """<name>/input.json for each module with answers: its questions (from cfbs.json), each with a
+    `response`, as cfbs input writes them."""
+    with open(os.path.join(directory, "cfbs.json"), encoding="utf-8") as file:
+        entries = {e.get("name"): e for e in json.load(file).get("build", []) if isinstance(e, dict)}
+    for module in modules:
+        name, answers = module.get("name"), module.get("input")
+        questions = entries.get(name, {}).get("input")
+        if not isinstance(answers, dict) or not isinstance(questions, list) or not INDEX_MODULE.match(name or ""):
+            continue
+        answered = [
+            {**q, "response": answers[q["variable"]]} if isinstance(q, dict) and q.get("variable") in answers else q
+            for q in questions
+        ]
+        os.makedirs(os.path.join(directory, name), exist_ok=True)
+        with open(os.path.join(directory, name, "input.json"), "w", encoding="utf-8") as file:
+            file.write(json.dumps(answered, indent=2) + "\n")
+
+
 def modules_command() -> int:
     """Adds and removes CFEngine Build modules in a project's cfbs.json (with their dependencies,
     as cfbs does: added before the module, removed once nothing needs them)."""

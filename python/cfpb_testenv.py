@@ -842,6 +842,18 @@ def build_policy(content: dict, masterfiles: str, cache_dir: str, work: str) -> 
                 finally:
                     shutil.rmtree(scratch, ignore_errors=True)
     shutil.copytree(base, work, dirs_exist_ok=True)
+    # The project's CFEngine Build modules, before its own policy (as a saved project has them).
+    modules = content.get("buildModules") or []
+    if modules:
+        emit(
+            "step",
+            step="build",
+            message="Adding modules: " + ", ".join(m.get("name", "?") for m in modules if not m.get("addedBy")),
+        )
+        try:
+            cfpb_backend.add_build_modules(work, modules)
+        except cfpb_backend.InitFailed as error:
+            raise RunnerError(str(error)) from error
     options = {"type": "policy-set", "name": "test", "description": "Test build", "git": False, "content": content}
     cfpb_backend._update_cfbs_json(work, options)
     emit("step", step="build", message="Building the policy set")

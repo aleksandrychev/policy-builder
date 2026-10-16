@@ -174,7 +174,7 @@ export function checkedBuilderModules(modules: unknown[], provided: Record<strin
 
 // A CFEngine Build module's name, as the index has them; also the folder its input.json is in.
 const INDEX_MODULE = /^[a-z0-9][a-z0-9._-]{0,100}$/i;
-const isBuildModule = (module: unknown) =>
+export const isBuildModule = (module: unknown) =>
   isRecord(module) &&
   typeof module.name === 'string' &&
   INDEX_MODULE.test(module.name) &&
