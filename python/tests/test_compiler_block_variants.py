@@ -19,8 +19,20 @@ TRICKY_PATHS = ['/tmp/with space/say "hi"', "/tmp/$(sys.fqhost)/x\\y"]
 LISTS = ["/tmp/a\n/tmp/b", "one\ntwo\n\nthree"]
 
 
+# Custom CFEngine text: other valid snippets (any other text is meant to be skipped).
+CUSTOM = {
+    "promises": [
+        'reports:\n  "say \\"hi\\" from $(sys.fqhost)";',
+        'commands:\n  "/bin/true"\n    contain => default:in_shell;',
+    ],
+    "definitions": [""],
+}
+
+
 def _values(param: dict) -> list[str]:
     """The values to try for one parameter, besides its sample."""
+    if param["name"] in CUSTOM:
+        return CUSTOM[param["name"]]
     options = [o if isinstance(o, str) else o["value"] for o in param.get("options", [])]
     if options:
         return options
@@ -59,6 +71,8 @@ def _project(block_id: str) -> dict:
         {"instanceId": f"{block_id}-{i}", "blockId": block_id, "label": f"Variant {i}", "params": params}
         for i, (_name, params) in enumerate(variants(block_id))
     ]
+    # The sample once more, limited by the block's own How often.
+    blocks.append({**blocks[0], "instanceId": f"{block_id}-every", "label": "Every hour", "runInterval": "60"})
     file = {"id": "f", "name": "Variants", "namespace": "variants", "path": "./variants.cf", "blocks": blocks}
     return {"files": [{**file, "order": [b["instanceId"] for b in blocks]}]}
 

@@ -27,6 +27,7 @@ export type UndoableKey = (typeof UNDOABLE_KEYS)[number];
 const TYPING_FIELDS: Record<string, string> = {
   'canvas/blockLabelChanged': 'label',
   'canvas/blockNoteChanged': 'note',
+  'canvas/blockRunIntervalChanged': 'runInterval',
   'canvas/blockParamChanged': 'value',
   'canvas/classRefChanged': 'name',
   'canvas/conditionClassNameChanged': 'className',

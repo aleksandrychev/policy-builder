@@ -71,11 +71,15 @@ const failure = (result: { details?: string; message?: string }) =>
   new ToolError([result.message || 'It failed', result.details?.trim().slice(-2000)].filter(Boolean).join('\n'));
 
 // Where a project folder would go: refused like the New Project dialog refuses it.
-async function checkTarget(parent: string, folderName: string) {
+async function checkTarget(parent: string, folderName: string, createParent = false) {
   if (!isAbsolute(parent)) throw new ToolError('parent must be an absolute path');
   if (!folderName) throw new ToolError('The name needs at least one letter or digit');
   const check = await desktopApi().checkProjectTarget(parent, folderName);
-  if (!check.parentWritable) throw new ToolError(`Can’t create a folder in ${parent}; choose another parent`);
+  if (!check.parentExists) {
+    if (createParent) return;
+    throw new ToolError(`${parent} doesn’t exist: pass createParent: true to create it, or choose an existing folder`);
+  }
+  if (!check.parentWritable) throw new ToolError(`Can’t write to ${parent}; choose another parent`);
   if (check.targetState === 'nonEmpty') throw new ToolError(`${folderName} already exists in ${parent} and isn’t empty; choose another name or parent`);
 }
 
@@ -114,7 +118,8 @@ async function createProject(env: ToolEnv, input: Input) {
   const name = str(input, 'name').trim();
   const parent = str(input, 'parent');
   const folderName = projectFolderName(name);
-  await checkTarget(parent, folderName);
+  const createParent = input.createParent === true;
+  await checkTarget(parent, folderName, createParent);
   const type = input.type === 'module' ? 'module' : 'policy-set';
   const masterfiles = type === 'module' ? 'no' : input.masterfiles === 'master' ? 'master' : await latestMasterfiles();
   const values: ProjectFormValues = {
@@ -125,7 +130,8 @@ async function createProject(env: ToolEnv, input: Input) {
     masterfiles,
     git: input.git !== false,
     type,
-    firstFile: optionalStr(input, 'firstFile')
+    firstFile: optionalStr(input, 'firstFile'),
+    ...(createParent ? { createParent } : {})
   };
   const result = await env.session.create(values);
   if (!result.ok) throw failure(result);

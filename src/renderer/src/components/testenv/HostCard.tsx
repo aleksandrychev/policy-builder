@@ -10,6 +10,7 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import { Box, CircularProgress, IconButton, Link, Paper, Stack, Tooltip, Typography, alpha, useTheme } from '@mui/material';
 
 import type { HostRuntime, RunResult } from '../../project/testRuns';
+import { useAppSelector } from '../../store';
 import { PLATFORMS, type TestHost } from '../../store/testEnvironmentsSlice/types';
 
 type Tone = 'error' | 'info' | 'muted' | 'success' | 'warning';
@@ -23,6 +24,15 @@ const STATES: Record<string, { label: string; tone: Tone }> = {
   done: { tone: 'success', label: 'Converged' },
   failed: { tone: 'error', label: 'Failed' }
 };
+
+// The pill's tooltip: which blocks keep it from converging, or ran every time for their How often.
+function useRepairingNote(runtime: HostRuntime | undefined): string {
+  const canvas = useAppSelector(state => state.canvas);
+  const names = (ids: string[] | undefined) => (ids ?? []).map(id => canvas.find(block => block.instanceId === id)?.label ?? 'a removed block').join(', ');
+  if (runtime?.stillRepairing?.length) return `Still repairing in its last run: ${names(runtime.stillRepairing)}`;
+  if (runtime?.everyRun?.length) return `Ran every time for their How often (test runs ignore it): ${names(runtime.everyRun)}`;
+  return '';
+}
 
 // The pill: what the host is, from its state and last run.
 function statusOf(runtime: HostRuntime | undefined, result: RunResult | undefined, problems: number): { label: string; tone: Tone } {
@@ -133,6 +143,7 @@ export function HostCard(props: HostCardProps) {
   const up = exists && !stopped;
   const label = PLATFORMS.find(item => item.id === host.platform)?.label ?? host.platform;
   const platform = host.image ? `${host.image} (${label} package)` : label;
+  const why = useRepairingNote(runtime);
 
   return (
     <Paper variant="outlined" sx={{ p: 1.5, borderColor: isHub ? 'primary.main' : 'divider' }}>
@@ -170,10 +181,12 @@ export function HostCard(props: HostCardProps) {
               {isHub ? 'HUB' : 'CLIENT'}
             </Typography>
             <Box sx={{ flex: 1 }} />
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: 1, py: 0.25, borderRadius: 4, bgcolor: alpha(color, 0.12) }}>
-              {busy ? <CircularProgress size={10} thickness={6} sx={{ color }} /> : <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />}
-              <Typography sx={{ fontSize: 12, fontWeight: 600, color }}>{status.label}</Typography>
-            </Stack>
+            <Tooltip title={why}>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', px: 1, py: 0.25, borderRadius: 4, bgcolor: alpha(color, 0.12) }}>
+                {busy ? <CircularProgress size={10} thickness={6} sx={{ color }} /> : <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />}
+                <Typography sx={{ fontSize: 12, fontWeight: 600, color }}>{status.label}</Typography>
+              </Stack>
+            </Tooltip>
           </Stack>
           <Typography
             sx={{ fontSize: 12, color: busy ? 'info.main' : 'text.muted', mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}

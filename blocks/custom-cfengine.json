@@ -1,0 +1,40 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "custom-cfengine",
+  "version": 1,
+  "name": "Custom CFEngine",
+  "category": "Methods",
+  "description": "Hand-written CFEngine promises, for what no block covers.",
+  "compile_target": "own_bundle",
+  "custom": true,
+  "arrow_default_outcome": "repaired",
+  "steps": [
+    {
+      "promise_type": "methods",
+      "promiser": "{{label}}",
+      "attributes": {
+        "usebundle": {
+          "custom_bundle": true
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "promises",
+      "label": "Promises",
+      "type": "text",
+      "required": true,
+      "help": "Promise sections as in a bundle agent, e.g. files: then its promises. They run as a bundle of their own, in this file's namespace: write the standard library's bodies and bundles as default:name."
+    },
+    {
+      "name": "definitions",
+      "label": "Bodies and bundles it uses",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "help": "Any body or bundle the promises call that isn't in the standard library, e.g. body copy_from mirror(from) { … }."
+    }
+  ]
+}

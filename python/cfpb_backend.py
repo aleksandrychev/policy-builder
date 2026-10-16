@@ -351,6 +351,33 @@ def compile_command() -> int:
     return 0
 
 
+def lint_custom_command() -> int:
+    """Custom CFEngine blocks' text, checked offline: {"blocks": [{id, promises, definitions, namespace}]} in,
+    {"problems": {id: [{field, line, column, message}]}} out."""
+    from cfpb_custom import check
+
+    try:
+        request = json.loads(sys.stdin.read())
+        blocks = request.get("blocks") if isinstance(request, dict) else None
+        if not isinstance(blocks, list):
+            raise ValueError('Expected {"blocks": [...]} on stdin')
+        problems = {}
+        for block in blocks:
+            if not isinstance(block, dict) or not isinstance(block.get("id"), str):
+                raise ValueError("Every block needs an id")
+            namespace = (
+                block.get("namespace") if re.fullmatch(r"[A-Za-z_]\w*", str(block.get("namespace"))) else "custom"
+            )
+            problems[block["id"]] = check(
+                str(block.get("promises") or ""), str(block.get("definitions") or ""), namespace
+            )
+    except (json.JSONDecodeError, ValueError) as error:
+        print(f"Couldn't check the text: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps({"problems": problems}))
+    return 0
+
+
 def build_command() -> int:
     """Deployment: cfbs build in a saved project, then lint + cf-promises (cfpb_build)."""
     import cfpb_build
@@ -493,6 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("init", help="create a cfbs project")
     commands.add_parser("compile", help="generate policy from the builder's project data")
     commands.add_parser("masterfiles", help="the masterfiles build entry for a version")
+    commands.add_parser("lint-custom", help="check Custom CFEngine blocks' text")
     commands.add_parser("build", help="build a saved project's policy set and check it")
     commands.add_parser("deploy", help="deploy a built policy set to a hub with cf-remote")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
@@ -524,6 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = {
         "init": init_command,
         "compile": compile_command,
+        "lint-custom": lint_custom_command,
         "masterfiles": masterfiles_command,
         "build": build_command,
         "deploy": deploy_command,

@@ -371,7 +371,8 @@
             }
           }
         }
-      ]
+      ],
+      "help": "Its output shows in the agent's log on every run; send it to /dev/null in the command (with the shell) to keep the log quiet."
     },
     {
       "id": "custom",

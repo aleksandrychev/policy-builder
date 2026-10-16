@@ -7,6 +7,7 @@ import {
   blockLabelChanged,
   blockNoteChanged,
   blockParamChanged,
+  blockRunIntervalChanged,
   blockValueSourceChanged,
   classRefAdded,
   classRefChanged,
@@ -65,6 +66,7 @@ function ConnectedPanel({ instanceId, arrows = [], onArrowRemove = vi.fn(), onCo
       onArrowRemove={onArrowRemove}
       onLabelChange={label => dispatch(blockLabelChanged({ instanceId, label }))}
       onNoteChange={note => dispatch(blockNoteChanged({ instanceId, note }))}
+      onRunIntervalChange={runInterval => dispatch(blockRunIntervalChanged({ instanceId, runInterval }))}
       onParamChange={(paramName, value, entryId) => dispatch(blockParamChanged({ instanceId, entryId, paramName, value }))}
       onValueSourceChange={(valueSourceId, entryId) => dispatch(blockValueSourceChanged({ instanceId, entryId, valueSourceId }))}
       onBindParam={(param, valueSourceId) => dispatch(paramBound({ instanceId, param, binding: { valueSourceId, params: {}, decorators: [] } }))}
@@ -192,6 +194,21 @@ describe('PropertiesPanel', () => {
       choose('How often', 'At most once a week');
       expect(blockOf(store, id)?.params.run_interval).toBe('10080');
       expect(screen.queryByRole('textbox', { name: 'Minutes between runs' })).not.toBeInTheDocument();
+    });
+
+    it('limits how often any block runs, unless it has its own How often', () => {
+      const id = add('create-directory', { path: '/srv/x', mode: '755', owner: 'root', group: 'root' });
+      renderPanel(store, { instanceId: id });
+      choose('How often', 'At most once a day');
+      expect(blockOf(store, id)?.runInterval).toBe('1440');
+      choose('How often', 'Every agent run');
+      expect(blockOf(store, id)).not.toHaveProperty('runInterval');
+    });
+
+    it('keeps one How often on blocks that have their own', () => {
+      const id = add('run-command', { command: '/bin/true', run_interval: '60' });
+      renderPanel(store, { instanceId: id });
+      expect(screen.getAllByRole('combobox', { name: 'How often' })).toHaveLength(1);
     });
 
     it('shows a number that isn’t listed as Other', () => {
@@ -434,7 +451,10 @@ describe('PropertiesPanel', () => {
       expect(screen.queryByRole('button', { name: /Data transformation/ })).not.toBeInTheDocument();
       choose('Value source', /File content/);
       expect(screen.getByRole('button', { name: 'Data transformation (0)' })).toBeInTheDocument();
+      // Data read from a file takes data transforms; typed-in data doesn't.
       choose('Value source', /Structured data \(JSON\)/);
+      expect(screen.getByRole('button', { name: 'Data transformation (0)' })).toBeInTheDocument();
+      choose('Value source', /Structured data \(literal\)/);
       expect(screen.queryByRole('button', { name: /Data transformation/ })).not.toBeInTheDocument();
     });
 

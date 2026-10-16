@@ -5,6 +5,8 @@ import type {
   BuildResult,
   CompiledPolicy,
   CreateProjectRequest,
+  CustomProblem,
+  CustomText,
   DockerStatus,
   GitStatus,
   HubProbe,
@@ -140,7 +142,7 @@ const api = {
     arch: string;
     edition: string;
     version: string;
-  }): Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
+  }): Promise<{ latest: string | null; platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
   testEnvSearch: (query: { hub: boolean; term: string }): Promise<ImageSearch> => invoke('testenv:search', query),
   testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }> =>
     invoke('testenv:status', request),
@@ -226,6 +228,7 @@ const api = {
   /** Formats CFEngine policy text with the bundled `cfengine format` engine. */
   formatPolicy: (source: string): Promise<string> => invoke('policy:format', source),
   compilePolicy: (project: object): Promise<CompiledPolicy> => invoke('policy:compile', project),
+  lintCustom: (blocks: CustomText[]): Promise<Record<string, CustomProblem[]>> => invoke('policy:lint-custom', blocks),
 
   /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
   importTextFile: (): Promise<{ content: string; fileName: string } | null> => invoke('file:import-text'),

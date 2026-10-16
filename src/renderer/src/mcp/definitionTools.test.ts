@@ -156,6 +156,17 @@ describe('transformers', () => {
     expect(call('list_variables').variables[0]).toMatchObject({ name: 'out', type: 'int', valueSource: 'command-output' });
   });
 
+  it('chains data transforms on a data value, then list and string ones', () => {
+    const blockId = defineBlock('define-variable');
+    const { entryId } = call('add_entry', { blockId, name: 'services', valueSource: 'data-variable', params: { from_variable: 'def.services' } });
+    const target = { blockId, entryId };
+    expect(() => call('add_transformer', { ...target, transformer: 'join', params: { glue: ',' } })).toThrow(/takes a list but gets data/);
+    expect(call('add_transformer', { ...target, transformer: 'data-keys' }).result).toBe('list');
+    expect(call('add_transformer', { ...target, transformer: 'join', params: { glue: ',' } }).result).toBe('string');
+    expect(() => call('add_transformer', { ...target, transformer: 'data-field', params: { field: 'x' } })).toThrow(/takes data but gets a string/);
+    expect(call('list_variables').variables[0]).toMatchObject({ name: 'services', type: 'string', valueSource: 'data-variable' });
+  });
+
   it('updates, moves and removes steps, refusing a broken chain', () => {
     const target = computed();
     const split = call('add_transformer', { ...target, transformer: 'split-list', params: { delimiter: ',' } }).transformerId;

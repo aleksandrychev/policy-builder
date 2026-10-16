@@ -140,7 +140,9 @@ export type TestEnvEvent =
   | { current: number; t: 'progress'; total: number }
   | { host?: string | null; line: string; stream?: string; t: 'log' }
   | { host?: string; message: string; step: string; t: 'step' }
-  | { container?: string; converged?: boolean; host: string; ip?: string; state: string; t: 'host' }
+  // When done: stillRepairing, the block ids still repairing in its last run; everyRun, those with How
+  // often (they run on every test run, which ignores locks, so they don't stop it converging).
+  | { container?: string; converged?: boolean; everyRun?: string[]; host: string; ip?: string; state: string; stillRepairing?: string[]; t: 'host' }
   | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
   | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
   | { image: string; os: string | null; platform: string | null; t: 'detected' }
@@ -152,6 +154,21 @@ export type TestEnvEvent =
 
 // The generated files by project path (.cf and ./templates/), and where each block or group
 // landed in each .cf: id → [first, last] line ranges, 1-based.
+// A Custom CFEngine block's text, and what the linter found in it (line within its field).
+export interface CustomText {
+  definitions: string;
+  id: string;
+  namespace: string;
+  promises: string;
+}
+
+export interface CustomProblem {
+  column: number;
+  field: 'definitions' | 'promises';
+  line: number;
+  message: string;
+}
+
 export interface CompiledPolicy {
   files: Record<string, string>;
   sourceMap: Record<string, Record<string, [number, number][]>>;
@@ -165,6 +182,8 @@ export interface ProjectStorage {
 }
 
 export interface CreateProjectRequest extends ProjectContent {
+  // Create the parent folder when it's missing (AI agents can't make folders otherwise).
+  createParent?: boolean;
   description: string;
   folderName: string;
   git: boolean;
@@ -269,6 +288,7 @@ export interface RecentProject {
 }
 
 export interface TargetCheck {
+  parentExists: boolean;
   parentWritable: boolean;
   targetState: 'empty' | 'new' | 'nonEmpty';
 }
@@ -351,6 +371,8 @@ declare global {
       hubState: (url: string) => Promise<OperationResult<{ state: HubState }>>;
       /** Opens a native file picker and reads the chosen file as text, or null if cancelled. */
       importTextFile: () => Promise<{ content: string; fileName: string } | null>;
+      /** Checks Custom CFEngine blocks' text offline: problems by block id. */
+      lintCustom: (blocks: CustomText[]) => Promise<Record<string, CustomProblem[]>>;
       /** Turns the MCP server Claude Code connects to on or off. */
       mcpSetEnabled: (enabled: boolean) => Promise<McpStatus>;
       /** What AI agents may do: tools that are off aren't offered to them. */
@@ -394,7 +416,7 @@ declare global {
         arch: string;
         edition: string;
         version: string;
-      }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
+      }) => Promise<{ latest: string | null; platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
       /** Images for a custom host: pulled ones matching `term`, and Docker Hub's when `hub`. */
       testEnvSearch: (query: { hub: boolean; term: string }) => Promise<ImageSearch>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */

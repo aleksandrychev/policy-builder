@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import CloseIcon from '@mui/icons-material/Close';
+import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import { Box, IconButton, Typography, useTheme } from '@mui/material';
 
@@ -93,14 +94,38 @@ function FailedOnBadge({ compact, hosts }: { compact: boolean; hosts?: string[] 
   );
 }
 
+const CUSTOM_LINES = 4;
+
+// The card's icon and badge: the promise type's, or Custom CFEngine's (hand-written, marked as such).
+function cardKind(descriptor: BlockDescriptor | undefined, blockId: string) {
+  if (descriptor?.custom) return { TypeIcon: CodeOutlinedIcon, badge: 'CUSTOM', custom: true };
+  const promiseType = descriptor && primaryPromiseType(descriptor);
+  return { TypeIcon: promiseType ? PROMISE_TYPE_ICONS[promiseType] : undefined, badge: (promiseType ?? blockId).toUpperCase(), custom: false };
+}
+
+// A Custom CFEngine block's first lines of promises, in place of parameter rows.
+function CustomPreview({ promises }: { promises: string }) {
+  const lines = promises.split('\n').filter(line => line.trim());
+  return (
+    <Box sx={{ px: 1.5, py: 1.25 }}>
+      <Typography
+        component="pre"
+        sx={{ m: 0, fontSize: 11, fontFamily: 'monospace', color: 'text.primary', whiteSpace: 'pre', overflow: 'hidden', textOverflow: 'ellipsis' }}
+      >
+        {lines.length ? lines.slice(0, CUSTOM_LINES).join('\n') : 'No promises yet'}
+      </Typography>
+      {lines.length > CUSTOM_LINES && <Typography sx={{ fontSize: 11, color: 'text.muted' }}>+{lines.length - CUSTOM_LINES} more lines</Typography>}
+    </Box>
+  );
+}
+
 export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
   const { instance, descriptor, duplicateKeys, orderNumber, onRemove, highlighted, hasDataInput, failedOn, cutPending = false } = data;
   const theme = useTheme();
   const compact = useStore(state => state.transform[2] < COMPACT_ZOOM);
   const sequenced = isSequenced(descriptor);
 
-  const promiseType = descriptor && primaryPromiseType(descriptor);
-  const TypeIcon = promiseType ? PROMISE_TYPE_ICONS[promiseType] : undefined;
+  const { TypeIcon, badge, custom } = cardKind(descriptor, instance.blockId);
   const { rows, hidden } = useMemo(() => cardRows(instance, descriptor, duplicateKeys), [instance, descriptor, duplicateKeys]);
   const entryCount = instance.entries?.length ?? 0;
   const conditionalEntries = (instance.entries ?? []).filter(entry => entry.condition).length;
@@ -154,7 +179,7 @@ export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
       />
       {sequenced && <Handle id="in" type="target" position={Position.Top} style={{ ...handleSx, background: theme.palette.text.secondary }} />}
 
-      <Box sx={headerSx(!compact && rows.length > 0)}>
+      <Box sx={headerSx(!compact && (custom || rows.length > 0))}>
         {!compact && conditionalEntries > 0 && (
           <EntryConditionsLine conditional={conditionalEntries} total={entryCount} noun={descriptor?.entries?.noun_plural} />
         )}
@@ -191,9 +216,7 @@ export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
               </Typography>
             )}
             {!compact && (
-              <Typography sx={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: 'text.muted', letterSpacing: 0.5 }}>
-                {(promiseType ?? instance.blockId).toUpperCase()}
-              </Typography>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: 'text.muted', letterSpacing: 0.5 }}>{badge}</Typography>
             )}
             <IconButton
               className="block-card-remove nodrag nopan"
@@ -210,7 +233,9 @@ export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
         </Box>
       </Box>
 
-      {!compact && rows.length > 0 && (
+      {!compact && custom && <CustomPreview promises={instance.params.promises ?? ''} />}
+
+      {!compact && !custom && rows.length > 0 && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, px: 1.5, py: 1.25 }}>
           {rows.map(row => (
             <Box key={row.key} sx={{ display: 'flex', gap: 0.75 }}>

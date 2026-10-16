@@ -152,8 +152,10 @@ describe('sourceBaseType', () => {
     expect(sourceBaseType(sourceById('file-lines'))).toBe('slist');
   });
 
-  it('is undefined for structured data, typed-in values and no source', () => {
-    expect(sourceBaseType(sourceById('structured-data-json'))).toBeUndefined();
+  it('is data for data read or referenced, undefined for typed-in values and no source', () => {
+    expect(sourceBaseType(sourceById('structured-data-json'))).toBe('data');
+    expect(sourceBaseType(sourceById('data-variable'))).toBe('data');
+    expect(sourceBaseType(sourceById('structured-data-literal'))).toBeUndefined();
     expect(sourceBaseType(sourceById('literal'))).toBeUndefined();
     expect(sourceBaseType(sourceById('list'))).toBeUndefined();
     expect(sourceBaseType(undefined)).toBeUndefined();

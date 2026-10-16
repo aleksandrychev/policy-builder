@@ -275,9 +275,8 @@ def _matches(classexpr: str, platform: str, arch: str) -> bool:
     return expr_arch == arch and platform in re.findall(r"[a-z]+_\d+", systems)
 
 
-def find_package(releases: dict, detail_of, edition: str, version: str, platform: str, arch: str, hub: bool) -> dict:
-    """The package for a host, from CFEngine's release data (what cf-remote reads).
-    `version`: an exact release, or "latest" for the latest stable one."""
+def _release(releases: dict, edition: str, version: str) -> dict:
+    """The release data's entry for a version, or for "latest" the latest stable one."""
     entries = [r for r in releases.get("releases", []) if not r.get("debug")]
     if version == "latest":
         entry = next((r for r in entries if r.get("latest_stable")), None)
@@ -285,6 +284,13 @@ def find_package(releases: dict, detail_of, edition: str, version: str, platform
         entry = next((r for r in entries if r.get("version") == version), None)
     if entry is None:
         raise RunnerError(f"No CFEngine {edition} release {version}")
+    return entry
+
+
+def find_package(releases: dict, detail_of, edition: str, version: str, platform: str, arch: str, hub: bool) -> dict:
+    """The package for a host, from CFEngine's release data (what cf-remote reads).
+    `version`: an exact release, or "latest" for the latest stable one."""
+    entry = _release(releases, edition, version)
     detail = detail_of(entry["URL"])
     for items in detail.get("artifacts", {}).values():
         for item in items:
@@ -616,7 +622,9 @@ def platforms(query: dict) -> dict:
         {"id": key, "label": spec["label"], "client": has(spec["package"], False), "hub": has(spec["package"], True)}
         for key, spec in PLATFORMS.items()
     ]
-    return {"platforms": listed}
+    # "latest" installs this release, which may be newer than the latest masterfiles.
+    latest = next((r["version"] for r in releases.get("releases", []) if r.get("latest_stable")), None)
+    return {"platforms": listed, "latest": latest}
 
 
 def _labelled(engine, env: dict) -> dict:
@@ -674,6 +682,72 @@ def _ip(engine, container, env: dict) -> str:
     return container.attrs["NetworkSettings"]["Networks"][network_name(env)]["IPAddress"]
 
 
+class ValidationFailed(RunnerError):
+    """cf-promises refused the policy on the hub: its output, to trace the errors to blocks."""
+
+    def __init__(self, message: str, lines: list[str]):
+        super().__init__(message)
+        self.lines = lines
+
+
+# cf-promises on the hub: "/var/cfengine/masterfiles/services/cfbs/site.cf:93:19: error: …"
+VALIDATION_ERROR = re.compile(r"(?P<path>\S+?\.cf):(?P<line>\d+):\d+: error: (?P<message>.*)")
+# Where cfbs puts the project's own files in the policy set.
+DEPLOYED = "services/cfbs/"
+
+
+def validation_problems(lines: list[str], project: dict) -> list[dict]:
+    """The hub's validation errors, each traced to its block where it's in the project's policy."""
+    from cfpb_compiler import compile_project
+
+    source_map: dict = {}
+    try:
+        compile_project(project, source_map=source_map)
+    except Exception:  # the build compiled it already; without a map the errors keep their place
+        source_map = {}
+    block_files = {
+        item: file["id"]
+        for file in project.get("files", [])
+        for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
+    }
+    problems: dict[tuple, dict] = {}
+    for raw in lines:
+        found = VALIDATION_ERROR.search(raw.strip())
+        if not found:
+            continue
+        deployed, line = found["path"], int(found["line"])
+        path = "./" + deployed.split(DEPLOYED, 1)[1] if DEPLOYED in deployed else deployed
+        block = _block_at(source_map.get(path, {}), line)
+        key = (path, line, found["message"])
+        if key not in problems:
+            problems[key] = {
+                "message": found["message"],
+                "cause": [],
+                "count": 1,
+                "block": block,
+                "fileId": block_files.get(block) if block else None,
+                "bundle": None,
+                "file": path,
+                "line": line,
+            }
+    return list(problems.values())
+
+
+def _deploy_checked(engine, hub, masterfiles: str, hub_host: dict, project: dict) -> None:
+    """_deploy, with a policy the hub refuses reported as the hub's problems, traced to blocks."""
+    try:
+        _deploy(engine, hub, masterfiles, hub_host["id"])
+    except ValidationFailed as failure:
+        problems = validation_problems(failure.lines, project)
+        emit("problems", host=hub_host["id"], problems=problems)
+        emit("host", host=hub_host["id"], state="failed", converged=False)
+        if problems:
+            first = problems[0]
+            where = f"{first['file']}:{first['line']}"
+            raise RunnerError(f"The hub refused the policy: {first['message']} ({where})") from failure
+        raise
+
+
 def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
     """Replaces the hub's /var/cfengine/masterfiles with the built policy set, and tags it."""
     import io
@@ -687,8 +761,10 @@ def _deploy(engine, hub, masterfiles: str, host_id: str | None = None) -> None:
         raise RunnerError("Couldn't copy the policy to the hub")
     # Clients' update.cf (and a bootstrap) needs masterfiles/cf_promises_validated, which clearing
     # removed and only the hub's own run writes again: tag it now, which also validates the policy.
-    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", host_id, "setup")
-    _check(tagged, "Validating the policy on the hub")
+    output: list[str] = []
+    tagged = run_in(engine, hub, f"{CFENGINE}/cf-promises -T /var/cfengine/masterfiles", host_id, "setup", keep=output)
+    if tagged != 0:
+        raise ValidationFailed(f"Validating the policy on the hub failed (exit {tagged})", output)
 
 
 # What build_policy takes: an exact release or master (it names a cache folder).
@@ -826,7 +902,7 @@ def up(request: dict, finish: bool = True, masterfiles_dir: str | None = None) -
             elif host["id"] in stale and kept:
                 _forget_hub(engine, container, host["id"])
         hub = containers[hub_host["id"]]
-        _deploy(engine, hub, masterfiles_dir, hub_host["id"])
+        _deploy_checked(engine, hub, masterfiles_dir, hub_host, (request.get("content") or {}).get("project") or {})
         hub_ip = _ip(engine, hub, env)
         for host in order:
             container = containers[host["id"]]
@@ -879,6 +955,13 @@ BELONGS = re.compile(r"Promise belongs to bundle '([^']+)' in file '([^']+)' nea
 # Roll-ups of an error already reported on its own line.
 ROLLUP = re.compile(r"Method '[^']+' failed in some repairs|Errors encountered when actuating|Not all promises")
 INPUTS = "/var/cfengine/inputs/services/cfbs/"
+# What a run changed, by the promiser its info line names: a command run, a file copied to (not
+# from), else the first quoted name (Created file '/x', Updated file '/x' with content '...').
+EXECUTED = re.compile(r"Executing '[^']*' \.\.\. '(.*)'$")
+COPIED = re.compile(r"Copied file '.*' to '(.*?)(?:\.cfnew)?'")
+QUOTED = re.compile(r"'([^']*)'")
+# Info lines about a repair already counted, or about no change.
+NOT_A_REPAIR = re.compile(r"^(Completed execution|Last \d+ quoted lines)")
 # A failed command names only its promiser (expanded): no "belongs to" line.
 COMMAND_FAILED = re.compile(r"related to promiser '(.*)' -- ")
 QUOTED_PROMISER = re.compile(r'\s+"((?:\\.|[^"\\])*)"(?:\s|$)')
@@ -902,7 +985,9 @@ def add_problems(problems: dict[tuple, dict], found: list[dict], run: int) -> No
 
 
 def _promiser_at(promiser: str, policies: dict[str, str]) -> tuple[str, int] | None:
-    """Where the project's policy writes `promiser` (path, 1-based line); its variables match anything."""
+    """Where the project's policy writes `promiser` (path, 1-based line); its variables match anything,
+    so the promise with the most literal text wins ("/bin/echo x" over "$(vars.package)")."""
+    best, literal = None, -1
     for path, policy in policies.items():
         if not path.endswith(".cf"):
             continue
@@ -910,11 +995,48 @@ def _promiser_at(promiser: str, policies: dict[str, str]) -> tuple[str, int] | N
             quoted = QUOTED_PROMISER.match(line)
             if not quoted:
                 continue
-            text = re.sub(r"\\(.)", r"\1", quoted.group(1))
-            pattern = ".*".join(re.escape(part) for part in VARIABLE.split(text))
-            if re.fullmatch(pattern, promiser, re.S):
-                return path, number
-    return None
+            parts = VARIABLE.split(re.sub(r"\\(.)", r"\1", quoted.group(1)))
+            if len("".join(parts)) > literal and re.fullmatch(".*".join(map(re.escape, parts)), promiser, re.S):
+                best, literal = (path, number), len("".join(parts))
+    return best
+
+
+def find_repairs(lines: list[str], source_map: dict, policies: dict) -> set[str]:
+    """The blocks a run repaired something with, from its info lines (reports count as kept)."""
+    blocks = set()
+    for raw in lines:
+        line = raw.strip()
+        if not line.startswith("info:"):
+            continue
+        text = line[len("info:") :].strip()
+        if NOT_A_REPAIR.match(text):
+            continue
+        named = EXECUTED.search(text) or COPIED.search(text)
+        candidates = [named[1]] if named else QUOTED.findall(text)[:1]
+        for candidate in candidates:
+            found = _promiser_at(candidate, policies)
+            block = _block_at(source_map.get(found[0], {}), found[1]) if found else None
+            if block:
+                blocks.add(block)
+                break
+    return blocks
+
+
+def periodic_blocks(project: dict, library=None) -> set[str]:
+    """Blocks with How often: in a test run (locks ignored, a host without any) they run every time.
+    A run_interval parameter left at its default (Run Command's daily) is in the block's descriptor."""
+    from cfpb_compiler import Library, params_with_defaults
+
+    library = library or Library.load()
+    periodic = set()
+    for file in project.get("files", []):
+        for block in file.get("blocks", []):
+            declared = library.descriptors.get(block.get("blockId"), {}).get("parameters", [])
+            params = params_with_defaults(declared, block.get("params") or {})
+            own = str(params.get("run_interval") or "").strip()
+            if str(block.get("runInterval") or "").strip() or own:
+                periodic.add(block["instanceId"])
+    return periodic
 
 
 def find_problems(lines: list[str], source_map: dict, block_files: dict, policies: dict | None = None) -> list[dict]:
@@ -999,7 +1121,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         raise RunnerError(f"Start the environment first ({', '.join(missing) or 'no hosts'} not running)")
     hub = containers[hub_host["id"]]
     with built_policy(request, masterfiles_dir) as built:
-        _deploy(engine, hub, built, hub_host["id"])
+        _deploy_checked(engine, hub, built, hub_host, request["content"]["project"])
     # Where each block's lines are, to trace errors back to blocks.
     from cfpb_compiler import compile_project
 
@@ -1011,6 +1133,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         for file in project.get("files", [])
         for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
     }
+    periodic = periodic_blocks(project)
     dotenv = read_dotenv(request.get("envFile"))
     max_runs = env.get("maxRuns") if isinstance(env.get("maxRuns"), int) and 1 <= env["maxRuns"] <= 10 else MAX_RUNS
     for host in sorted(hosts, key=lambda h: h is not hub_host):
@@ -1020,6 +1143,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         emit("host", host=host["id"], state="running")
         result = None
         problems: dict[tuple, dict] = {}
+        repairing: set[str] = set()
         for number in range(1, max_runs + 1):
             emit("step", host=host["id"], step="run", message=f"Run {number} of {max_runs}")
             # update.cf's errors are problems too (its compliance isn't in the summary we read).
@@ -1036,16 +1160,31 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
                 *find_problems(output, source_map, block_files, policies),
             ]
             add_problems(problems, found, number)
+            repairing = find_repairs(output, source_map, policies)
             if code != 0 or result.get("repaired", 0) == 0:
+                break
+            # Only blocks with How often still repair: they would on every run here.
+            if number > 1 and repairing and repairing <= periodic:
                 break
         # Every run's: a promise that failed in the first run isn't always tried again (a restart
         # behind a change that's done by then), and a later run then looks clean.
         emit("problems", host=host["id"], problems=list(problems.values()))
         # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
         # Enterprise hub repairs a little on every run).
-        converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0
+        # Blocks with How often repairing every run count as converged: test runs ignore locks.
+        settled = result.get("repaired", 1) == 0 if result else False
+        only_periodic = bool(repairing) and repairing <= periodic
+        converged = bool(result) and result["exit"] == 0 and (settled or only_periodic)
         failed = not result or result["exit"] != 0
-        emit("host", host=host["id"], state="failed" if failed else "done", converged=converged)
+        emit(
+            "host",
+            host=host["id"],
+            state="failed" if failed else "done",
+            converged=converged,
+            # In the last run: blocks repairing that shouldn't, and those with How often.
+            stillRepairing=sorted(repairing - periodic) if not settled else [],
+            everyRun=sorted(repairing & periodic) if not settled else [],
+        )
     emit("done")
 
 

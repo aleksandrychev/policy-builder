@@ -39,10 +39,14 @@ export interface RunResult {
 export interface HostRuntime {
   container?: string;
   converged?: boolean;
+  // Blocks with How often that repaired on every run (ignored for converging), by id.
+  everyRun?: string[];
   ip?: string | null;
   state: string;
   // What it's doing right now ("Bootstrapping to …", "Run 2 of 3"), while busy.
   step?: string;
+  // Blocks still repairing in its last run, by id: why it hasn't converged.
+  stillRepairing?: string[];
 }
 
 const BUSY_STATES = new Set(['provisioning', 'running']);
@@ -134,6 +138,8 @@ function handle(runId: string, event: TestEnvEvent) {
               container: event.container ?? known?.container,
               ip: event.ip ?? known?.ip,
               converged: event.converged,
+              stillRepairing: event.stillRepairing,
+              everyRun: event.everyRun,
               step: BUSY_STATES.has(event.state) ? known?.step : undefined
             }
           }

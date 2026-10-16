@@ -37,7 +37,7 @@ function setup(session: Partial<SessionTools> = {}) {
 
 function installApi(api: Partial<Api>) {
   window.api = {
-    checkProjectTarget: vi.fn(async () => ({ parentWritable: true, targetState: 'new' as const })),
+    checkProjectTarget: vi.fn(async () => ({ parentExists: true, parentWritable: true, targetState: 'new' as const })),
     getMasterfilesVersions: vi.fn(async () => ({ latest: '3.27.9' })),
     ...api
   } as unknown as Api;
@@ -153,12 +153,22 @@ describe('MCP project tools', () => {
 
     it('refuses targets the dialog refuses', async () => {
       const { call } = setup();
-      installApi({ checkProjectTarget: vi.fn(async () => ({ parentWritable: true, targetState: 'nonEmpty' as const })) });
+      installApi({ checkProjectTarget: vi.fn(async () => ({ parentExists: true, parentWritable: true, targetState: 'nonEmpty' as const })) });
       expect((await call('create_project', { name: 'X', parent: '/p' })).content).toMatch(/isn’t empty/);
       expect((await call('create_project', { name: 'X', parent: 'relative' })).content).toMatch(/absolute/);
       expect((await call('create_project', { name: '!!!', parent: '/p' })).content).toMatch(/letter or digit/);
-      installApi({ checkProjectTarget: vi.fn(async () => ({ parentWritable: false, targetState: 'new' as const })) });
-      expect((await call('create_project', { name: 'X', parent: '/p' })).content).toMatch(/Can’t create a folder/);
+      installApi({ checkProjectTarget: vi.fn(async () => ({ parentExists: true, parentWritable: false, targetState: 'new' as const })) });
+      expect((await call('create_project', { name: 'X', parent: '/p' })).content).toMatch(/Can’t write to \/p/);
+    });
+
+    it('creates a missing parent only when asked to', async () => {
+      const create = vi.fn(async () => ({ ok: true }));
+      const { call } = setup({ create });
+      installApi({ checkProjectTarget: vi.fn(async () => ({ parentExists: false, parentWritable: false, targetState: 'new' as const })) });
+      expect((await call('create_project', { name: 'X', parent: '/p/new' })).content).toMatch(/\/p\/new doesn’t exist: pass createParent: true/);
+      expect(create).not.toHaveBeenCalled();
+      expect((await call('create_project', { name: 'X', parent: '/p/new', createParent: true })).ok).toBe(true);
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ parent: '/p/new', createParent: true }));
     });
 
     it('passes cfbs’s failure on', async () => {

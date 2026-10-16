@@ -82,7 +82,7 @@ export function registerDefinitionTools(server: McpServer, answer: Answer) {
     {
       inputSchema: {},
       description:
-        'The transformers (CFEngine functions) a computed value can be chained through: id, function, input → output type (string or list), parameters.',
+        'The transformers (CFEngine functions) a computed value can be chained through: id, function, input → output type (string, list or data), parameters. Data values (Structured data (JSON), Data variable) start with the data transformers: Keys, Values, Field, Merge with JSON, As JSON text, Count entries.',
       annotations: READ_ONLY
     },
     answer('list_transformers')

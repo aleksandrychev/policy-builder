@@ -6,6 +6,7 @@ import { blockAdvice } from '../canvas/advice';
 import { executionOrder, isSequenced, wouldCreateCycle } from '../canvas/executionOrder';
 import { nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
+import { describeProblem } from '../components/properties/CustomTextProblems';
 import { toCfbsProject } from '../project/cfbsProject';
 import { compiledPart } from '../project/useCompiledPolicy';
 import type { RootState } from '../store';
@@ -15,6 +16,7 @@ import {
   blockNoteChanged,
   blockParamChanged,
   blockRemoved,
+  blockRunIntervalChanged,
   blocksMoved,
   conditionRemoved,
   conditionSet
@@ -99,6 +101,7 @@ function fileDetail(state: RootState, fileId: string) {
       id: block.instanceId,
       label: block.label,
       note: block.note,
+      runInterval: block.runInterval,
       type: block.blockId,
       runOrder: order.indexOf(block.instanceId) + 1 || undefined,
       params: block.entries ? undefined : block.params,
@@ -151,8 +154,24 @@ async function skippedParts(state: RootState): Promise<Map<string, string[]>> {
   return skipped;
 }
 
+// Custom CFEngine blocks' text, checked with the bundled linter: problems by block id.
+async function customProblems(state: RootState): Promise<Record<string, string[]>> {
+  const namespaces = new Map(state.files.files.map(file => [file.id, file.namespace]));
+  const blocks = state.canvas
+    .filter(block => blockDescriptorsById.get(block.blockId)?.custom)
+    .map(block => ({
+      id: block.instanceId,
+      namespace: namespaces.get(block.fileId) ?? 'custom',
+      promises: block.params.promises ?? '',
+      definitions: block.params.definitions ?? ''
+    }));
+  if (!blocks.length || !window.api) return {};
+  const found = await window.api.lintCustom(blocks);
+  return Object.fromEntries(Object.entries(found).map(([id, problems]) => [id, problems.map(describeProblem)]));
+}
+
 async function warnings(state: RootState) {
-  const skipped = await skippedParts(state);
+  const [skipped, custom] = await Promise.all([skippedParts(state), customProblems(state)]);
   const missing = state.canvas.flatMap(block => {
     const descriptor = blockDescriptorsById.get(block.blockId);
     if (!descriptor) return [];
@@ -166,7 +185,8 @@ async function warnings(state: RootState) {
       return problem ? [`${param.name} ${problem}`] : [];
     });
     const advice = blockAdvice(block, state.edges);
-    return empty.length || invalid.length || notCompiled || advice.length
+    const customText = custom[block.instanceId]?.length ? custom[block.instanceId] : undefined;
+    return empty.length || invalid.length || notCompiled || advice.length || customText
       ? [
           {
             blockId: block.instanceId,
@@ -175,7 +195,8 @@ async function warnings(state: RootState) {
             ...(empty.length ? { missing: empty } : {}),
             ...(invalid.length ? { invalid } : {}),
             ...(notCompiled ? { notCompiled } : {}),
-            ...(advice.length ? { advice } : {})
+            ...(advice.length ? { advice } : {}),
+            ...(customText ? { customText } : {})
           }
         ]
       : [];
@@ -215,7 +236,20 @@ interface BlockSpec {
   label: string;
   note?: string;
   params: Record<string, string>;
+  runInterval?: string;
   valueSourceId?: string;
+}
+
+// "How often" in minutes, for blocks without a run_interval parameter of their own; "" removes it.
+function runIntervalInput(input: Input, descriptor: BlockDescriptor): string | undefined {
+  if (input.runInterval === undefined || input.runInterval === null) return undefined;
+  const minutes = String(input.runInterval).trim();
+  if (descriptor.parameters?.some(parameter => parameter.name === 'run_interval')) {
+    throw new ToolError(`${descriptor.name} sets how often with its run_interval parameter`);
+  }
+  if (descriptor.entries) throw new ToolError(`${descriptor.name} has no How often`);
+  if (minutes !== '' && !/^[1-9]\d*$/.test(minutes)) throw new ToolError('runInterval is a whole number of minutes, at least 1 ("" removes it)');
+  return minutes;
 }
 
 function conditionInput(input: Input): Condition | undefined {
@@ -277,7 +311,8 @@ function checkedBlockSpec(state: RootState, input: Input, earlier: BlockSpec[] =
   const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : descriptor.name;
   const groupId = checkedGroupId(state, input, fileId, isSequenced(descriptor));
   const note = optionalStr(input, 'note')?.trim() || undefined;
-  const spec: BlockSpec = { fileId, descriptor, label, note, params, valueSourceId, condition: conditionInput(input), groupId };
+  const runInterval = runIntervalInput(input, descriptor) || undefined;
+  const spec: BlockSpec = { fileId, descriptor, label, note, params, runInterval, valueSourceId, condition: conditionInput(input), groupId };
   return { ...spec, after: checkedArrow(state, input, spec, earlier) };
 }
 
@@ -297,6 +332,7 @@ function dispatchBlock(env: CanvasEnv, spec: BlockSpec, added: string[]): string
     )
   ).payload.instanceId;
   if (spec.note) env.dispatch(blockNoteChanged({ instanceId, note: spec.note }));
+  if (spec.runInterval) env.dispatch(blockRunIntervalChanged({ instanceId, runInterval: spec.runInterval }));
   if (spec.condition) env.dispatch(conditionSet({ instanceId, condition: spec.condition }));
   if (spec.groupId) env.dispatch(changeMembership(fileId, [instanceId], spec.groupId));
   if (spec.after) {
@@ -346,10 +382,12 @@ function updateBlock(env: CanvasEnv, input: Input) {
   if (block.entries && input.params) throw new ToolError(`${descriptor.name} holds entries: change them with update_entry`);
   const params = checkedBlockParams(descriptor, block.valueSourceId, input.params);
   const condition = input.condition === null ? null : conditionInput(input);
+  const runInterval = runIntervalInput(input, descriptor);
   env.openFile(block.fileId);
   inOneStep(env.dispatch, () => {
     if (typeof input.label === 'string' && input.label.trim()) env.dispatch(blockLabelChanged({ instanceId: block.instanceId, label: input.label.trim() }));
     if (typeof input.note === 'string') env.dispatch(blockNoteChanged({ instanceId: block.instanceId, note: input.note.trim() }));
+    if (runInterval !== undefined) env.dispatch(blockRunIntervalChanged({ instanceId: block.instanceId, runInterval }));
     for (const [paramName, value] of Object.entries(params)) env.dispatch(blockParamChanged({ instanceId: block.instanceId, paramName, value }));
     if (condition === null) env.dispatch(conditionRemoved({ instanceId: block.instanceId }));
     else if (condition) env.dispatch(conditionSet({ instanceId: block.instanceId, condition }));

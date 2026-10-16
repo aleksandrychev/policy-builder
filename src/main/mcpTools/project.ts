@@ -43,6 +43,7 @@ export function registerProjectTools(server: McpServer, answer: Answer) {
           .optional()
           .describe('The first policy file’s name (default: the project name). Its namespace derives from it and can’t be changed later.'),
         parent: absolutePath('The folder to create the project folder in'),
+        createParent: z.boolean().optional().describe('Create the parent folder if it doesn’t exist (default false: refused)'),
         description: z.string().optional(),
         type: z
           .enum(['policy-set', 'module'])

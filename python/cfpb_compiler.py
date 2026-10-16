@@ -208,6 +208,8 @@ class Context:
     bodies: set[str]
     class_refs: list[dict] = field(default_factory=list)
     previous: str | None = None
+    # The name of a variable holding the previous value, for steps that need one.
+    previous_name: str | None = None
     # Chained values are function arguments: a list can't be a { } literal there.
     as_argument: bool = False
     # A block's own files in ./templates/ ({"template_file": …}), named after the block,
@@ -223,6 +225,8 @@ class Context:
     computed: dict[str, str] = field(default_factory=dict)
     # Classes the file defines: everything else bare is `default:`.
     local_classes: set[str] = field(default_factory=set)
+    # A Custom CFEngine block's own bundle, which its methods promise calls.
+    custom_bundle: str = ""
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -282,13 +286,26 @@ def compile_value(expr, ctx: Context) -> str:
             return f"{{ @({name}) }}"
         return quote(name)
     if "previous" in expr:
+        if expr["previous"] == "name":
+            if ctx.previous_name is None:
+                raise CompileError("{previous: name} used outside a decorator")
+            return quote(ctx.previous_name)
         if ctx.previous is None:
             raise CompileError("{previous} used outside a decorator")
         return ctx.previous
+    if "field" in expr:
+        if ctx.previous_name is None:
+            raise CompileError("{field} used outside a decorator")
+        keys = [key for key in ctx.substitute(expr["field"]).split(".") if key]
+        return quote(f"$({ctx.previous_name}{''.join(f'[{key}]' for key in keys)})")
     if "if_set" in expr:
         return compile_value(expr["value"] if ctx.params.get(expr["if_set"], "").strip() else expr["else"], ctx)
     if "if_true" in expr:
         return compile_value(expr["value"], ctx)
+    if "custom_bundle" in expr:
+        if not ctx.custom_bundle:
+            raise CompileError("{custom_bundle} outside a Custom CFEngine block")
+        return ctx.custom_bundle
     if "choose" in expr:
         picked = ctx.params.get(expr["choose"], "")
         if picked not in expr["cases"]:
@@ -459,6 +476,26 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     return PLACEHOLDER.sub(shown, pattern)
 
 
+def needs_name(expr) -> bool:
+    """Whether a decorator's expression takes the previous value by a variable's name."""
+    if isinstance(expr, dict):
+        return expr.get("previous") == "name" or "field" in expr or any(needs_name(value) for value in expr.values())
+    if isinstance(expr, list):
+        return any(needs_name(item) for item in expr)
+    return False
+
+
+def run_interval(block: dict, descriptor: dict) -> list[str]:
+    """A block's "How often": at most every N minutes, as its promise's action. Blocks with a
+    run_interval parameter of their own (Run Command…) set it there."""
+    minutes = str(block.get("runInterval") or "").strip()
+    if not re.fullmatch(r"[1-9]\d*", minutes) or any(
+        p["name"] == "run_interval" for p in descriptor.get("parameters", [])
+    ):
+        return []
+    return [f'action => default:if_elapsed("{minutes}")']
+
+
 def noted(block: dict) -> list[str]:
     """A block's note, as its promises' comment (one line: CFEngine prints it in reports)."""
     note = one_line(block.get("note") or "")
@@ -531,6 +568,12 @@ class FileCompiler:
     companions: dict[str, str] = field(default_factory=dict)
     # (block or group id, its `# ...` comment) in output order, for source_map.
     chunks: list[tuple[str, str]] = field(default_factory=list)
+    # Custom CFEngine blocks' bundles and the bodies and bundles they use, written as given,
+    # with their comments for source_map (added after the entry and group bundles', in file order).
+    custom_sections: list[str] = field(default_factory=list)
+    custom_chunks: list[tuple[str, str]] = field(default_factory=list)
+    # Chunks that run to the next one, not to the end of their first bundle or body.
+    spans: set[str] = field(default_factory=set)
     # Block or group id -> its [first, last] line ranges (1-based) in the compiled file.
     source_map: dict[str, list[list[int]]] = field(default_factory=dict)
 
@@ -562,9 +605,12 @@ class FileCompiler:
             sections.append(self.entry_bundle(sequenced, names, groups))
             sections.extend(self.group_bundle(group, sequenced, names) for group in groups.values())
         sections.extend(self.builder_body(name) for name in sorted(self.bodies))
+        # Last: a custom block's bodies run to the next block's section, or the end.
+        sections.extend(self.custom_sections)
+        self.chunks += self.custom_chunks
         body = in_own_namespace("\n\n".join(sections[1:]), self.ns)
         policy = format_policy(sections[0] + "\n\n" + body + "\n")
-        self.source_map = locate_chunks(policy, self.chunks)
+        self.source_map = locate_chunks(policy, self.chunks, self.spans)
         return policy
 
     def header(self) -> str:
@@ -655,7 +701,9 @@ class FileCompiler:
                 kind, lines = self.entry_promises(block, descriptor, entry)
                 if first[kind]:
                     label = one_line(block.get("label") or descriptor["name"])
-                    lines = [f"# {label}", *lines]
+                    # A Define block's note, once above its entries (not as each one's comment).
+                    note = one_line(block.get("note") or "")
+                    lines = [f"# {label}", *([f"# Note: {note}"] if note else []), *lines]
                     chunks[kind].append((block["instanceId"], label))
                     first[kind] = False
                 sections[kind].extend(lines)
@@ -705,7 +753,7 @@ class FileCompiler:
             class_refs=entry.get("classRefs") or [],
             local_classes=self.local_classes,
         )
-        extra = noted(block)
+        extra = []
         if entry.get("inventory", {}).get("attributeName", "").strip():
             extra.append(
                 f'meta => {{ "inventory", {quote("attribute_name=" + entry["inventory"]["attributeName"].strip())} }}'
@@ -714,7 +762,7 @@ class FileCompiler:
         if kind != "vars":
             return kind, promise(
                 quote(ctx.substitute(step["promiser"])),
-                [*attributes_of(step, ctx), *noted(block), *condition_attributes(conditions)],
+                [*attributes_of(step, ctx), *condition_attributes(conditions)],
             )
 
         [(value_type, value)] = step["attributes"].items()
@@ -780,7 +828,15 @@ class FileCompiler:
         for index, instance in enumerate(decorators):
             decorator = self.library.decorators[instance["decoratorId"]]
             params = params_with_defaults(decorator.get("parameters", []), instance.get("params") or {})
-            step_ctx = Context(ctx.vars_bundle, params, ctx.bodies, previous=expression, as_argument=True)
+            previous_name = None
+            if needs_name(decorator.get("expression")):
+                # A function that only takes a variable: the steps so far, stored in one.
+                held = f"{name}__{index + 1}"
+                lines += promise(quote(held), [f"{value_type} => {expression}", *condition_attributes(conditions)])
+                previous_name = f"{owner}.{held}"
+            step_ctx = Context(
+                ctx.vars_bundle, params, ctx.bodies, previous=expression, previous_name=previous_name, as_argument=True
+            )
             if "fallback" not in decorator:
                 expression, value_type = compile_value(decorator["expression"], step_ctx), decorator["output_type"]
                 continue
@@ -806,7 +862,10 @@ class FileCompiler:
                 quote(name), [f'{decorator["output_type"]} => {fallback}', *extra, *if_all([*conditions, unset])]
             )
             return lines
-        return promise(quote(name), [f"{value_type} => {expression}", *extra, *condition_attributes(conditions)])
+        return [
+            *lines,
+            *promise(quote(name), [f"{value_type} => {expression}", *extra, *condition_attributes(conditions)]),
+        ]
 
     def gating(self, node: dict, names: dict[str, str], edges: list[dict]) -> list[str]:
         """What runs a block's (or group's) promise: its condition and the arrows it waits for (`if`),
@@ -844,7 +903,15 @@ class FileCompiler:
         body = [f"  # {label}"]
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
-        lines = promise(promiser, [*attributes, *noted(block), *self.gating(block, names, edges)])
+        lines = promise(
+            promiser,
+            [
+                *attributes,
+                *noted(block),
+                *run_interval(block, self.descriptor(block)),
+                *self.gating(block, names, edges),
+            ],
+        )
         return [*body, f"  {promise_type}:", *guarded, *[f"      {line}" for line in lines], ""]
 
     # bundle agent main: every ungrouped block's own promise and every group's call, in order (top_down).
@@ -920,6 +987,7 @@ class FileCompiler:
         if len(steps) != 1:
             raise CompileError(f"{descriptor['name']}: only one-step blocks compile so far")
         step = inline_computed_template(steps[0], computed)
+        custom_bundle = self.custom_block(block, name, params) if descriptor.get("custom") else ""
         to_root = "../" * self.file["path"][2:].count("/")
         ctx = Context(
             self.vars_name,
@@ -933,6 +1001,7 @@ class FileCompiler:
             owner=owner,
             computed={param: kind for param, (_lines, kind) in computed.items()},
             local_classes=self.local_classes,
+            custom_bundle=custom_bundle,
         )
         # A one-value-per-line parameter in the promiser iterates over a list, unless it holds one value.
         variables, promiser_params = [line for lines, _kind in computed.values() for line in lines], dict(params)
@@ -960,6 +1029,27 @@ class FileCompiler:
             variables += template_data
             attributes.append(f"template_data => @({prefix}template_data)")
         return variables, step["promise_type"], quote(promiser), attributes
+
+    def custom_block(self, block: dict, name: str, params: dict[str, str]) -> str:
+        """A Custom CFEngine block's text: its promises as a bundle named after the block, then
+        the bodies and bundles they use. Skipped, with the reason, if the text doesn't parse."""
+        from cfpb_custom import syntax_error
+
+        promises, definitions = params.get("promises", ""), params.get("definitions", "")
+        problem = syntax_error(promises, definitions, self.ns)
+        if problem:
+            raise Skip(problem)
+        label = one_line(block.get("label") or "custom")
+        comment = f'Custom CFEngine "{label}", run as one step of main.'
+        self.custom_chunks.append((block["instanceId"], comment))
+        self.custom_sections.append(f"# {comment}\nbundle agent {name}\n{{\n{promises.rstrip()}\n}}")
+        # A copied block brings the same bodies: written once, or the file defines them twice.
+        if definitions.strip() and not any(section.endswith(definitions.strip()) for section in self.custom_sections):
+            used = f'Bodies and bundles of Custom CFEngine "{label}".'
+            self.custom_chunks.append((block["instanceId"], used))
+            self.spans.add(used)
+            self.custom_sections.append(f"# {used}\n{definitions.strip()}")
+        return name
 
     def computed_parameters(
         self, block: dict, bundle: str, prefix: str = ""
@@ -1095,19 +1185,24 @@ def format_policy(text: str) -> str:
     return out.getvalue()
 
 
-def locate_chunks(policy: str, chunks: list[tuple[str, str]]) -> dict[str, list[list[int]]]:
+def locate_chunks(
+    policy: str, chunks: list[tuple[str, str]], spans: set[str] = frozenset()
+) -> dict[str, list[list[int]]]:
     """Where each chunk landed after formatting: from its comment to the next chunk's (or its
-    bundle's end), without trailing blank lines or bare section headers. 1-based, inclusive."""
+    bundle's end), without trailing blank lines or bare section headers. 1-based, inclusive.
+    A chunk in `spans` runs to the next chunk, or the end: several bodies and bundles."""
     lines = policy.splitlines()
     starts, at = [], 0
     for owner, text in chunks:
         found = next((i for i in range(at, len(lines)) if lines[i].strip() == f"# {text}"), None)
         if found is not None:
-            starts.append((owner, found))
+            starts.append((owner, found, text))
             at = found + 1
     ranges: dict[str, list[list[int]]] = {}
-    for index, (owner, start) in enumerate(starts):
+    for index, (owner, start, text) in enumerate(starts):
         close = next((i for i in range(start + 1, len(lines)) if lines[i] == "}"), len(lines) - 1)
+        if text in spans:
+            close = starts[index + 1][1] - 1 if index + 1 < len(starts) else len(lines) - 1
         # A comment above a bundle covers the whole bundle, blocks and all.
         top_level = not lines[start].startswith(" ")
         end = close if top_level else close - 1

@@ -47,7 +47,7 @@ async function setup({ dockerUp = true, withEnvironment = true, states = { h1: '
         ? { available: true, host: null, message: '', problem: null }
         : { available: false, host: null, message: 'down', problem: 'not_running' as const }
     ),
-    testEnvPlatforms: vi.fn(async () => ({ platforms: [] })),
+    testEnvPlatforms: vi.fn(async () => ({ latest: null, platforms: [] })),
     testEnvStart: vi.fn(async () => 'run-1'),
     testEnvStatus: vi.fn(async () => ({
       hosts: Object.fromEntries(Object.entries(states).map(([id, state]) => [id, { state, container: `c-${id}`, ip: `10.0.0.${id.slice(1)}` }]))

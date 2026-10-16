@@ -19,6 +19,12 @@ const note = z
     'Why the block is there, or a decision behind it (e.g. “daily, not weekly: the old run took too long”): shown in Properties, compiled to the promise’s comment'
   );
 
+const runInterval = z
+  .union([z.string(), z.number().int().min(1)])
+  .describe(
+    'How often: at most every N minutes (60 hourly, 1440 daily, 10080 weekly), as the promise’s ifelapsed; "" removes it. Not for blocks with a run_interval parameter (Run Command, Report Message, Signal Process) or Define Variable / Define Class'
+  );
+
 const outcomes = z
   .array(z.enum(['kept', 'repaired', 'not_kept']))
   .optional()
@@ -30,6 +36,7 @@ const newBlock = {
   blockType: z.string(),
   label: z.string().optional().describe('Defaults to the block type’s name'),
   note: note.optional(),
+  runInterval: runInterval.optional(),
   params: z.record(z.string(), z.string()).optional().describe('Parameter name → value, as get_block_type lists them'),
   condition: condition.optional(),
   groupId: z.string().optional().describe('A group of the same file to put the block in (get_file lists them)'),
@@ -90,7 +97,7 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
     {
       inputSchema: {},
       description:
-        'What the editor flags in the project: blocks with required parameters left empty, values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters), blocks or entries the generated policy leaves out (notCompiled, with why: e.g. an invalid class expression), and advice: settings that are valid but probably not meant (a directory mode without x, a restart that runs on every agent run). Run it after editing, before saving.',
+        'What the editor flags in the project: blocks with required parameters left empty, values a parameter doesn’t accept (an option it doesn’t have, a relative path, wrong characters), blocks or entries the generated policy leaves out (notCompiled, with why: e.g. an invalid class expression), customText: problems the linter finds in a Custom CFEngine block’s promises or bodies (field, line, message), and advice: settings that are valid but probably not meant (a directory mode without x, a restart that runs on every agent run). Run it after editing, before saving.',
       annotations: READ_ONLY
     },
     answer('get_warnings')
@@ -119,11 +126,12 @@ export function registerCanvasTools(server: McpServer, answer: Answer) {
   server.registerTool(
     'update_block',
     {
-      description: 'Changes a block’s label, note, parameters (only those given) or condition.',
+      description: 'Changes a block’s label, note, how often (runInterval), parameters (only those given) or condition.',
       inputSchema: {
         blockId: z.string(),
         label: z.string().optional(),
         note: note.optional().describe('Empty removes it'),
+        runInterval: runInterval.optional(),
         params: z.record(z.string(), z.string()).optional(),
         condition: condition.optional()
       },

@@ -23,6 +23,10 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
     "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
+    "custom-cfengine": {
+        "promises": 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    depth_search => default:recurse("inf");',
+        "definitions": 'body copy_from mirror(from)\n{\n  source => "$(from)";\n  purge => "true";\n}',
+    },
     "create-directory": {"path": "/var/www/html\n/var/www/uploads", "owner": "www-data", "group": "www-data"},
     "create-edit-file": {"path": "/etc/app.conf", "content": 'name = "app"\nport = 8080\n'},
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},
@@ -95,7 +99,9 @@ def _decorator_cases() -> list[tuple[str, dict]]:
     sources = {s["id"]: s for s in LIBRARY.descriptors["define-variable"]["value_sources"]}
     cases = []
     for i, (decorator_id, decorator) in enumerate(sorted(LIBRARY.decorators.items())):
-        source_id = "file-lines" if decorator["input_type"] == "slist" else "command-output"
+        source_id = {"slist": "file-lines", "data": "structured-data-json"}.get(
+            decorator["input_type"], "command-output"
+        )
         step = {"id": "d", "decoratorId": decorator_id, "params": _params(decorator.get("parameters", []))}
         entry = _entry(
             "v", "variable_name", f"via_{i}", source_id, _params(sources[source_id]["parameters"]), decorators=[step]

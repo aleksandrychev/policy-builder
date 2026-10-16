@@ -2,6 +2,7 @@ import { fileConditionClassNameChanged, fileConditionEnabled, fileDescriptionCha
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
 import { addBlock, addFile, blockOf, makeStore, undoAll } from '../store/test/storeTestUtils';
+import { installApi, uninstallApi } from '../test/render';
 import type { ToolEnv } from './shared';
 import { type ToolAnswer, answerTool } from './tools';
 
@@ -246,5 +247,34 @@ describe('MCP canvas tools: changing the canvas', () => {
     expect(fitView).toHaveBeenCalled();
     expect(undoAll(store)).toBe(1);
     expect((await call('tidy_file', { fileId: 'nope' })).ok).toBe(false);
+  });
+
+  it('limits how often a block runs, where it has no How often of its own', async () => {
+    const { call, fileId, store } = setup();
+    const { id } = (await call('add_block', { fileId, blockType: 'create-directory', params: { path: '/srv/x' }, runInterval: 1440 })).result;
+    expect(blockOf(store, id)?.runInterval).toBe('1440');
+    expect((await call('get_file', { fileId })).result.blocks[0]).toMatchObject({ id, runInterval: '1440' });
+    await call('update_block', { blockId: id, runInterval: '' });
+    expect(blockOf(store, id)).not.toHaveProperty('runInterval');
+
+    expect((await call('update_block', { blockId: id, runInterval: '0' })).content).toMatch(/whole number of minutes/);
+    expect((await call('add_block', { fileId, blockType: 'run-command', params: { command: '/bin/true' }, runInterval: 60 })).content).toMatch(
+      /run_interval parameter/
+    );
+  });
+
+  it('reports what the linter finds in a Custom CFEngine block', async () => {
+    const { call, fileId } = setup();
+    const lintCustom = vi.fn(async (blocks: { id: string }[]) => ({
+      [blocks[0].id]: [{ field: 'promises' as const, line: 1, column: 20, message: 'mog isn’t defined in this block' }]
+    }));
+    installApi({ lintCustom, compilePolicy: vi.fn(async () => ({ files: {}, sourceMap: {} })) });
+    const { id } = (await call('add_block', { fileId, blockType: 'custom-cfengine', params: { promises: 'files: "/a" perms => mog("644","root","root");' } }))
+      .result;
+
+    const { blocks } = (await call('get_warnings')).result;
+    expect(blocks).toEqual([expect.objectContaining({ blockId: id, customText: [expect.stringMatching(/^Promises, line 1: mog isn’t defined/)] })]);
+    expect(lintCustom).toHaveBeenCalledWith([expect.objectContaining({ id, namespace: 'main' })]);
+    uninstallApi();
   });
 });

@@ -5,8 +5,8 @@ import { homedir } from 'os';
 import { basename, join, normalize, sep } from 'path';
 import { pathToFileURL } from 'url';
 
-import type { RecentProject } from '../preload/api';
-import { compilePolicy, formatPolicy, warmUpSidecar } from './backend';
+import type { CustomText, RecentProject } from '../preload/api';
+import { compilePolicy, formatPolicy, lintCustom, warmUpSidecar } from './backend';
 import { registerDeployHandlers } from './deploy';
 import { registerHubHandlers } from './hub';
 import { registerMcpHandlers } from './mcp';
@@ -388,6 +388,20 @@ app.whenReady().then(() => {
     if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
     if (typeof project !== 'object' || project === null || Array.isArray(project)) throw new Error('project data must be an object');
     return compilePolicy(project);
+  });
+
+  // Custom CFEngine blocks' text, checked as the user types.
+  ipcMain.handle('policy:lint-custom', (event, blocks: unknown) => {
+    if (!isTrustedFrame(event.senderFrame)) throw new Error('untrusted sender');
+    if (!Array.isArray(blocks) || blocks.length > 200) throw new Error('blocks must be a list');
+    const texts = blocks.map(block => {
+      const { definitions, id, namespace, promises } = (typeof block === 'object' && block !== null ? block : {}) as Record<string, unknown>;
+      if ([definitions, id, namespace, promises].some(value => typeof value !== 'string'))
+        throw new Error('each block has id, namespace, promises, definitions');
+      if ((promises as string).length + (definitions as string).length > 200_000) throw new Error('custom text too long');
+      return { definitions, id, namespace, promises } as CustomText;
+    });
+    return lintCustom(texts);
   });
 
   // 1 MB is plenty for config/template/script text and keeps a single

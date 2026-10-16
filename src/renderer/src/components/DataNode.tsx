@@ -9,7 +9,7 @@ import { Box, IconButton, ListItemText, Menu, MenuItem, TextField, Typography, u
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 
 import { currentChainType, decoratorsById } from '../blocks/decorators';
-import type { DecoratorValue } from '../blocks/evaluateDecorator';
+import { DataValue, type DecoratorValue } from '../blocks/evaluateDecorator';
 import { runDecoratorChain } from '../blocks/runDecoratorChain';
 import { DATA_NODE_WIDTH, type DataChain } from '../canvas/dataChains';
 import { useMenuAnchor } from '../hooks/useMenuAnchor';
@@ -29,6 +29,10 @@ export interface DataNodeData extends Record<string, unknown> {
 export type DataFlowNode = Node<DataNodeData, 'data'>;
 
 function formatValue(value: DecoratorValue): string {
+  if (value instanceof DataValue) {
+    const json = JSON.stringify(value.json);
+    return json.length > 60 ? `${json.slice(0, 59)}…` : json;
+  }
   if (!Array.isArray(value)) return value === '' ? '(empty)' : `"${value}"`;
   if (value.length === 0) return 'empty list';
   return `list of ${value.length}: ${value.slice(0, 3).join(', ')}${value.length > 3 ? ', …' : ''}`;

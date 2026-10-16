@@ -76,8 +76,19 @@ test.describe('with Docker', () => {
     const card = hostCard(window, 'web');
     const deployAndRun = window.getByRole('button', { name: 'Deploy & run', exact: true });
 
-    await test.step('open the demo on Test Results & Logs', async () => {
+    await test.step('open the demo, with a command run at most once a day', async () => {
       await window.getByText(/^Try Demo:/).click();
+      // How often: it runs on every test run (no locks), and mustn't keep the host "Still repairing".
+      await window.getByRole('button', { name: /^Run Command\b/ }).click();
+      await window.getByLabel('Command', { exact: true }).click();
+      const editor = window.getByRole('dialog', { name: 'Command' });
+      await editor.locator('.cm-content').click();
+      await window.keyboard.insertText('/bin/echo periodic');
+      await editor.getByRole('button', { name: 'Save' }).click();
+      await expect(window.getByRole('combobox', { name: 'How often' })).toHaveText('At most once a day');
+    });
+
+    await test.step('open it on Test Results & Logs', async () => {
       await window.getByRole('tab', { name: 'Test Results & Logs' }).click();
       await expect(card.getByText('Not set up', { exact: true })).toBeVisible();
       await expect(card.getByRole('link', { name: 'localhost:8080' })).toBeVisible();
@@ -88,7 +99,9 @@ test.describe('with Docker', () => {
       await expect(window.getByRole('button', { name: 'Cancel' })).toBeVisible();
       // Generous: pulling the image and installing CFEngine can take minutes on a cold cache.
       await expect(deployAndRun).toBeVisible({ timeout: 600_000 });
-      await expect(card.getByText(/^\d+% kept · \d+% repaired · \d+% not kept/)).toBeVisible();
+      await expect(card.getByText(/^[\d.]+% kept · [\d.]+% repaired · [\d.]+% not kept/)).toBeVisible();
+      // The daily command repaired on every run, yet the host converged.
+      await expect(card.getByText('Still repairing')).toHaveCount(0);
       await expect(window.getByRole('button', { name: 'Copy the log' })).toBeEnabled();
       await expect(window.getByText(/^Nothing yet: Deploy & run/)).toHaveCount(0);
     });

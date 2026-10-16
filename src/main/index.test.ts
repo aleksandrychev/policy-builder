@@ -71,7 +71,8 @@ vi.mock('electron', async importOriginal => {
   };
 });
 
-vi.mock('./backend', () => ({}));
+const backend = vi.hoisted(() => ({ lintCustom: vi.fn(async () => ({})) }));
+vi.mock('./backend', () => backend);
 vi.mock('./deploy', () => ({ registerDeployHandlers: () => {} }));
 vi.mock('./hub', () => ({ registerHubHandlers: () => {} }));
 vi.mock('./testenv', () => ({ registerTestEnvHandlers: () => {} }));
@@ -180,6 +181,17 @@ describe('IPC from the renderer', () => {
     await launch({ isPackaged: false });
     expect(() => invoke('window:set-document', ipcEvent({ url: 'http://localhost:5173/' }), { edited: false, title: null })).not.toThrow();
     expect(() => invoke('window:set-document', ipcEvent(), { edited: false, title: null })).toThrow('untrusted sender');
+  });
+
+  it('checks Custom CFEngine text only in the shape it expects', async () => {
+    await launch({ isPackaged: true });
+    const block = { id: 'b', namespace: 'site', promises: 'files: ;', definitions: '' };
+    await invoke('policy:lint-custom', ipcEvent(), [block]);
+    expect(backend.lintCustom).toHaveBeenCalledWith([block]);
+    expect(() => invoke('policy:lint-custom', ipcEvent({ url: 'https://evil.example/' }), [block])).toThrow('untrusted sender');
+    expect(() => invoke('policy:lint-custom', ipcEvent(), 'files: ;')).toThrow('blocks must be a list');
+    expect(() => invoke('policy:lint-custom', ipcEvent(), [{ ...block, promises: 42 }])).toThrow('each block has id');
+    expect(() => invoke('policy:lint-custom', ipcEvent(), [{ ...block, promises: 'x'.repeat(200_001) }])).toThrow('too long');
   });
 
   it('runs only the Edit menu’s own text commands natively', async () => {

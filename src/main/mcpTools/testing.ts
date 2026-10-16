@@ -42,7 +42,7 @@ export function registerTestTools(server: McpServer, answer: Answer) {
     'list_test_platforms',
     {
       description:
-        'What a test host can run: each platform (id, label, base image, whether it is pulled) and whether the edition / version / architecture has a CFEngine client package and a hub package for it; plus the editions, architectures and the latest version. Defaults to the first environment’s edition, version and arch. Checking packages needs the internet.',
+        'What a test host can run: each platform (id, label, base image, whether it is pulled) and whether the edition / version / architecture has a CFEngine client package and a hub package for it; plus the editions, architectures, the CFEngine release “latest” installs and the masterfiles the policy is built on (which may be older). Defaults to the first environment’s edition, version and arch. Checking packages needs the internet.',
       inputSchema: {
         edition: z.enum(['community', 'enterprise']).optional(),
         version: z.string().optional().describe('"latest" or a release such as "3.27.1"'),
@@ -111,7 +111,7 @@ export function registerTestTools(server: McpServer, answer: Answer) {
     'get_test_results',
     {
       description:
-        'The latest run of an environment (running, passed, failed, or not converged: a host still repaired something in its last run, so a promise changes the host every time; and whether the policy changed since) in the shape run_tests returns, with the end of its log.',
+        'The latest run of an environment (running, passed, failed, or not converged: a host still repaired something in its last run, so a promise changes the host every time (stillRepairing names the blocks; blocks with How often that repair, listed as everyRun, run every time in a test and don’t count; reports with How often print every run too, but count as kept); and whether the policy changed since) in the shape run_tests returns, with the end of its log.',
       inputSchema: { environmentId, logLines: z.number().int().min(0).max(1000).optional().describe('Log lines to include (default 100)') },
       annotations: READ_ONLY
     },

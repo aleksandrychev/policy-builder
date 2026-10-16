@@ -6,7 +6,7 @@ import { DEFAULT_DESCRIPTION, NewProjectDialog, type ProjectFormValues, type Sub
 type Api = NonNullable<Window['api']>;
 type TargetCheck = Awaited<ReturnType<Api['checkProjectTarget']>>;
 
-const FREE: TargetCheck = { parentWritable: true, targetState: 'new' };
+const FREE: TargetCheck = { parentExists: true, parentWritable: true, targetState: 'new' };
 
 function setup({ mode = 'new', ...props }: { initialName?: string; mode?: 'new' | 'saveAs' } = {}) {
   const onClose = vi.fn();
@@ -115,14 +115,14 @@ describe('NewProjectDialog with the Electron bridge', () => {
   });
 
   it('refuses a folder that exists and is not empty', async () => {
-    check = { parentWritable: true, targetState: 'nonEmpty' };
+    check = { parentExists: true, parentWritable: true, targetState: 'nonEmpty' };
     setup({ initialName: 'web' });
     expect(await screen.findByText(/^A folder named .web. already exists and isn’t empty\.$/)).toBeInTheDocument();
     expect(createButton()).toBeDisabled();
   });
 
   it('refuses a location it cannot write to', async () => {
-    check = { parentWritable: false, targetState: 'new' };
+    check = { parentExists: true, parentWritable: false, targetState: 'new' };
     setup({ initialName: 'web' });
     expect(await screen.findByText('Can’t create a folder here — choose another location.')).toBeInTheDocument();
     expect(createButton()).toBeDisabled();

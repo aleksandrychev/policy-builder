@@ -104,7 +104,7 @@ def test_a_files_own_variables_are_referenced_with_its_namespace():
     assert '"$(webserver:vars.a) ${webserver:vars.b} $(common:vars.c) $(myvars.d)"' in policy
 
 
-def test_a_blocks_note_is_its_promises_comment():
+def test_a_blocks_note_is_its_promises_comment_or_a_define_blocks_comment():
     meta = _demo()
     report = next(b for b in _webserver(meta)["blocks"] if b["blockId"] == "report-message")
     report["note"] = 'Daily, not "weekly":\nthe old one was too slow'
@@ -114,8 +114,9 @@ def test_a_blocks_note_is_its_promises_comment():
     files = compile_project(meta)
 
     assert 'comment => "Daily, not \\"weekly\\": the old one was too slow"' in _block(files[WEBSERVER], report["label"])
-    # Every entry's promises: a chained one compiles to more than one.
-    assert files[COMMON].count('comment => "Sized for the demo VM"') >= len(settings["entries"])
+    # A Define block's note: once, above its entries.
+    assert files[COMMON].count("# Note: Sized for the demo VM") == 1
+    assert 'comment => "Sized for the demo VM"' not in files[COMMON]
 
 
 def test_a_line_naming_a_list_brings_that_list_in():
@@ -163,6 +164,20 @@ def test_a_line_naming_a_list_brings_that_list_in():
     assert 'difference(\n        "t:vars.all", mergedata(\'["emacs"]\', "default:def.allowed")\n      )' in policy
     # A list in a summary: its items, not a literal \n.
     assert "# → remove emacs, @(def.allowed)" in policy
+
+
+def test_a_blocks_how_often_limits_its_promise():
+    meta = _demo()
+    blocks = _webserver(meta)["blocks"]
+    landing = next(b for b in blocks if b["label"] == "Publish the demo landing page")
+    landing["runInterval"] = "10080"
+    report = next(b for b in blocks if b["blockId"] == "report-message")
+    report["runInterval"] = "60"  # Report Message has its own "How often" parameter
+
+    policy = compile_project(meta)[WEBSERVER]
+
+    assert 'action => default:if_elapsed("10080")' in _block(policy, landing["label"])
+    assert "if_elapsed" not in _block(policy, report["label"])
 
 
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():

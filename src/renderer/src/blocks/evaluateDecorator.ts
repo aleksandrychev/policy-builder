@@ -1,7 +1,12 @@
 import type { Decorator } from './decorators';
 import { optionValue } from './types';
 
-export type DecoratorValue = string | string[];
+// A data container (readjson, Data variable …): its JSON, kept apart from a list of strings.
+export class DataValue {
+  constructor(readonly json: unknown) {}
+}
+
+export type DecoratorValue = DataValue | string | string[];
 
 /**
  * Approximates what a decorator's CFEngine function would produce, for the
@@ -18,14 +23,56 @@ export type DecoratorValue = string | string[];
  * - A result CFEngine leaves undefined (nth out of range, ...) throws
  *   UndefinedValueError; runDecoratorChain carries that on to later steps.
  */
+const kindOf = (value: DecoratorValue) => (value instanceof DataValue ? 'data' : Array.isArray(value) ? 'a list' : 'a string');
+
 function asString(value: DecoratorValue): string {
-  if (Array.isArray(value)) throw new Error('Expected a string here, but the chain produced a list.');
+  if (typeof value !== 'string') throw new Error(`Expected a string here, but the chain produced ${kindOf(value)}.`);
   return value;
 }
 
 function asList(value: DecoratorValue): string[] {
-  if (!Array.isArray(value)) throw new Error('Expected a list here, but the chain produced a string.');
+  if (!Array.isArray(value)) throw new Error(`Expected a list here, but the chain produced ${kindOf(value)}.`);
   return value;
+}
+
+// An object or a list: what getindices(), getvalues() and length() work on.
+function asContainer(value: DecoratorValue): Record<string, unknown> | unknown[] {
+  if (!(value instanceof DataValue)) throw new Error(`Expected data here, but the chain produced ${kindOf(value)}.`);
+  const { json } = value;
+  if (json === null || typeof json !== 'object') throw new UndefinedValueError('not an object or a list');
+  return json as Record<string, unknown> | unknown[];
+}
+
+const scalarText = (item: unknown) => (typeof item === 'string' ? item : JSON.stringify(item));
+const isScalar = (item: unknown) => item !== null && typeof item !== 'object';
+
+// getvalues(): every value inside, nested objects and lists flattened, in order.
+const leaves = (json: unknown): string[] =>
+  json !== null && typeof json === 'object' ? Object.values(json as Record<string, unknown>).flatMap(leaves) : [scalarText(json)];
+
+// One field by a path of keys and list indexes (web.port, servers.0.name).
+function dataField(value: DecoratorValue, path: string): string {
+  let current: unknown = asContainer(value);
+  for (const key of path.split('.').filter(Boolean)) {
+    if (current === null || typeof current !== 'object' || !(key in current)) throw new UndefinedValueError(`no field ${path}`);
+    current = (current as Record<string, unknown>)[key];
+  }
+  if (!isScalar(current)) throw new UndefinedValueError(`${path} holds an object or a list, not a value`);
+  return scalarText(current);
+}
+
+// mergedata(): objects merge key by key (the second wins), lists append.
+function dataMerge(value: DecoratorValue, json: string): DataValue {
+  const base = asContainer(value);
+  let extra: unknown;
+  try {
+    extra = JSON.parse(json);
+  } catch {
+    throw new Error('The JSON to merge isn’t valid JSON.');
+  }
+  if (Array.isArray(base) && Array.isArray(extra)) return new DataValue([...base, ...extra]);
+  if (!Array.isArray(base) && extra !== null && typeof extra === 'object' && !Array.isArray(extra)) return new DataValue({ ...base, ...extra });
+  throw new Error('Merges an object with an object, or a list with a list.');
 }
 
 export const PATTERN_TOO_COMPLEX = 'Pattern too complex to preview';
@@ -236,6 +283,28 @@ export function evaluateDecorator(decorator: Decorator, given: Record<string, st
       return nth(asList(input), params.index);
     case 'length':
       return String(asList(input).length);
+    case 'difference': {
+      const removed = new Set((params.entries ?? '').split('\n').filter(Boolean));
+      return asList(input).filter(entry => !removed.has(entry));
+    }
+    case 'data-keys': {
+      const container = asContainer(input);
+      return Array.isArray(container) ? container.map((_item, index) => String(index)) : Object.keys(container);
+    }
+    case 'data-values':
+      return leaves(asContainer(input));
+    case 'data-top-values':
+      return Object.values(asContainer(input))
+        .filter(value => value === null || typeof value !== 'object')
+        .map(scalarText);
+    case 'data-field':
+      return dataField(input, params.field ?? '');
+    case 'data-merge':
+      return dataMerge(input, params.json ?? '');
+    case 'data-to-json':
+      return JSON.stringify(asContainer(input));
+    case 'data-length':
+      return String(Object.keys(asContainer(input)).length);
     default:
       return applyFallback(decorator, params, input) ?? input;
   }

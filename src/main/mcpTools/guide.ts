@@ -57,6 +57,14 @@ const blocks = `# Blocks, arrows and groups
 - group_blocks puts blocks into a frame that runs as one step (its own bundle). Arrows into and out of the group attach to its frame; an arrow out of a group reads the group's combined outcome.
 - Use groups for a set of blocks that belong together ("Configure nginx"), and set_group_condition to gate them all.
 
+## Custom CFEngine (hand-written promises)
+- For what no block covers (a custom body, a promise type without a block, an attribute no block offers), the Custom CFEngine block (custom-cfengine) holds CFEngine text: \`promises\` (promise sections as in a bundle agent, e.g. \`files:\` then its promises) and \`definitions\` (the bodies and bundles they use). It runs as a bundle of its own, in order, with the block's condition, arrows, How often and note like any block.
+- **Ask the user before using it**, and only for the part no block covers: the rest stays in blocks they can read and edit. Say in the block's note what it does and why it's hand-written.
+- The text is in the file's namespace: the standard library's bodies and bundles need \`default:\` (\`default:recurse("inf")\`, \`default:mog(…)\`), another file's \`<ns>:\`, while bodies in \`definitions\` are used bare. \`$(vars.x)\` reads this file's variables.
+- A \`body perms\` of your own sets \`rxdirs\` (\`"false"\`, or \`"true"\` for directories): CFEngine 3.28 warns on every run without it.
+- List attributes (\`owners\`, \`groups\`, \`depends_on\`, slist variables…) take a list even for one item: \`owners => { "root" }\`. A plain string is refused by the hub.
+- Check it with get_warnings: customText lists the linter's findings by field and line, notCompiled a syntax error (the block is then left out of the policy). Read get_generated_policy for what it became.
+
 ## Layout
 - New blocks are stacked under the lowest block. After adding or connecting several, call **tidy_file**: it lays the file out by run order, like the canvas's Tidy button (one undo step).`;
 
@@ -104,7 +112,9 @@ Test environments are Docker containers running real CFEngine: the policy set is
 Reading results:
 - A problem names the block it came from: fix that block, then run again.
 - The first run after a host is set up does most of the work (installing, writing files). If a run reports everything kept on a fresh host, read the log (get_test_results with logLines) for errors from that first run.
-- **not converged**: a host still repaired something in its last run, so a promise changes the host every time (a command that always runs, a file rewritten each run). complianceByRun shows it; find the block before calling the policy done.
+- **not converged**: a host still repaired something in its last run, so a promise changes the host every time (a command that always runs, a file rewritten each run). The host's stillRepairing names the blocks; fix them before calling the policy done.
+- **How often in a test**: test runs ignore it (each run is seconds after the last, on a host with no locks), so a block with How often runs every time. Those that repair are listed as everyRun and don't stop the host converging; reports with How often print every run too, and count as kept.
+- **The hub refuses the policy** (status failed, "The hub refused the policy: …"): the hub's problems name the block and line, as a test run's do. Read get_generated_policy at that line.
 - Policy changed since the last run shows as \`policyChangedSince\`: run again to test the current blocks.`;
 
 const translating = `# Translating existing CFEngine policy
@@ -131,6 +141,7 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`services:\` | Manage Service |
 | \`processes:\` \`signals\` | Signal Process |
 | \`commands:\` with \`ifelapsed\` | Run Command; "How often" (run_interval) takes any number of minutes, e.g. 10080 for weekly. Report Message and Signal Process have it too |
+| \`ifelapsed\` on any other promise (\`action => if_elapsed(N)\`) | The block's How often: runInterval on add_block / update_block, in minutes |
 | \`users:\` | Manage Users |
 | \`methods:\` \`usebundle\` with or without arguments | Call Method (arguments one per line; @(…) passes a list) |
 | \`difference()\` on a list | The Remove entries transformer; a line @(list) removes another list too, e.g. @(def.allowed) from augments |
@@ -139,14 +150,29 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`storage:\` \`mount\` | Mount Storage |
 | Iterating over a list | A list in $(…) in a parameter repeats the promise per item; parameters with allowList take one value per line |
 
+## Functions in vars and classes
+A function call in \`vars:\` or \`classes:\` is usually a value source of Define Variable / Define Class, or a transformer on the value (list_value_sources, list_transformers):
+| Function | Where |
+| --- | --- |
+| \`execresult()\` | Define Variable › Command output |
+| \`returnszero()\` | Define Class › Command succeeds (its output shows in the agent's log on every run: send it to /dev/null in the command to keep the log quiet) |
+| \`readfile()\`, \`readstringlist()\`, \`readjson()\`, \`filestat()\`, \`getenv()\` | Define Variable › File content, File lines, Structured data (JSON), File metadata, Environment variable |
+| \`parsejson()\` | Define Variable › Structured data (literal) |
+| \`mergedata("def.x")\` or a data variable used as a whole | Define Variable › Data variable (e.g. \`def.services\` from augments) |
+| \`getindices()\`, \`getvalues()\`, \`length()\` on data, \`$(x[key][sub])\`, \`mergedata(x, '{…}')\`, \`format("%S", x)\` | Data transformers on a Structured data (JSON) or Data variable value: Keys, Values (nested ones flattened), Top-level values, Count entries, Field (path web.port), Merge with JSON, As JSON text |
+| \`fileexists()\`, \`isdir()\`, \`isvariable()\`, \`regcmp()\`, \`strcmp()\`, \`isgreaterthan()\`, \`islessthan()\` | Define Class › File exists, Directory exists, Variable is defined, Value matches pattern, Values are equal, Value is greater / less than |
+| \`ifelse()\` | Define Variable › Per condition |
+| \`and()\`, \`or()\`, \`not()\`, class expressions | Define Class › All of / Any of these classes, Custom expression |
+| \`regex_replace()\`, \`string_replace()\`, \`string_split()\`/\`splitstring()\`, \`join()\`, \`grep()\`, \`filter()\`, \`maplist()\`, \`sort()\`, \`unique()\`, \`difference()\`, \`nth()\`, \`length()\`, \`format()\`, \`lastnode()\`, \`string_head()\`/\`string_tail()\`, \`string_upcase()\`/\`string_downcase()\` | Transformers on the value (add_transformer) |
+
+**Before calling something unsupported, check list_value_sources and list_transformers**, and say which one you'd use. Don't invent a block, parameter or value source that the catalog doesn't list.
+
 ## No block yet (say so, don't drop silently)
 - \`copy_from\` options beyond a remote copy compared by content (\`encrypt\`, \`purge\`, \`compare => "mtime"\`).
-- \`ifelapsed\` on blocks other than Run Command, Report Message and Signal Process.
 - A package method (\`package_module\`) or architecture.
-- \`getindices\` and other transformers on data containers: data values take no transformers yet.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.
 
-For these, ask the user: keep that part in a hand-written bundle the canvas calls (Call Method), leave it out, or approximate it (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
+For these, ask the user: write that part in a Custom CFEngine block (see the blocks guide), call a hand-written bundle from elsewhere (Call Method), leave it out, or approximate it with blocks (say exactly how). Record each decision in the note of the block it affects, where the user sees it.`;
 
 const pitfalls = `# Pitfalls
 
@@ -157,7 +183,8 @@ const pitfalls = `# Pitfalls
 - **Namespaces don't follow renames**: reference variables and classes the way list_variables / list_classes show them.
 - **The user can undo or delete your changes** in the app: if a block id is suddenly unknown, read the file again (get_file).
 - **The user may stop you**: a "Stopped by the user" answer means stop and ask.
-- **One change at a time** is easier for the user to follow and undo than a large rewrite.`;
+- **One change at a time** is easier for the user to follow and undo than a large rewrite.
+- **Custom CFEngine is the last resort**, after asking: a block the user can't edit visually. Standard library names in it need \`default:\`.`;
 
 export const GUIDE: Record<string, GuidePage> = {
   workflow: { title: 'Workflow', summary: 'How to work in Policy Builder, step by step (start here)', text: workflow },

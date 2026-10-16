@@ -48,6 +48,8 @@ const summaryOf = (item: { label: string } | undefined, params: Record<string, s
   return summary ? fill(summary, params) : item?.label;
 };
 const typeName = (type: string) => (type === 'slist' ? 'list' : type);
+// "a list", "a string", but "data".
+const aType = (type: string) => (type === 'data' ? 'data' : `a ${typeName(type)}`);
 
 function descriptorOf(blockType: string): BlockDescriptor {
   const descriptor = blockDescriptorsById.get(blockType);
@@ -90,7 +92,8 @@ function namedSource(descriptor: BlockDescriptor, valueSourceId: string): BlockV
 const resultType = (start: string, chain: DecoratorInstance[] = []) =>
   chain.reduce((type, step) => decoratorsById.get(step.decoratorId)?.output_type ?? type, start);
 
-const CONVERT_HINT = 'Split into a list (split-list) makes a list; Join (join), Pick entry (nth) or Count (length) make a string again.';
+const CONVERT_HINT =
+  'Split into a list (split-list) makes a list; Join (join), Pick entry (nth) or Count (length) make a string again. From data: Keys (data-keys), Values (data-values, nested ones flattened) or Top-level values (data-top-values) make a list, Field (data-field), As JSON text (data-to-json) or Count (data-length) a string.';
 
 // Why a chain doesn't type-check from `base`, if it doesn't — the UI only offers steps taking what flows in.
 function chainError(base: DecoratorValueType, decoratorIds: string[]): string | undefined {
@@ -99,7 +102,7 @@ function chainError(base: DecoratorValueType, decoratorIds: string[]): string | 
     const decorator = decoratorsById.get(id);
     if (!decorator) continue;
     if (decorator.input_type !== type) {
-      return `${decorator.label} (step ${index + 1}) takes a ${typeName(decorator.input_type)} but gets a ${typeName(type)}. ${CONVERT_HINT}`;
+      return `${decorator.label} (step ${index + 1}) takes ${aType(decorator.input_type)} but gets ${aType(type)}. ${CONVERT_HINT}`;
     }
     type = chainOutputType(decorator);
   }
@@ -273,7 +276,7 @@ function listValueSources(blockType: string) {
       parameters: source.parameters.map(parameterView)
     })),
     notes: variables
-      ? 'Typed-in sources (literal, list, per-condition) and structured data take no transformers. bindable sources can feed another block’s parameter (bind_parameter). cases rows are [{className, mode, value}].'
+      ? 'Typed-in sources (literal, list, per-condition, structured data typed in) take no transformers; data read from a file or a Data variable takes the data transformers. bindable sources can feed another block’s parameter (bind_parameter). cases rows are [{className, mode, value}].'
       : 'combine-and / combine-or take classRefs instead of parameters.'
   };
 }
@@ -480,7 +483,7 @@ function chainTarget(state: RootState, input: Input): ChainTarget {
   if (!base) {
     throw new ToolError(
       isVariableBlock(descriptor)
-        ? `${source?.label} values take no transformers (typed-in values and structured data); switch the entry to a computed value source (list_value_sources)`
+        ? `${source?.label} values take no transformers (typed-in values); switch the entry to a computed value source (list_value_sources)`
         : 'Classes take no transformers'
     );
   }

@@ -1,5 +1,5 @@
 import { decoratorsById } from './decorators';
-import { type DecoratorValue, PATTERN_TOO_COMPLEX, UndefinedValueError, applyFallback, evaluateDecorator } from './evaluateDecorator';
+import { DataValue, type DecoratorValue, PATTERN_TOO_COMPLEX, UndefinedValueError, applyFallback, evaluateDecorator } from './evaluateDecorator';
 
 // Expected values below were checked against real CFEngine (cf-promises 3.28 --show-vars).
 const run = (decoratorId: string, params: Record<string, string>, input: DecoratorValue) => {
@@ -210,5 +210,45 @@ describe('pattern safety', () => {
 
   it.each(['(ab)+', '[(]+', '\\(a+\\)+', '(a|b)c+'])('allows the safe pattern %s', pattern => {
     expect(() => run('regex-replace', { pattern, replacement: '', options: 'g' }, 'aaaa')).not.toThrow();
+  });
+});
+
+describe('difference (Remove entries)', () => {
+  it('drops every entry that is in the list', () => {
+    expect(run('difference', { entries: 'b\nx' }, ['a', 'b', 'c', 'b'])).toEqual(['a', 'c']);
+  });
+});
+
+// As CFEngine 3.28 gave them on the same data.
+describe('data transforms', () => {
+  const config = new DataValue({ web: { port: '80', hosts: ['a', 'b'] }, db: { port: '5432' }, name: 'site' });
+
+  it('takes keys, top-level values and the count', () => {
+    expect(run('data-keys', {}, config)).toEqual(['web', 'db', 'name']);
+    expect(run('data-keys', {}, new DataValue(['x', 'y']))).toEqual(['0', '1']);
+    expect(run('data-values', {}, config)).toEqual(['80', 'a', 'b', '5432', 'site']);
+    expect(run('data-values', {}, new DataValue(['x', ['y', 'z'], { k: 'v' }, 3, true]))).toEqual(['x', 'y', 'z', 'v', '3', 'true']);
+    expect(run('data-top-values', {}, config)).toEqual(['site']);
+    expect(run('data-top-values', {}, new DataValue(['x', ['y'], { k: 'v' }, 3, null]))).toEqual(['x', '3', 'null']);
+    expect(run('data-length', {}, config)).toBe('3');
+  });
+
+  it('picks a field by its path, list items by index', () => {
+    expect(run('data-field', { field: 'web.port' }, config)).toBe('80');
+    expect(run('data-field', { field: 'web.hosts.0' }, config)).toBe('a');
+    expect(() => run('data-field', { field: 'web.missing' }, config)).toThrow(UndefinedValueError);
+    expect(() => run('data-field', { field: 'web' }, config)).toThrow(/object or a list/);
+  });
+
+  it('merges JSON in and writes it out', () => {
+    const merged = run('data-merge', { json: '{"cache": {"port": "6379"}}' }, config);
+    expect(run('data-keys', {}, merged)).toEqual(['web', 'db', 'name', 'cache']);
+    expect(run('data-to-json', {}, new DataValue({ nginx: { enabled: true }, ssh: {} }))).toBe('{"nginx":{"enabled":true},"ssh":{}}');
+    expect(() => run('data-merge', { json: 'nope' }, config)).toThrow(/valid JSON/);
+  });
+
+  it('refuses a string or a list where data goes in', () => {
+    expect(() => run('data-keys', {}, 'text')).toThrow(/Expected data here, but the chain produced a string/);
+    expect(() => run('join', { glue: ',' }, config)).toThrow(/Expected a list here, but the chain produced data/);
   });
 });

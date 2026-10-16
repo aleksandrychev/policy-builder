@@ -581,6 +581,162 @@
         "trigger": "{{trigger}}",
         "value": "{{fallback}}"
       }
+    },
+    {
+      "id": "data-keys",
+      "label": "Keys",
+      "summary": "its keys",
+      "badge": "getindices()",
+      "help": "An object's keys, or a list's indexes (0, 1, …).",
+      "input_type": "data",
+      "output_type": "slist",
+      "parameters": [],
+      "expression": {
+        "call": "getindices",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "data-values",
+      "label": "Values",
+      "summary": "its values",
+      "badge": "getvalues()",
+      "help": "Every value inside, nested objects and lists flattened, e.g. 80, a, b for {\"web\": {\"port\": 80, \"hosts\": [\"a\", \"b\"]}}.",
+      "input_type": "data",
+      "output_type": "slist",
+      "parameters": [],
+      "expression": {
+        "call": "getvalues",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
+    },
+    {
+      "id": "data-top-values",
+      "label": "Top-level values",
+      "summary": "its top-level values",
+      "badge": "maplist()",
+      "help": "The values of its own keys (or a list's items), nested objects and lists left out, e.g. shop for {\"web\": {\"port\": 80}, \"name\": \"shop\"}.",
+      "input_type": "data",
+      "output_type": "slist",
+      "parameters": [],
+      "expression": {
+        "call": "filter",
+        "args": [
+          "[$][(].*",
+          {
+            "call": "maplist",
+            "args": [
+              {
+                "field": "$(this)"
+              },
+              {
+                "call": "getindices",
+                "args": [
+                  {
+                    "previous": "name"
+                  }
+                ]
+              }
+            ]
+          },
+          "true",
+          "true",
+          "99999"
+        ]
+      }
+    },
+    {
+      "id": "data-field",
+      "label": "Field",
+      "summary": "its field {{field}}",
+      "badge": "[key]",
+      "help": "One value by its path: keys separated by dots, a list's items by index, e.g. web.port or servers.0.name. A missing field leaves the reference unexpanded.",
+      "input_type": "data",
+      "output_type": "string",
+      "parameters": [
+        {
+          "name": "field",
+          "label": "Path",
+          "type": "string",
+          "required": true,
+          "allowed_chars": "A-Za-z0-9_.-"
+        }
+      ],
+      "expression": {
+        "field": "{{field}}"
+      }
+    },
+    {
+      "id": "data-merge",
+      "label": "Merge with JSON",
+      "summary": "merged with {{json}}",
+      "badge": "mergedata()",
+      "help": "Keys given here are added, or replace the incoming ones.",
+      "input_type": "data",
+      "output_type": "data",
+      "parameters": [
+        {
+          "name": "json",
+          "label": "JSON",
+          "type": "text",
+          "required": true,
+          "help": "A JSON object, e.g. { \"port\": 8080 }."
+        }
+      ],
+      "expression": {
+        "call": "mergedata",
+        "args": [
+          {
+            "previous": "value"
+          },
+          "{{json}}"
+        ]
+      }
+    },
+    {
+      "id": "data-to-json",
+      "label": "As JSON text",
+      "summary": "as JSON text",
+      "badge": "format(\"%S\")",
+      "help": "The data written out as one line of JSON.",
+      "input_type": "data",
+      "output_type": "string",
+      "parameters": [],
+      "expression": {
+        "call": "format",
+        "args": [
+          "%S",
+          {
+            "previous": "name"
+          }
+        ]
+      }
+    },
+    {
+      "id": "data-length",
+      "label": "Count entries",
+      "summary": "count its entries",
+      "badge": "length()",
+      "help": "How many keys an object has, or items a list.",
+      "input_type": "data",
+      "output_type": "int",
+      "parameters": [],
+      "expression": {
+        "call": "length",
+        "args": [
+          {
+            "previous": "value"
+          }
+        ]
+      }
     }
   ]
 }
