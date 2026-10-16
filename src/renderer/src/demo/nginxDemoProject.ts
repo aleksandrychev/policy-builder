@@ -138,10 +138,12 @@ const LANDING_PAGE_TEMPLATE = `<!DOCTYPE html>
     .badge { display: inline-block; margin-bottom: 16px; padding: 2px 10px; border-radius: 999px;
              background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; }
     footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+    .logo { display: block; height: 40px; margin-bottom: 24px; }
   </style>
 </head>
 <body>
   <main>
+    <img class="logo" src="cfengine-logo.svg" alt="CFEngine">
     {{#classes.common:webserver_role}}<span class="badge">Web server role</span>{{/classes.common:webserver_role}}
     <h1>CFEngine Policy Builder demo project</h1>
     <p>This page, the nginx it runs on and everything around them were set up by policy built visually in CFEngine Policy Builder.</p>
@@ -168,6 +170,36 @@ function buildLandingPageBlock(): DemoBlock {
       owner: 'root',
       group: 'root'
     }
+  };
+}
+
+// The logo the landing page shows, fetched from cfengine.com once a day: an HTTP Request block,
+// whose promise type comes from the promise-type-http module (adding the block adds it).
+function buildLogoBlock(): DemoBlock {
+  return {
+    blockId: 'http-request',
+    label: 'Download the CFEngine logo',
+    note: 'The landing page shows it; fetched at most once a day.',
+    runInterval: '1440',
+    params: {
+      url: 'https://cfengine.com/images/cfengine-logo.svg',
+      method: 'GET',
+      file: '/var/www/html/cfengine-logo.svg',
+      headers: '',
+      payload: '',
+      insecure: 'false'
+    }
+  };
+}
+
+// The http promise type runs with python3 on the host.
+function buildPythonBlock(): DemoBlock {
+  return {
+    blockId: 'install-package',
+    label: 'Install python3',
+    note: 'The logo download is an http promise, which runs with python3.',
+    params: { package_name: 'python3', version: '' },
+    condition: { mode: 'if', kind: 'class', className: 'common:webserver_role' }
   };
 }
 
@@ -279,6 +311,8 @@ const POSITIONS: Record<string, Position> = {
   'Keep nginx running': { x: 420, y: 220 },
   'Create web root': { x: 500, y: 680 },
   'Publish the demo landing page': { x: 560, y: 440 },
+  'Install python3': { x: 1240, y: 780 },
+  'Download the CFEngine logo': { x: 900, y: 780 },
   'Remove default nginx site': { x: 580, y: 920 },
   'Lock down nginx config files': { x: 580, y: 1060 },
   'Prune old nginx logs': { x: 580, y: 1260 },
@@ -319,7 +353,7 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   const webserverFileId = webserverFile.payload.id;
   describe(
     webserverFileId,
-    'Turns a webserver_role host into an nginx web server. It installs nginx, removes a conflicting Apache, renders nginx.conf from a template and restarts nginx only when that file changes. It keeps the service running and publishes a landing page. It also tidies up: removes the default site, locks down config permissions, prunes old logs and creates a deploy user.'
+    'Turns a webserver_role host into an nginx web server. It installs nginx, removes a conflicting Apache, renders nginx.conf from a template and restarts nginx only when that file changes. It keeps the service running and publishes a landing page, with the CFEngine logo downloaded from cfengine.com. It also tidies up: removes the default site, locks down config permissions, prunes old logs and creates a deploy user.'
   );
   const [install, ...beforeTemplate] = buildWebserverBlocksBeforeTemplate();
   const renderTemplate = buildRenderTemplateBlock();
@@ -327,7 +361,20 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   const keepRunning = buildKeepRunningBlock();
   const landingPage = buildLandingPageBlock();
   const webRoot = buildWebRootBlock();
-  const column = [install, ...beforeTemplate, renderTemplate, manageService, keepRunning, webRoot, landingPage, ...buildWebserverBlocksAfterTemplate()];
+  const python = buildPythonBlock();
+  const logo = buildLogoBlock();
+  const column = [
+    install,
+    ...beforeTemplate,
+    renderTemplate,
+    manageService,
+    keepRunning,
+    webRoot,
+    landingPage,
+    python,
+    logo,
+    ...buildWebserverBlocksAfterTemplate()
+  ];
   const ids = column.map(block => dispatch(blockAdded({ ...block, fileId: webserverFileId, position: positionOf(block) })).payload.instanceId);
   const idOf = (block: DemoBlock) => ids[column.indexOf(block)];
   const arrow = (source: DemoBlock, target: DemoBlock, outcomes: BlockOutcome[]) =>
@@ -337,6 +384,8 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
   arrow(install, landingPage, ['kept', 'repaired']);
   arrow(renderTemplate, manageService, ['repaired']);
   arrow(webRoot, landingPage, ['kept', 'repaired']);
+  arrow(webRoot, logo, ['kept', 'repaired']);
+  arrow(python, logo, ['kept', 'repaired']);
 
   const securityFileId = dispatch(fileAdded('Security')).payload.id;
   describe(
