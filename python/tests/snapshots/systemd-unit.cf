@@ -1,0 +1,148 @@
+### example
+  # Case 0
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### state = 'stopped'
+  # Case 1
+  systemd:
+    "myapp"
+      state => "stopped",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### state = 'absent'
+  # Case 2
+  systemd:
+    "myapp"
+      state => "absent",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### state = 'restart'
+  # Case 3
+  systemd:
+    "myapp"
+      state => "restart",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### state = 'reload'
+  # Case 4
+  systemd:
+    "myapp"
+      state => "reload",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### enabled = 'false'
+  # Case 5
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "false",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### daemon_reload = 'true'
+  # Case 6
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "true",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      unit_after => { "network-online.target" };
+
+### service_type = 'simple'
+  # Case 7
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_type => "simple",
+      unit_after => { "network-online.target" };
+
+### service_type = 'forking'
+  # Case 8
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_type => "forking",
+      unit_after => { "network-online.target" };
+
+### service_type = 'oneshot'
+  # Case 9
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_type => "oneshot",
+      unit_after => { "network-online.target" };
+
+### service_type = 'notify'
+  # Case 10
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_type => "notify",
+      unit_after => { "network-online.target" };
+
+### restart = 'on-failure'
+  # Case 11
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_restart => "on-failure",
+      unit_after => { "network-online.target" };
+
+### restart = 'always'
+  # Case 12
+  systemd:
+    "myapp"
+      state => "started",
+      enabled => "true",
+      daemon_reload => "false",
+      unit_description => "My app",
+      service_exec_start => { "/usr/bin/myapp --port 8080" },
+      service_restart => "always",
+      unit_after => { "network-online.target" };

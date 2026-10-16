@@ -57,6 +57,10 @@ const blocks = `# Blocks, arrows and groups
 - group_blocks puts blocks into a frame that runs as one step (its own bundle). Arrows into and out of the group attach to its frame; an arrow out of a group reads the group's combined outcome.
 - Use groups for a set of blocks that belong together ("Configure nginx"), and set_group_condition to gate them all.
 
+## Blocks from CFEngine Build modules
+- Git Checkout (git-checkout), Systemd Unit (systemd-unit), HTTP Request (http-request) and Run Ansible Playbook (ansible-playbook) are custom promise types (git:, systemd:, http:, ansible:). Adding one adds its module (promise-type-git…) to the project; saving installs it with cfbs (needs the internet once). Hosts need python3, and git or Ansible for those blocks.
+- Use them rather than Run Command for cloning repositories, systemd units, HTTP requests and playbooks: they report kept/repaired properly, so arrows and How often work.
+
 ## Custom CFEngine (hand-written promises)
 - For what no block covers (a custom body, a promise type without a block, an attribute no block offers), the Custom CFEngine block (custom-cfengine) holds CFEngine text: \`promises\` (promise sections as in a bundle agent, e.g. \`files:\` then its promises) and \`definitions\` (the bodies and bundles they use). It runs as a bundle of its own, in order, with the block's condition, arrows, How often and note like any block.
 - **Ask the user before using it**, and only for the part no block covers: the rest stays in blocks they can read and edit. Say in the block's note what it does and why it's hand-written.

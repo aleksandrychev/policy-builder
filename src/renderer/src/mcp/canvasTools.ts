@@ -131,7 +131,10 @@ function blockType(blockTypeId: string) {
     takesArrows: isSequenced(descriptor),
     parameters: (descriptor.parameters ?? []).map(parameter),
     valueSources: descriptor.value_sources?.map(source => ({ id: source.id, label: source.label, parameters: source.parameters.map(parameter) })),
-    entries: descriptor.entries ? 'Holds a list of entries (one variable or class each): see list_value_sources, add_entry and update_entry.' : undefined
+    entries: descriptor.entries ? 'Holds a list of entries (one variable or class each): see list_value_sources, add_entry and update_entry.' : undefined,
+    requiresModule: descriptor.requires_module
+      ? `Its promise type comes from the CFEngine Build module ${descriptor.requires_module}: adding the block adds the module to the project (installed on save; hosts need python3).`
+      : undefined
   };
 }
 
@@ -459,7 +462,8 @@ function tidyFile(env: CanvasEnv, input: Input) {
 export const CANVAS_TOOLS: Record<string, Tool> = {
   get_project_overview: env => projectOverview(env.getState(), canvasOf(env)),
   get_file: (env, input) => fileDetail(env.getState(), str(input, 'fileId')),
-  list_block_types: () => blockDescriptors.map(({ id, name, category, description }) => ({ id, name, category, description })),
+  list_block_types: () =>
+    blockDescriptors.map(({ id, name, category, description, requires_module }) => ({ id, name, category, description, requiresModule: requires_module })),
   get_block_type: (_env, input) => blockType(str(input, 'blockType')),
   get_generated_policy: (env, input) => generatedPolicy(env.getState(), optionalStr(input, 'fileId')),
   get_warnings: env => warnings(env.getState()),

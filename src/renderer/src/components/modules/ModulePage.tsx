@@ -58,6 +58,8 @@ interface ModulePageProps {
   onRemove: () => void;
   // The Input tab first (Edit input).
   openInput?: boolean;
+  // The blocks using its promise type: it stays while they're there.
+  usedBy: string[];
   web: ModuleDetailsState;
   // The dependencies adding it would bring that the project doesn't have yet.
   wouldAdd: string[];
@@ -98,6 +100,7 @@ export function ModulePage({
   onOpenModule,
   onRemove,
   openInput,
+  usedBy,
   web,
   wouldAdd
 }: ModulePageProps) {
@@ -132,7 +135,7 @@ export function ModulePage({
               <Box sx={{ flex: 1 }} />
               {added ? (
                 !added.module.addedBy && (
-                  <Button color="error" variant="outlined" size="small" onClick={onRemove}>
+                  <Button color="error" variant="outlined" size="small" onClick={onRemove} disabled={usedBy.length > 0}>
                     Remove
                   </Button>
                 )
@@ -156,6 +159,7 @@ export function ModulePage({
             </Box>
             {added?.module.addedBy && <Muted>Added for {added.module.addedBy}: it’s removed with it, unless another module needs it.</Muted>}
             {!added && wouldAdd.length > 0 && <Muted>Adding it also adds {wouldAdd.join(', ')}.</Muted>}
+            {usedBy.length > 0 && <Muted>Used by {usedBy.join(', ')}: delete those blocks to remove it.</Muted>}
             {module.kind === 'promise-type' && <Muted>Adds a promise type for your own policy. Hosts need python3 to run it.</Muted>}
 
             <Tabs

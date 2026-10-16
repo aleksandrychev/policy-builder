@@ -1,0 +1,101 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "ansible-playbook",
+  "version": 1,
+  "name": "Run Ansible Playbook",
+  "category": "From modules",
+  "description": "Runs an Ansible playbook on the host (connection local by default).",
+  "compile_target": "own_bundle",
+  "requires_module": "promise-type-ansible",
+  "steps": [
+    {
+      "promise_type": "ansible",
+      "promiser": "{{playbook}}",
+      "attributes": {
+        "inventory": {
+          "if_set": "inventory",
+          "value": "{{inventory}}"
+        },
+        "tags": {
+          "if_set": "tags",
+          "value": {
+            "list_param": "tags"
+          }
+        },
+        "limit": {
+          "if_set": "limit",
+          "value": {
+            "list_param": "limit"
+          }
+        },
+        "become": "{{become}}",
+        "become_user": {
+          "if_set": "become_user",
+          "value": "{{become_user}}"
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "playbook",
+      "label": "Playbook",
+      "type": "string",
+      "required": true,
+      "path": "absolute",
+      "help": "Its absolute path on the host, e.g. /srv/ansible/site.yml. Needs Ansible on the host."
+    },
+    {
+      "name": "inventory",
+      "label": "Inventory",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "path": "absolute"
+    },
+    {
+      "name": "tags",
+      "label": "Tags",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "allow_list": true,
+      "help": "Only the plays and tasks with these tags, one per line."
+    },
+    {
+      "name": "limit",
+      "label": "Limit to hosts",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "allow_list": true,
+      "help": "Hosts or groups, one per line."
+    },
+    {
+      "name": "become",
+      "label": "Become",
+      "type": "string",
+      "required": true,
+      "default": "false",
+      "options": [
+        {
+          "value": "false",
+          "label": "No"
+        },
+        {
+          "value": "true",
+          "label": "Yes (sudo)"
+        }
+      ]
+    },
+    {
+      "name": "become_user",
+      "label": "Become user",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "help": "Empty: root."
+    }
+  ]
+}

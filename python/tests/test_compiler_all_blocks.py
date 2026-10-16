@@ -196,9 +196,14 @@ def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: 
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / path).write_text(text)
     shutil.copy(FIXTURES / "stdlib-stub.cf", tmp_path / "stdlib.cf")
+    # Custom promise types are declared by their modules' enable.cf (cfbs appends it to services/init.cf).
+    declared = "".join(
+        f'promise agent {kind} {{ path => "/var/cfengine/modules/promises/{kind}.py"; interpreter => "/usr/bin/python3"; }}\n'
+        for kind in ("git", "systemd", "http", "ansible")
+    )
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all:main" }; }\n'
-        "bundle agent some_bundle(one) { }\n"
+        "bundle agent some_bundle(one) { }\n" + declared
     )
 
     result = subprocess.run(["cf-promises", "-f", str(tmp_path / "promises.cf")], capture_output=True, text=True)

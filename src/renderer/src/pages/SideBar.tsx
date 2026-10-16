@@ -33,6 +33,7 @@ export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFra
             onEditInput={modules.openInput}
             onAdd={modules.add}
             onRemove={modules.remove}
+            usedBy={modules.usedBy}
           />
         ) : (
           policy

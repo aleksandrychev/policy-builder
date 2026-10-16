@@ -53,9 +53,11 @@ interface ModuleRowProps {
   onRemove: () => void;
   onSelect: () => void;
   selected: boolean;
+  // The blocks needing it (its promise type): it can't be removed while they're there.
+  usedBy?: string[];
 }
 
-function GearMenu({ addedFor, module, onEditInput, onRemove }: Pick<ModuleRowProps, 'addedFor' | 'module' | 'onEditInput' | 'onRemove'>) {
+function GearMenu({ addedFor, module, onEditInput, onRemove, usedBy }: Pick<ModuleRowProps, 'addedFor' | 'module' | 'onEditInput' | 'onRemove' | 'usedBy'>) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const source = sourceUrl(module);
   const close = () => setAnchor(null);
@@ -88,9 +90,9 @@ function GearMenu({ addedFor, module, onEditInput, onRemove }: Pick<ModuleRowPro
             Open source ↗
           </MenuItem>
         )}
-        {addedFor ? (
+        {addedFor || usedBy?.length ? (
           <MenuItem disabled>
-            <ListItemText primary={`Added for ${addedFor}`} />
+            <ListItemText primary={addedFor ? `Added for ${addedFor}` : `Used by ${usedBy!.join(', ')}`} />
           </MenuItem>
         ) : (
           <MenuItem
@@ -109,7 +111,7 @@ function GearMenu({ addedFor, module, onEditInput, onRemove }: Pick<ModuleRowPro
 }
 
 /** One module: kind icon, name, version and action; then its description and badges. */
-export function ModuleRow({ added, addedFor, alias, inProject, module, needsInput, onAdd, onEditInput, onRemove, onSelect, selected }: ModuleRowProps) {
+export function ModuleRow({ added, addedFor, alias, inProject, module, needsInput, onAdd, onEditInput, onRemove, onSelect, selected, usedBy }: ModuleRowProps) {
   const KindIcon = KIND_ICONS[module.kind];
   return (
     <Box
@@ -145,7 +147,7 @@ export function ModuleRow({ added, addedFor, alias, inProject, module, needsInpu
           </Tooltip>
           {module.version && <Typography sx={{ fontSize: 10, fontFamily: 'monospace', color: 'text.muted', flexShrink: 0 }}>{module.version}</Typography>}
           {inProject ? (
-            <GearMenu addedFor={addedFor} module={module} onEditInput={onEditInput} onRemove={onRemove} />
+            <GearMenu addedFor={addedFor} module={module} onEditInput={onEditInput} onRemove={onRemove} usedBy={usedBy} />
           ) : added ? (
             <Typography sx={{ display: 'flex', alignItems: 'center', gap: 0.25, fontSize: 11, color: 'text.muted', flexShrink: 0 }}>
               <CheckIcon sx={{ fontSize: 13 }} /> Added

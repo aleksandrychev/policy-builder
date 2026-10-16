@@ -68,10 +68,11 @@ interface ModulesViewProps {
   onSelect: (name: string) => void;
   projectModules: ProjectModule[];
   selectedName: string | null;
+  usedBy: (name: string) => string[];
 }
 
 /** The CFEngine Build modules: the project's, then the whole index, searched and filtered by tag. */
-export function ModulesView({ catalog, isNeedingInput, onAdd, onEditInput, onRemove, onSelect, projectModules, selectedName }: ModulesViewProps) {
+export function ModulesView({ catalog, isNeedingInput, onAdd, onEditInput, onRemove, onSelect, projectModules, selectedName, usedBy }: ModulesViewProps) {
   const [filter, setFilter] = useState<CatalogFilter>({ search: '', supportedOnly: false, tag: null });
   const [showLibraries, setShowLibraries] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -103,7 +104,8 @@ export function ModulesView({ catalog, isNeedingInput, onAdd, onEditInput, onRem
     onSelect: () => onSelect(module.name),
     onAdd: () => onAdd(module.name),
     onEditInput: () => onEditInput(module.name),
-    onRemove: () => onRemove(module.name)
+    onRemove: () => onRemove(module.name),
+    usedBy: usedBy(module.name)
   });
 
   return (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { modulesToAdd, modulesToRemove } from '../modules/catalog';
 import { needsInput } from '../modules/moduleInput';
 import { useModuleCatalog } from '../modules/useModuleCatalog';
@@ -14,6 +15,9 @@ import { type ModuleInputResponse, moduleInputChanged, modulesAdded, modulesRemo
 export function useProjectModules(viewOpen: boolean, backLabel: string) {
   const dispatch = useAppDispatch();
   const projectModules = useAppSelector(state => state.modules);
+  const canvas = useAppSelector(state => state.canvas);
+  // The blocks whose promise type a module provides, by label.
+  const usedBy = (name: string) => canvas.filter(block => blockDescriptorsById.get(block.blockId)?.requires_module === name).map(block => block.label);
   const [openName, setOpenName] = useState<string | null>(null);
   const [openInput, setOpenInput] = useState(false);
   const catalog = useModuleCatalog(viewOpen || openName !== null);
@@ -48,6 +52,7 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
             .map(module => module.name),
     onAdd: () => add(open.name),
     onRemove: () => remove(open.name),
+    usedBy: usedBy(open.name),
     onBack: close,
     onInputChange: (variable: string, response: ModuleInputResponse) => dispatch(moduleInputChanged({ name: open.name, variable, response })),
     onOpenModule: (name: string) => openPage(name),
@@ -65,6 +70,7 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
     openName,
     page,
     projectModules,
-    remove
+    remove,
+    usedBy
   };
 }

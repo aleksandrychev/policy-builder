@@ -104,7 +104,23 @@ export type Expression =
 
 export interface BlockStep {
   attributes?: Record<string, Expression>;
-  promise_type: 'vars' | 'classes' | 'users' | 'files' | 'packages' | 'methods' | 'processes' | 'services' | 'commands' | 'storage' | 'reports';
+  // git, systemd, http, ansible: custom promise types, from the descriptor's requires_module.
+  promise_type:
+    | 'vars'
+    | 'classes'
+    | 'users'
+    | 'files'
+    | 'packages'
+    | 'methods'
+    | 'processes'
+    | 'services'
+    | 'commands'
+    | 'storage'
+    | 'reports'
+    | 'git'
+    | 'systemd'
+    | 'http'
+    | 'ansible';
   promiser: Template;
 }
 
@@ -179,6 +195,8 @@ export interface BlockDescriptor {
   // Which step's outcome drives arrows.
   outcome_step?: number;
   parameters?: BlockParameter[];
+  // The CFEngine Build module its custom promise type comes from: added to the project with the block.
+  requires_module?: string;
   schema_version: 1;
   steps?: BlockStep[];
   value_source_label?: string;
