@@ -5,7 +5,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import App from '../../App';
 import { AppThemeProvider } from '../../ThemeProvider';
 import { projectFilesInitialized } from '../../store/filesSlice';
-import { projectCreated } from '../../store/projectSlice';
+import { projectCreated, projectTypeChanged } from '../../store/projectSlice';
 import { type TestStore, makeStore } from '../../store/test/storeTestUtils';
 import { installApi, uninstallApi } from '../../test/render';
 
@@ -110,6 +110,15 @@ describe('the Modules view', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Back to Canvas/ }));
     expect(screen.queryByRole('heading', { name: 'delete-files' })).not.toBeInTheDocument();
+  });
+
+  it('lists modules in a module project, but doesn’t add them', async () => {
+    await renderApp();
+    store.dispatch(projectTypeChanged({ type: 'module' }));
+    fireEvent.click(within(sideBar()).getByRole('button', { name: 'Modules' }));
+    fireEvent.click(await screen.findByText('delete-files'));
+    expect(screen.getByRole('button', { name: 'Add to project' })).toBeDisabled();
+    expect(screen.getByText(/modules go into policy-set projects/)).toBeInTheDocument();
   });
 
   it('collapses the side bar from its open view’s icon', async () => {

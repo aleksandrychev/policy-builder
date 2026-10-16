@@ -49,6 +49,8 @@ interface ModulePageProps {
   // Its place in the project's build order, when added.
   added?: { index: number; module: ProjectModule; total: number };
   backLabel: string;
+  // False in a module project: modules go into policy sets.
+  canAdd: boolean;
   module: CatalogModule;
   needsInput: boolean;
   onAdd: () => void;
@@ -92,6 +94,7 @@ function Description({ web }: { web: ModuleDetailsState }) {
 export function ModulePage({
   added,
   backLabel,
+  canAdd,
   module,
   needsInput,
   onAdd,
@@ -140,7 +143,7 @@ export function ModulePage({
                   </Button>
                 )
               ) : (
-                <Button variant="contained" size="small" onClick={onAdd}>
+                <Button variant="contained" size="small" onClick={onAdd} disabled={!canAdd}>
                   Add to project
                 </Button>
               )}
@@ -159,6 +162,7 @@ export function ModulePage({
             </Box>
             {added?.module.addedBy && <Muted>Added for {added.module.addedBy}: it’s removed with it, unless another module needs it.</Muted>}
             {!added && wouldAdd.length > 0 && <Muted>Adding it also adds {wouldAdd.join(', ')}.</Muted>}
+            {!canAdd && !added && <Muted>This project is a cfbs module: modules go into policy-set projects (Project Settings).</Muted>}
             {usedBy.length > 0 && <Muted>Used by {usedBy.join(', ')}: delete those blocks to remove it.</Muted>}
             {module.kind === 'promise-type' && <Muted>Adds a promise type for your own policy. Hosts need python3 to run it.</Muted>}
 

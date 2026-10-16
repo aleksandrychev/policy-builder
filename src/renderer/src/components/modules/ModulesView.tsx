@@ -60,6 +60,8 @@ function Section({ children, count, title }: { children: ReactNode; count: numbe
 }
 
 interface ModulesViewProps {
+  // False in a module project: modules go into policy sets.
+  canAdd: boolean;
   catalog: ModuleCatalog;
   // What the search starts with (Browse modules… from the Blocks palette).
   initialSearch?: string;
@@ -75,6 +77,7 @@ interface ModulesViewProps {
 
 /** The CFEngine Build modules: the project's, then the whole index, searched and filtered by tag. */
 export function ModulesView({
+  canAdd,
   catalog,
   initialSearch = '',
   isNeedingInput,
@@ -118,7 +121,8 @@ export function ModulesView({
     onAdd: () => onAdd(module.name),
     onEditInput: () => onEditInput(module.name),
     onRemove: () => onRemove(module.name),
-    usedBy: usedBy(module.name)
+    usedBy: usedBy(module.name),
+    canAdd
   });
 
   return (

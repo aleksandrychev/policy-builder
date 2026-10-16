@@ -44,6 +44,8 @@ interface ModuleRowProps {
   // A dependency: the module it came with.
   addedFor?: string;
   alias?: string;
+  // False in a module project: modules go into policy sets.
+  canAdd: boolean;
   // In the project section (gear menu), else in the catalog (Add).
   inProject: boolean;
   module: CatalogModule;
@@ -111,7 +113,21 @@ function GearMenu({ addedFor, module, onEditInput, onRemove, usedBy }: Pick<Modu
 }
 
 /** One module: kind icon, name, version and action; then its description and badges. */
-export function ModuleRow({ added, addedFor, alias, inProject, module, needsInput, onAdd, onEditInput, onRemove, onSelect, selected, usedBy }: ModuleRowProps) {
+export function ModuleRow({
+  added,
+  addedFor,
+  alias,
+  canAdd,
+  inProject,
+  module,
+  needsInput,
+  onAdd,
+  onEditInput,
+  onRemove,
+  onSelect,
+  selected,
+  usedBy
+}: ModuleRowProps) {
   const KindIcon = KIND_ICONS[module.kind];
   return (
     <Box
@@ -153,16 +169,18 @@ export function ModuleRow({ added, addedFor, alias, inProject, module, needsInpu
               <CheckIcon sx={{ fontSize: 13 }} /> Added
             </Typography>
           ) : (
-            <Button
-              size="small"
-              onClick={event => {
-                event.stopPropagation();
-                onAdd();
-              }}
-              sx={{ minWidth: 0, px: 1, py: 0, fontSize: 11, flexShrink: 0 }}
-            >
-              Add
-            </Button>
+            canAdd && (
+              <Button
+                size="small"
+                onClick={event => {
+                  event.stopPropagation();
+                  onAdd();
+                }}
+                sx={{ minWidth: 0, px: 1, py: 0, fontSize: 11, flexShrink: 0 }}
+              >
+                Add
+              </Button>
+            )
           )}
         </Box>
         {addedFor ? (

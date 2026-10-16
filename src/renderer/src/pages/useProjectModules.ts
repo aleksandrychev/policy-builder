@@ -15,6 +15,8 @@ import { type ModuleInputResponse, moduleInputChanged, modulesAdded, modulesRemo
 export function useProjectModules(viewOpen: boolean, backLabel: string) {
   const dispatch = useAppDispatch();
   const projectModules = useAppSelector(state => state.modules);
+  // Modules go into policy sets: a module project lists them, but can't add one.
+  const canAdd = useAppSelector(state => state.project?.type !== 'module');
   const canvas = useAppSelector(state => state.canvas);
   // The blocks whose promise type a module provides, by label.
   const usedBy = (name: string) => canvas.filter(block => requiredModule(block) === name).map(block => block.label);
@@ -58,6 +60,7 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
     onRemove: () => remove(open.name),
     usedBy: usedBy(open.name),
     onBack: close,
+    canAdd,
     onInputChange: (variable: string, response: ModuleInputResponse) => dispatch(moduleInputChanged({ name: open.name, variable, response })),
     onOpenModule: (name: string) => openPage(name),
     openInput
@@ -65,6 +68,7 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
 
   return {
     add,
+    canAdd,
     browse: (search: string) => setBrowsing(current => ({ search, count: current.count + 1 })),
     browsing,
     want: () => setWanted(true),

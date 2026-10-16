@@ -27,6 +27,7 @@ export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFra
           <ModulesView
             key={modules.browsing.count}
             initialSearch={modules.browsing.search}
+            canAdd={modules.canAdd}
             catalog={modules.catalog}
             projectModules={modules.projectModules}
             selectedName={modules.openName}
