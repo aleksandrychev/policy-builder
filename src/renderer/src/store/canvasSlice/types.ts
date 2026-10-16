@@ -113,6 +113,8 @@ export interface BlockInstance {
   // breaks ties in execution order (see canvas/executionOrder.ts): blocks
   // not ordered by arrows run top-to-bottom, then left-to-right.
   position?: { x: number; y: number };
+  // "How often", at most every N minutes: the promise's action (blocks without a run_interval parameter).
+  runInterval?: string;
   // Which of the block descriptor's value_sources is active, for blocks that
   // have them (e.g. Define Variable's "Value source" selector). Undefined
   // for blocks with a plain, single steps/parameters shape.

@@ -59,6 +59,8 @@ def _project(block_id: str) -> dict:
         {"instanceId": f"{block_id}-{i}", "blockId": block_id, "label": f"Variant {i}", "params": params}
         for i, (_name, params) in enumerate(variants(block_id))
     ]
+    # The sample once more, limited by the block's own How often.
+    blocks.append({**blocks[0], "instanceId": f"{block_id}-every", "label": "Every hour", "runInterval": "60"})
     file = {"id": "f", "name": "Variants", "namespace": "variants", "path": "./variants.cf", "blocks": blocks}
     return {"files": [{**file, "order": [b["instanceId"] for b in blocks]}]}
 

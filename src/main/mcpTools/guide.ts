@@ -131,6 +131,7 @@ Map each promise to a block before creating anything, and tell the user up front
 | \`services:\` | Manage Service |
 | \`processes:\` \`signals\` | Signal Process |
 | \`commands:\` with \`ifelapsed\` | Run Command; "How often" (run_interval) takes any number of minutes, e.g. 10080 for weekly. Report Message and Signal Process have it too |
+| \`ifelapsed\` on any other promise (\`action => if_elapsed(N)\`) | The block's How often: runInterval on add_block / update_block, in minutes |
 | \`users:\` | Manage Users |
 | \`methods:\` \`usebundle\` with or without arguments | Call Method (arguments one per line; @(…) passes a list) |
 | \`difference()\` on a list | The Remove entries transformer; a line @(list) removes another list too, e.g. @(def.allowed) from augments |
@@ -156,7 +157,6 @@ A function call in \`vars:\` or \`classes:\` is usually a value source of Define
 
 ## No block yet (say so, don't drop silently)
 - \`copy_from\` options beyond a remote copy compared by content (\`encrypt\`, \`purge\`, \`compare => "mtime"\`).
-- \`ifelapsed\` on blocks other than Run Command, Report Message and Signal Process.
 - A package method (\`package_module\`) or architecture.
 - \`getindices\` and other transformers on data containers: data values take no transformers yet.
 - Custom promise types (\`ansible:\`, \`git:\` …) and anything else without a block.

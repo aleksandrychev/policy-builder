@@ -62,6 +62,7 @@ import {
   blockNoteChanged,
   blockParamChanged,
   blockRemoved,
+  blockRunIntervalChanged,
   blockValueSourceChanged,
   blocksMoved,
   blocksRemovedForFile,
@@ -971,6 +972,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
             advice={blockAdvice(selectedInstance, allEdges)}
+            onRunIntervalChange={runInterval => selectedInstance && dispatch(blockRunIntervalChanged({ instanceId: selectedInstance.instanceId, runInterval }))}
             onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}
             onParamChange={(paramName, value, entryId) =>
               selectedInstance && dispatch(blockParamChanged({ instanceId: selectedInstance.instanceId, entryId, paramName, value }))

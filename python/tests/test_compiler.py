@@ -165,6 +165,20 @@ def test_a_line_naming_a_list_brings_that_list_in():
     assert "# → remove emacs, @(def.allowed)" in policy
 
 
+def test_a_blocks_how_often_limits_its_promise():
+    meta = _demo()
+    blocks = _webserver(meta)["blocks"]
+    landing = next(b for b in blocks if b["label"] == "Publish the demo landing page")
+    landing["runInterval"] = "10080"
+    report = next(b for b in blocks if b["blockId"] == "report-message")
+    report["runInterval"] = "60"  # Report Message has its own "How often" parameter
+
+    policy = compile_project(meta)[WEBSERVER]
+
+    assert 'action => default:if_elapsed("10080")' in _block(policy, landing["label"])
+    assert "if_elapsed" not in _block(policy, report["label"])
+
+
 def test_classes_the_file_doesnt_define_are_the_default_namespaces():
     meta = _demo()
     _webserver(meta)["condition"] = {"kind": "class", "className": "linux.!policy_server", "mode": "if"}

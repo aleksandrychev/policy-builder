@@ -459,6 +459,17 @@ def fill_summary(pattern: str, params: dict[str, str]) -> str:
     return PLACEHOLDER.sub(shown, pattern)
 
 
+def run_interval(block: dict, descriptor: dict) -> list[str]:
+    """A block's "How often": at most every N minutes, as its promise's action. Blocks with a
+    run_interval parameter of their own (Run Command…) set it there."""
+    minutes = str(block.get("runInterval") or "").strip()
+    if not re.fullmatch(r"[1-9]\d*", minutes) or any(
+        p["name"] == "run_interval" for p in descriptor.get("parameters", [])
+    ):
+        return []
+    return [f'action => default:if_elapsed("{minutes}")']
+
+
 def noted(block: dict) -> list[str]:
     """A block's note, as its promises' comment (one line: CFEngine prints it in reports)."""
     note = one_line(block.get("note") or "")
@@ -844,7 +855,15 @@ class FileCompiler:
         body = [f"  # {label}"]
         if variables:
             body += ["  vars:", *guarded, *[f"      {line}" for line in variables]]
-        lines = promise(promiser, [*attributes, *noted(block), *self.gating(block, names, edges)])
+        lines = promise(
+            promiser,
+            [
+                *attributes,
+                *noted(block),
+                *run_interval(block, self.descriptor(block)),
+                *self.gating(block, names, edges),
+            ],
+        )
         return [*body, f"  {promise_type}:", *guarded, *[f"      {line}" for line in lines], ""]
 
     # bundle agent main: every ungrouped block's own promise and every group's call, in order (top_down).

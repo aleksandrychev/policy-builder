@@ -247,4 +247,18 @@ describe('MCP canvas tools: changing the canvas', () => {
     expect(undoAll(store)).toBe(1);
     expect((await call('tidy_file', { fileId: 'nope' })).ok).toBe(false);
   });
+
+  it('limits how often a block runs, where it has no How often of its own', async () => {
+    const { call, fileId, store } = setup();
+    const { id } = (await call('add_block', { fileId, blockType: 'create-directory', params: { path: '/srv/x' }, runInterval: 1440 })).result;
+    expect(blockOf(store, id)?.runInterval).toBe('1440');
+    expect((await call('get_file', { fileId })).result.blocks[0]).toMatchObject({ id, runInterval: '1440' });
+    await call('update_block', { blockId: id, runInterval: '' });
+    expect(blockOf(store, id)).not.toHaveProperty('runInterval');
+
+    expect((await call('update_block', { blockId: id, runInterval: '0' })).content).toMatch(/whole number of minutes/);
+    expect((await call('add_block', { fileId, blockType: 'run-command', params: { command: '/bin/true' }, runInterval: 60 })).content).toMatch(
+      /run_interval parameter/
+    );
+  });
 });

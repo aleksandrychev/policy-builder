@@ -23,6 +23,7 @@ import { type SubjectCallbacks, SubjectEditor } from './properties/SubjectEditor
 import { capitalize } from './properties/capitalize';
 import { buildClassNameOptions, buildTemplateTokens } from './properties/classOptions';
 import { BindToDataLink, BoundParameter, isBindable } from './properties/dataBinding';
+import { ParameterField } from './properties/paramFields';
 import { inputSx } from './properties/styles';
 
 export { AddDecoratorButton } from './properties/decorators';
@@ -73,11 +74,23 @@ interface PropertiesPanelProps {
   onLabelChange: (label: string) => void;
   onNoteChange: (note: string) => void;
   onParamChange: (paramName: string, value: string, entryId?: string) => void;
+  onRunIntervalChange: (runInterval: string) => void;
   onUnbindParam: (param: string) => void;
   onValueSourceChange: (valueSourceId: string, entryId?: string) => void;
   // 1-based position in this file's execution order, for sequenced blocks.
   orderNumber?: number;
 }
+
+// Any block's "How often": Run Command's own choices, as the promise's ifelapsed.
+const RUN_INTERVAL: BlockParameter = {
+  ...(blockDescriptorsById.get('run-command')?.parameters?.find(parameter => parameter.name === 'run_interval') ?? {
+    name: 'run_interval',
+    type: 'number',
+    required: false
+  }),
+  default: undefined,
+  help: 'A block is checked on every agent run (every 5 minutes by default) unless limited here.'
+};
 
 export function PropertiesPanel(props: PropertiesPanelProps) {
   const { instance, descriptor, allInstances, files, currentFileId, onLabelChange } = props;
@@ -200,6 +213,9 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
           showInventory={false}
           paramSlot={paramSlot}
         />
+        {!descriptor.parameters?.some(parameter => parameter.name === 'run_interval') && (
+          <ParameterField parameter={RUN_INTERVAL} value={instance.runInterval ?? ''} onChange={props.onRunIntervalChange} />
+        )}
         {descriptor.id === 'run-command' && props.onConvertToData && (
           <Box>
             <Button size="small" variant="outlined" onClick={props.onConvertToData}>
