@@ -619,6 +619,41 @@
       }
     },
     {
+      "id": "data-top-values",
+      "label": "Top-level values",
+      "summary": "its top-level values",
+      "badge": "maplist()",
+      "help": "The values of its own keys (or a list's items), nested objects and lists left out, e.g. shop for {\"web\": {\"port\": 80}, \"name\": \"shop\"}.",
+      "input_type": "data",
+      "output_type": "slist",
+      "parameters": [],
+      "expression": {
+        "call": "filter",
+        "args": [
+          "[$][(].*",
+          {
+            "call": "maplist",
+            "args": [
+              {
+                "field": "$(this)"
+              },
+              {
+                "call": "getindices",
+                "args": [
+                  {
+                    "previous": "name"
+                  }
+                ]
+              }
+            ]
+          },
+          "true",
+          "true",
+          "99999"
+        ]
+      }
+    },
+    {
       "id": "data-field",
       "label": "Field",
       "summary": "its field {{field}}",

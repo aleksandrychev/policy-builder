@@ -228,6 +228,8 @@ describe('data transforms', () => {
     expect(run('data-keys', {}, new DataValue(['x', 'y']))).toEqual(['0', '1']);
     expect(run('data-values', {}, config)).toEqual(['80', 'a', 'b', '5432', 'site']);
     expect(run('data-values', {}, new DataValue(['x', ['y', 'z'], { k: 'v' }, 3, true]))).toEqual(['x', 'y', 'z', 'v', '3', 'true']);
+    expect(run('data-top-values', {}, config)).toEqual(['site']);
+    expect(run('data-top-values', {}, new DataValue(['x', ['y'], { k: 'v' }, 3, null]))).toEqual(['x', '3', 'null']);
     expect(run('data-length', {}, config)).toBe('3');
   });
 

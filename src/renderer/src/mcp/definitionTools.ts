@@ -93,7 +93,7 @@ const resultType = (start: string, chain: DecoratorInstance[] = []) =>
   chain.reduce((type, step) => decoratorsById.get(step.decoratorId)?.output_type ?? type, start);
 
 const CONVERT_HINT =
-  'Split into a list (split-list) makes a list; Join (join), Pick entry (nth) or Count (length) make a string again. From data: Keys (data-keys) or Values (data-values) make a list, Field (data-field), As JSON text (data-to-json) or Count (data-length) a string.';
+  'Split into a list (split-list) makes a list; Join (join), Pick entry (nth) or Count (length) make a string again. From data: Keys (data-keys), Values (data-values, nested ones flattened) or Top-level values (data-top-values) make a list, Field (data-field), As JSON text (data-to-json) or Count (data-length) a string.';
 
 // Why a chain doesn't type-check from `base`, if it doesn't — the UI only offers steps taking what flows in.
 function chainError(base: DecoratorValueType, decoratorIds: string[]): string | undefined {

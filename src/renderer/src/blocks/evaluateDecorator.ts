@@ -293,6 +293,10 @@ export function evaluateDecorator(decorator: Decorator, given: Record<string, st
     }
     case 'data-values':
       return leaves(asContainer(input));
+    case 'data-top-values':
+      return Object.values(asContainer(input))
+        .filter(value => value === null || typeof value !== 'object')
+        .map(scalarText);
     case 'data-field':
       return dataField(input, params.field ?? '');
     case 'data-merge':
