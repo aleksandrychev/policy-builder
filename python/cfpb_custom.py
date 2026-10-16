@@ -10,7 +10,9 @@ standard library's, which a namespaced file only reaches as default:<name>.
 from __future__ import annotations
 
 import contextlib
+import functools
 import io
+import json
 import os
 import re
 import tempfile
@@ -57,11 +59,71 @@ def check(promises: str, definitions: str, namespace: str) -> list[dict]:
             if ":" in name:
                 continue
             message = f"{name} isn't defined in this block: from the standard library, write default:{name}"
-        field, first = ("definitions", definitions_at) if line >= definitions_at else ("promises", promises_at)
-        if line < promises_at:
-            field, first = "promises", line
-        problems.append({"field": field, "line": line - first + 1, "column": int(found["column"]), "message": message})
-    return problems + _perms_without_rxdirs(definitions)
+        problems.append(_placed(line, int(found["column"]), message, promises_at, definitions_at))
+    lists = [
+        _placed(line, column, message, promises_at, definitions_at)
+        for line, column, message in _scalars_for_lists(text)
+    ]
+    return problems + lists + _perms_without_rxdirs(definitions)
+
+
+def _placed(line: int, column: int, message: str, promises_at: int, definitions_at: int) -> dict:
+    """A problem at a line of the wrapped text, as a line of the field it's in."""
+    field, first = ("definitions", definitions_at) if line >= definitions_at else ("promises", promises_at)
+    if line < promises_at:
+        field, first = "promises", line
+    return {"field": field, "line": line - first + 1, "column": column, "message": message}
+
+
+LIST_TYPES = {"slist", "ilist", "rlist", "clist", "olist"}
+
+
+@functools.cache
+def _attribute_types() -> tuple[dict, dict]:
+    """Attribute name -> type, per body type and per promise type, from the linter's syntax data."""
+    import cfengine_cli
+
+    path = os.path.join(os.path.dirname(cfengine_cli.__file__), "syntax-description.json")
+    with open(path) as file:
+        syntax = json.load(file)
+
+    def types(group: str) -> dict:
+        return {
+            name: {key: spec.get("type") for key, spec in kind["attributes"].items()}
+            for name, kind in syntax[group].items()
+        }
+
+    return types("bodyTypes"), types("promiseTypes")
+
+
+def _scalars_for_lists(text: str) -> list[tuple[int, int, str]]:
+    """A string given to a list attribute (owners => "root"): the linter lets it through, cf-promises refuses it."""
+    import tree_sitter_cfengine
+    from tree_sitter import Language, Parser
+
+    body_types, promise_types = _attribute_types()
+    tree = Parser(Language(tree_sitter_cfengine.language())).parse(text.encode())
+    found = []
+
+    def walk(node, attributes: dict):
+        if node.type == "body_block":
+            kind = next((child for child in node.children if child.type == "body_block_type"), None)
+            attributes = body_types.get(kind.text.decode(), {}) if kind else {}
+        elif node.type == "promise_guard":
+            return node.text.decode().rstrip(":")
+        elif node.type == "attribute" and len(node.children) >= 3:
+            name, value = node.children[0].text.decode(), node.children[2]
+            if attributes.get(name) in LIST_TYPES and value.type in ("quoted_string", "qualified_identifier"):
+                row, column = value.start_point
+                found.append((row + 1, column + 1, f"{name} takes a list: write {{ {value.text.decode()} }}"))
+            return None
+        promise_type = None
+        for child in node.children:
+            in_section = promise_types.get(promise_type, {}) if node.type == "bundle_section" else attributes
+            promise_type = walk(child, in_section) or promise_type
+
+    walk(tree.root_node, {})
+    return found
 
 
 PERMS_BODY = re.compile(r"^\s*body\s+perms\s+(\w+)", re.M)

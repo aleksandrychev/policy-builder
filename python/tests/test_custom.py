@@ -135,3 +135,16 @@ def test_a_perms_body_without_rxdirs_is_pointed_out():
     assert check(promises, 'body perms locked\n{\n  owners => { "root" };\n  mode => "}";\n}', "site")[0][
         "message"
     ].startswith("body perms locked")
+
+
+def test_a_string_given_to_a_list_attribute_is_pointed_out():
+    # cf-promises: "Attempted to give a scalar to a non-scalar type"; the linter lets it through.
+    promises = 'files:\n  "/srv/app/marker"\n    create => "true",\n    perms => app;\nvars:\n  "names" slist => "a";'
+    body = 'body perms app\n{\n  mode => "644";\n  owners => "root";\n  groups => { "root" };\n  rxdirs => "false";\n}'
+    found = [(problem["field"], problem["line"], problem["message"]) for problem in check(promises, body, "site")]
+    assert found == [
+        ("promises", 6, 'slist takes a list: write { "a" }'),
+        ("definitions", 4, 'owners takes a list: write { "root" }'),
+    ]
+    listed = 'vars:\n  "names" slist => splitstring("a,b", ",", 9);\n  "more" slist => { "a" };'
+    assert check(listed, "", "site") == []

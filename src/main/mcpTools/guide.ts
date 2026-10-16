@@ -62,6 +62,7 @@ const blocks = `# Blocks, arrows and groups
 - **Ask the user before using it**, and only for the part no block covers: the rest stays in blocks they can read and edit. Say in the block's note what it does and why it's hand-written.
 - The text is in the file's namespace: the standard library's bodies and bundles need \`default:\` (\`default:recurse("inf")\`, \`default:mog(…)\`), another file's \`<ns>:\`, while bodies in \`definitions\` are used bare. \`$(vars.x)\` reads this file's variables.
 - A \`body perms\` of your own sets \`rxdirs\` (\`"false"\`, or \`"true"\` for directories): CFEngine 3.28 warns on every run without it.
+- List attributes (\`owners\`, \`groups\`, \`depends_on\`, slist variables…) take a list even for one item: \`owners => { "root" }\`. A plain string is refused by the hub.
 - Check it with get_warnings: customText lists the linter's findings by field and line, notCompiled a syntax error (the block is then left out of the policy). Read get_generated_policy for what it became.
 
 ## Layout
