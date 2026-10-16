@@ -355,6 +355,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const sideBar = useSideBar({ activeTab, maximized, setActiveTab, setMaximized });
   const modules = useProjectModules(sideBar.activeView === 'modules', PROJECT_TABS[activeTab]);
   const pythonAdvice = usePythonAdvice(allInstances);
+  const dismissedAdvice = useAppSelector(state => state.dismissedAdvice);
   // Another tab, or the canvas's file or a block: the module page closes.
   const showTab = (tab: number) => {
     modules.close();
@@ -991,7 +992,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
-            advice={blockAdvice(selectedInstance, allEdges, allInstances)}
+            advice={blockAdvice(selectedInstance, allEdges, allInstances, dismissedAdvice)}
             adviceAction={pythonAdvice(selectedInstance)}
             onRunIntervalChange={runInterval => selectedInstance && dispatch(blockRunIntervalChanged({ instanceId: selectedInstance.instanceId, runInterval }))}
             onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}

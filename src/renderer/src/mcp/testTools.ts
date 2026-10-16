@@ -95,6 +95,7 @@ const contentOf = (state: RootState, project: Project) =>
       files: state.files,
       groups: state.groups,
       modules: state.modules,
+      dismissedAdvice: state.dismissedAdvice,
       testEnvironments: []
     },
     project

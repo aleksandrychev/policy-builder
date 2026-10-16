@@ -31,6 +31,9 @@ function restartAdvice(block: BlockInstance, edges: BlockEdge[]): string | null 
 // Promise modules that don't run with Python.
 const WITHOUT_PYTHON = new Set(['promise-type-docker-compose']);
 
+// The key a project ignores this advice by (dismissedAdvice).
+export const PYTHON_ADVICE_KEY = 'python3';
+
 export const PYTHON_ADVICE =
   'Its promise type runs with python3 on the host. If your hosts may not have it, add an Install Package block for python3 before this one.';
 
@@ -43,12 +46,12 @@ export function needsPython(block: BlockInstance, canvas: BlockInstance[]): bool
   return !canvas.some(installs);
 }
 
-export function blockAdvice(block: BlockInstance | undefined, edges: BlockEdge[], canvas: BlockInstance[] = []): string[] {
+export function blockAdvice(block: BlockInstance | undefined, edges: BlockEdge[], canvas: BlockInstance[] = [], dismissed: string[] = []): string[] {
   if (!block) return [];
   const advice = [
     block.blockId === 'create-directory' ? directoryModeAdvice(block) : null,
     block.blockId === 'manage-service' ? restartAdvice(block, edges) : null,
-    needsPython(block, canvas) ? PYTHON_ADVICE : null
+    !dismissed.includes(PYTHON_ADVICE_KEY) && needsPython(block, canvas) ? PYTHON_ADVICE : null
   ];
   return advice.filter((item): item is string => item !== null);
 }

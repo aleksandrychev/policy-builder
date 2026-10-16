@@ -6,6 +6,7 @@ import { requiredModule } from '../blocks/requiredModule';
 import canvasReducer from './canvasSlice';
 import clipboardReducer from './clipboardSlice';
 import derivedNodesReducer from './derivedNodesSlice';
+import dismissedAdviceReducer from './dismissedAdviceSlice';
 import edgesReducer from './edgesSlice';
 import filesReducer from './filesSlice';
 import groupsReducer from './groupsSlice';
@@ -18,6 +19,7 @@ const contentReducer = combineReducers({
   canvas: canvasReducer,
   clipboard: clipboardReducer,
   derivedNodes: derivedNodesReducer,
+  dismissedAdvice: dismissedAdviceReducer,
   edges: edgesReducer,
   files: filesReducer,
   groups: groupsReducer,

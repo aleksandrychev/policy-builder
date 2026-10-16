@@ -147,6 +147,16 @@ describe('modules from the Blocks palette', () => {
     expect(store.getState().edges).toEqual([]);
   });
 
+  it('ignores the python3 advice for the whole project, until undone', async () => {
+    await renderApp();
+    fireEvent.click(screen.getByText(/^Git Checkout$/));
+    fireEvent.click(screen.getByRole('button', { name: 'Ignore in this project' }));
+    expect(screen.queryByText(/runs with python3 on the host/)).not.toBeInTheDocument();
+    expect(store.getState().dismissedAdvice).toEqual(['python3']);
+    store.dispatch(undone());
+    expect(await screen.findByText(/runs with python3 on the host/)).toBeInTheDocument();
+  });
+
   it('points a search no block matches at the modules that do', async () => {
     await renderApp();
     fireEvent.change(screen.getByPlaceholderText('Search blocks…'), { target: { value: 'clamav' } });

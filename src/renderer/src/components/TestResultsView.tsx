@@ -124,6 +124,7 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
         files: state.files,
         groups: state.groups,
         modules: state.modules,
+        dismissedAdvice: state.dismissedAdvice,
         testEnvironments: []
       },
       project!

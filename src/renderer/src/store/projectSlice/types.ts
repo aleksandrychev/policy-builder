@@ -28,6 +28,7 @@ export interface Project {
 export interface ProjectContentState {
   canvas: BlockInstance[];
   derivedNodes: Record<string, { x: number; y: number }>;
+  dismissedAdvice?: string[];
   edges: BlockEdge[];
   files: { currentFileId: string | null; files: PolicyFile[]; folders: PolicyFolder[] };
   groups: BlockGroup[];

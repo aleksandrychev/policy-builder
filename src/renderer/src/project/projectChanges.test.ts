@@ -28,6 +28,7 @@ const project = ({
   edges,
   files: { currentFileId: null, files, folders: [] },
   modules: [],
+  dismissedAdvice: [],
   groups,
   testEnvironments: []
 });

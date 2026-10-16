@@ -31,6 +31,8 @@ type Position = { x: number; y: number };
 
 export interface ProjectMeta {
   current_file_id: string | null;
+  // Advice the project ignores (canvas/advice.ts keys).
+  dismissed_advice?: string[];
   // In file order; each file's `path` is where its policy is written.
   files: FileMeta[];
   // `path` is the folder's directory, e.g. "./services/".
@@ -263,7 +265,8 @@ export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjec
       module_name: identity.moduleName,
       folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
       files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
-      current_file_id: data.files.currentFileId
+      current_file_id: data.files.currentFileId,
+      ...(data.dismissedAdvice.length ? { dismissed_advice: data.dismissedAdvice } : {})
     },
     modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
     provided: toProvided(modules, identity),
@@ -362,6 +365,7 @@ function readBuilderProject(project: ProjectMeta): ProjectData {
     edges,
     files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
     groups,
+    dismissedAdvice: Array.isArray(project.dismissed_advice) ? project.dismissed_advice.filter(key => typeof key === 'string') : [],
     // Read from cfbs.json and their own files; see loadCfbsProject.
     modules: [],
     testEnvironments: []
@@ -467,7 +471,11 @@ export function loadCfbsProject(
   const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
   if (data && data.files.files.length > 0) return { ...identity, data: { ...data, modules, testEnvironments: environments }, masterfiles };
   const files = filesReducer(undefined, projectFilesInitialized(name, ownPolicyFiles(Array.isArray(json.build) ? json.build : [])));
-  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [], modules, testEnvironments: environments }, masterfiles };
+  return {
+    ...identity,
+    data: { canvas: [], derivedNodes: {}, dismissedAdvice: [], edges: [], files, groups: [], modules, testEnvironments: environments },
+    masterfiles
+  };
 }
 
 // The input answers in a module's input.json (its questions, each with a `response`), by variable.

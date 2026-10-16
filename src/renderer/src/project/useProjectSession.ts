@@ -16,6 +16,7 @@ import { moduleNameFor } from './moduleName';
 const snapshotOf = (state: RootState): ProjectData => ({
   canvas: state.canvas,
   derivedNodes: state.derivedNodes,
+  dismissedAdvice: state.dismissedAdvice,
   edges: state.edges,
   files: state.files,
   groups: state.groups,

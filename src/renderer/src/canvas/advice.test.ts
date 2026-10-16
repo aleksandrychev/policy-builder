@@ -44,6 +44,7 @@ describe('python3 for promise modules', () => {
     expect(blockAdvice(clone, [], [clone])).toEqual([PYTHON_ADVICE]);
     const install = block('install-package', { package_name: 'curl\npython3' }, { instanceId: 'p' });
     expect(blockAdvice(clone, [], [clone, install])).toEqual([]);
+    expect(blockAdvice(clone, [], [clone], ['python3'])).toEqual([]);
   });
 
   it('isn’t for promise types without Python, or blocks of CFEngine’s own', () => {
