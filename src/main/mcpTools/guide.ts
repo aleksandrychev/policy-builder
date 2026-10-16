@@ -151,7 +151,7 @@ A function call in \`vars:\` or \`classes:\` is usually a value source of Define
 | Function | Where |
 | --- | --- |
 | \`execresult()\` | Define Variable › Command output |
-| \`returnszero()\` | Define Class › Command succeeds |
+| \`returnszero()\` | Define Class › Command succeeds (its output shows in the agent's log on every run: send it to /dev/null in the command to keep the log quiet) |
 | \`readfile()\`, \`readstringlist()\`, \`readjson()\`, \`filestat()\`, \`getenv()\` | Define Variable › File content, File lines, Structured data (JSON), File metadata, Environment variable |
 | \`parsejson()\` | Define Variable › Structured data (literal) |
 | \`mergedata("def.x")\` or a data variable used as a whole | Define Variable › Data variable (e.g. \`def.services\` from augments) |
