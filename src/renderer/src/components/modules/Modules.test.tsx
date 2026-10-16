@@ -146,7 +146,9 @@ describe('modules from the Blocks palette', () => {
     expect(store.getState().modules).toEqual([{ name: 'promise-type-git' }]);
 
     fireEvent.click(within(sideBar()).getByRole('button', { name: 'Modules' }));
-    fireEvent.click(await screen.findByText('promise-type-git'));
+    // Its library, which cfbs adds on save, shows under it already.
+    expect(await screen.findByText('added for promise-type-git, on save')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('promise-type-git')[0]);
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
     expect(screen.getByText(/Used by Git Checkout/)).toBeInTheDocument();
   });

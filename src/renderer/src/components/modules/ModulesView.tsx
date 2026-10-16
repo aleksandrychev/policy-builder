@@ -19,7 +19,7 @@ import {
   Typography
 } from '@mui/material';
 
-import { type CatalogFilter, type CatalogModule, TAG_CHIPS, filterCatalog } from '../../modules/catalog';
+import { type CatalogFilter, type CatalogModule, TAG_CHIPS, filterCatalog, modulesToAdd } from '../../modules/catalog';
 import type { ModuleCatalog } from '../../modules/useModuleCatalog';
 import type { ProjectModule } from '../../store/modulesSlice';
 import { ModuleRow } from './ModuleRow';
@@ -99,7 +99,19 @@ export function ModulesView({
 
   // The project's modules in build order, dependencies under the module they came with.
   const inProject = useMemo(() => {
-    const entries = projectModules.map(module => ({ module, entry: catalog.byName.get(module.name) ?? unknownModule(module) }));
+    // Dependencies cfbs adds on save that the project doesn't list yet (a block's module brings none).
+    const pending = projectModules.flatMap(module =>
+      module.addedBy
+        ? []
+        : modulesToAdd(
+            catalog.byName,
+            module.name,
+            projectModules.filter(other => other !== module)
+          )
+            .slice(1)
+            .map(dependency => ({ ...dependency, pending: true }))
+    );
+    const entries = [...projectModules, ...pending].map(module => ({ module, entry: catalog.byName.get(module.name) ?? unknownModule(module) }));
     const kept = filtering
       ? new Set(
           filterCatalog(
@@ -208,7 +220,13 @@ export function ModulesView({
               </Typography>
             ) : (
               inProject.map(({ module, entry }) => (
-                <ModuleRow key={module.name} {...rowProps(entry)} inProject addedFor={module.addedBy} needsInput={isNeedingInput(module.name)} />
+                <ModuleRow
+                  key={module.name}
+                  {...rowProps(entry)}
+                  inProject
+                  addedFor={module.addedBy && ('pending' in module ? `${module.addedBy}, on save` : module.addedBy)}
+                  needsInput={isNeedingInput(module.name)}
+                />
               ))
             )}
           </Section>
