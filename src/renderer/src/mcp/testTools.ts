@@ -129,11 +129,11 @@ async function listPlatforms(env: ToolEnv, input: Input) {
   const version = optionalStr(input, 'version') ?? first?.version ?? 'latest';
   const arch = optionalStr(input, 'arch') ?? first?.arch ?? 'x86_64';
   if (!VERSION.test(version)) throw new ToolError('version is "latest" or a release such as "3.27.1"');
-  const [packages, images, latest] = await Promise.all([
+  const [packages, images, latestMasterfiles] = await Promise.all([
     api()
       .testEnvPlatforms({ arch, edition, version })
-      .then(result => ({ platforms: new Map(result.platforms.map(platform => [platform.id, platform])), error: null }))
-      .catch((error: unknown) => ({ platforms: null, error: error instanceof Error ? error.message : String(error) })),
+      .then(result => ({ platforms: new Map(result.platforms.map(platform => [platform.id, platform])), latest: result.latest, error: null }))
+      .catch((error: unknown) => ({ platforms: null, latest: null, error: error instanceof Error ? error.message : String(error) })),
     api()
       .testEnvImages()
       .then(result => new Map(result.platforms.map(platform => [platform.id, platform])))
@@ -158,7 +158,11 @@ async function listPlatforms(env: ToolEnv, input: Input) {
     packagesUnknown: packages.error ? `Couldn’t check packages (offline?): ${packages.error}` : undefined,
     editions: ['community', 'enterprise'],
     arches: ['x86_64', 'aarch64'],
-    versions: { latest, note: '"latest", or any CFEngine release such as "3.27.1"' },
+    versions: {
+      latest: packages.latest,
+      masterfiles: env.getState().project?.masterfiles ?? latestMasterfiles,
+      note: '"latest" installs the latest CFEngine release; the policy is built on the project’s masterfiles, which may be older'
+    },
     customImages: 'A host may run any Docker image with apt or dnf (e.g. "rockylinux:9"): give it as image, with the platform whose package it takes'
   };
 }

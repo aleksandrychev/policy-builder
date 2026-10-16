@@ -130,7 +130,9 @@ def test_platforms_say_which_have_client_and_hub_packages(monkeypatch):
     detail = json.loads((RELEASES / "enterprise-3.27.1.json").read_text())
     monkeypatch.setattr(cfpb_testenv, "_fetch_json", lambda url: releases if url.endswith("releases.json") else detail)
 
-    found = cfpb_testenv.platforms({"edition": "enterprise", "version": "3.27.1", "arch": "x86_64"})["platforms"]
+    answer = cfpb_testenv.platforms({"edition": "enterprise", "version": "3.27.1", "arch": "x86_64"})
+    assert answer["latest"] == next(r["version"] for r in releases["releases"] if r.get("latest_stable"))
+    found = answer["platforms"]
     support = {p["id"]: (p["client"], p["hub"]) for p in found}
 
     assert support["ubuntu-22"] == (True, True)

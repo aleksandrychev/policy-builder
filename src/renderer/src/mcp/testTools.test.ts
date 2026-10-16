@@ -51,10 +51,11 @@ beforeEach(() => {
   doctor.mockResolvedValue({ available: true, problem: null, message: 'Docker 28', host: 'unix:///docker.sock', version: '28', arch: 'aarch64' });
   installApi({
     testEnvDoctor: doctor,
-    getMasterfilesVersions: async () => ({ latest: '3.28.0' }),
+    getMasterfilesVersions: async () => ({ latest: '3.27.1' }),
     testEnvImages: async () => ({ platforms: [{ id: 'ubuntu-22', label: 'Ubuntu 22.04', image: 'ubuntu:22.04', present: true }] }),
     // Every platform has packages, except an RHEL 7 Enterprise hub.
     testEnvPlatforms: async ({ edition }) => ({
+      latest: '3.28.0',
       platforms: ['ubuntu-22', 'ubuntu-24', 'debian-12', 'rhel-7'].map(id => ({
         id,
         label: id,
@@ -75,7 +76,7 @@ describe('Docker and platforms', () => {
 
   it('lists every platform with its image and packages', async () => {
     const result = await call('list_test_platforms', { edition: 'enterprise', version: '3.27.1' });
-    expect(result).toMatchObject({ edition: 'enterprise', version: '3.27.1', arch: 'x86_64', versions: { latest: '3.28.0' } });
+    expect(result).toMatchObject({ edition: 'enterprise', version: '3.27.1', arch: 'x86_64', versions: { latest: '3.28.0', masterfiles: '3.27.1' } });
     expect(result.platforms.find((p: { id: string }) => p.id === 'ubuntu-22')).toMatchObject({ image: 'ubuntu:22.04', pulled: true, hubPackage: true });
     expect(result.platforms.find((p: { id: string }) => p.id === 'rhel-7')).toMatchObject({ clientPackage: true, hubPackage: false });
     expect(result.platforms.find((p: { id: string }) => p.id === 'rhel-10')).toMatchObject({ clientPackage: null });
@@ -200,7 +201,7 @@ describe('runs', () => {
     finishesWithProblem();
     const result = await call('run_tests');
     expect(vi.mocked(startAction).mock.calls[0][1]).toBe('test');
-    expect(vi.mocked(startAction).mock.calls[0][2]).toMatchObject({ environment, masterfiles: '3.28.0', envFile: null });
+    expect(vi.mocked(startAction).mock.calls[0][2]).toMatchObject({ environment, masterfiles: '3.27.1', envFile: null });
     expect(result).toMatchObject({ status: 'failed', hosts: [{ name: 'hub', role: 'hub', compliance: { kept: 90, notKept: 5 }, converged: false }] });
     expect(result.hosts[0].problems[0]).toMatchObject({
       message: 'Package nginx not installed',

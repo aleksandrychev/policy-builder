@@ -416,7 +416,7 @@ declare global {
         arch: string;
         edition: string;
         version: string;
-      }) => Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
+      }) => Promise<{ latest: string | null; platforms: { client: boolean; hub: boolean; id: string; label: string }[] }>;
       /** Images for a custom host: pulled ones matching `term`, and Docker Hub's when `hub`. */
       testEnvSearch: (query: { hub: boolean; term: string }) => Promise<ImageSearch>;
       /** Starts a streaming action (pull a base image; an environment's up / run / stop / destroy); resolves with the run id its events (onTestEnvEvent) carry. */

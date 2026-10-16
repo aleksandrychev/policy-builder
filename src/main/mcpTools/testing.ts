@@ -42,7 +42,7 @@ export function registerTestTools(server: McpServer, answer: Answer) {
     'list_test_platforms',
     {
       description:
-        'What a test host can run: each platform (id, label, base image, whether it is pulled) and whether the edition / version / architecture has a CFEngine client package and a hub package for it; plus the editions, architectures and the latest version. Defaults to the first environment’s edition, version and arch. Checking packages needs the internet.',
+        'What a test host can run: each platform (id, label, base image, whether it is pulled) and whether the edition / version / architecture has a CFEngine client package and a hub package for it; plus the editions, architectures, the CFEngine release “latest” installs and the masterfiles the policy is built on (which may be older). Defaults to the first environment’s edition, version and arch. Checking packages needs the internet.',
       inputSchema: {
         edition: z.enum(['community', 'enterprise']).optional(),
         version: z.string().optional().describe('"latest" or a release such as "3.27.1"'),

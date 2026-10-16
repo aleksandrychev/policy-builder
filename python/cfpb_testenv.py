@@ -275,9 +275,8 @@ def _matches(classexpr: str, platform: str, arch: str) -> bool:
     return expr_arch == arch and platform in re.findall(r"[a-z]+_\d+", systems)
 
 
-def find_package(releases: dict, detail_of, edition: str, version: str, platform: str, arch: str, hub: bool) -> dict:
-    """The package for a host, from CFEngine's release data (what cf-remote reads).
-    `version`: an exact release, or "latest" for the latest stable one."""
+def _release(releases: dict, edition: str, version: str) -> dict:
+    """The release data's entry for a version, or for "latest" the latest stable one."""
     entries = [r for r in releases.get("releases", []) if not r.get("debug")]
     if version == "latest":
         entry = next((r for r in entries if r.get("latest_stable")), None)
@@ -285,6 +284,13 @@ def find_package(releases: dict, detail_of, edition: str, version: str, platform
         entry = next((r for r in entries if r.get("version") == version), None)
     if entry is None:
         raise RunnerError(f"No CFEngine {edition} release {version}")
+    return entry
+
+
+def find_package(releases: dict, detail_of, edition: str, version: str, platform: str, arch: str, hub: bool) -> dict:
+    """The package for a host, from CFEngine's release data (what cf-remote reads).
+    `version`: an exact release, or "latest" for the latest stable one."""
+    entry = _release(releases, edition, version)
     detail = detail_of(entry["URL"])
     for items in detail.get("artifacts", {}).values():
         for item in items:
@@ -616,7 +622,9 @@ def platforms(query: dict) -> dict:
         {"id": key, "label": spec["label"], "client": has(spec["package"], False), "hub": has(spec["package"], True)}
         for key, spec in PLATFORMS.items()
     ]
-    return {"platforms": listed}
+    # "latest" installs this release, which may be newer than the latest masterfiles.
+    latest = next((r["version"] for r in releases.get("releases", []) if r.get("latest_stable")), None)
+    return {"platforms": listed, "latest": latest}
 
 
 def _labelled(engine, env: dict) -> dict:

@@ -142,7 +142,7 @@ const api = {
     arch: string;
     edition: string;
     version: string;
-  }): Promise<{ platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
+  }): Promise<{ latest: string | null; platforms: { client: boolean; hub: boolean; id: string; label: string }[] }> => invoke('testenv:platforms', query),
   testEnvSearch: (query: { hub: boolean; term: string }): Promise<ImageSearch> => invoke('testenv:search', query),
   testEnvStatus: (request: TestEnvRequest): Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }> =>
     invoke('testenv:status', request),
