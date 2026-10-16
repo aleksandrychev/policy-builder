@@ -14,10 +14,7 @@
       "promiser": "{{destination}}",
       "attributes": {
         "repository": "{{repository}}",
-        "version": {
-          "if_set": "version",
-          "value": "{{version}}"
-        },
+        "version": "{{version}}",
         "update": "{{update}}",
         "force": "{{force}}",
         "depth": {
@@ -47,9 +44,8 @@
       "name": "version",
       "label": "Branch, tag or commit",
       "type": "string",
-      "required": false,
-      "default": "",
-      "help": "Empty: the remote's default branch."
+      "required": true,
+      "help": "E.g. main or master: the git module can't follow the remote's default branch unnamed."
     },
     {
       "name": "update",
