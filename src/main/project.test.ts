@@ -4,7 +4,7 @@ import { join } from 'path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProjectContent } from '../preload/api';
-import { compilePolicy, initCfbsProject } from './backend';
+import { compilePolicy, initCfbsProject, syncModules } from './backend';
 import {
   checkedAbsolutePath,
   checkedContent,
@@ -34,7 +34,7 @@ vi.mock('electron', async importOriginal => {
   };
 });
 
-vi.mock('./backend', () => ({ compilePolicy: vi.fn(), initCfbsProject: vi.fn(), masterfilesEntry: vi.fn() }));
+vi.mock('./backend', () => ({ compilePolicy: vi.fn(), initCfbsProject: vi.fn(), masterfilesEntry: vi.fn(), syncModules: vi.fn() }));
 
 let temp = '';
 
@@ -327,6 +327,62 @@ describe('IPC handlers', () => {
 
   it('refuses an untrusted sender', () => {
     expect(() => electron.handlers.get('project:save')?.(ipcEvent(false), {})).toThrow('untrusted sender');
+  });
+
+  describe('CFEngine Build modules', () => {
+    const sync = vi.mocked(syncModules);
+    const files = { variable: 'files', type: 'list', subtype: [{ key: 'path', type: 'string' }] };
+    const entry = { name: 'delete-files', commit: 'abc', version: '2.0.0', added_by: 'cfbs add', input: [files] };
+    const cfbs = async () => JSON.parse(await fs.readFile(join(project(), 'cfbs.json'), 'utf-8'));
+    const inputFile = () => join(project(), 'delete-files', 'input.json');
+
+    beforeEach(() => {
+      sync.mockReset();
+      // As cfbs add / remove do: the entries go into cfbs.json, dependencies first.
+      sync.mockImplementation(async (directory, add, remove) => {
+        const path = join(directory, 'cfbs.json');
+        const config = JSON.parse(await fs.readFile(path, 'utf-8'));
+        config.build = [...config.build.filter((item: { name: string }) => !remove.includes(item.name)), ...(add.includes('delete-files') ? [entry] : [])];
+        await fs.writeFile(path, JSON.stringify(config));
+      });
+    });
+
+    it('adds a module with cfbs on save, writes its answers, and opens with them', async () => {
+      await open();
+      const buildModules = [{ name: 'delete-files', input: { files: [{ path: '/etc/hosts.equiv' }] } }];
+      expect((await save({ buildModules })).ok).toBe(true);
+      expect(sync).toHaveBeenCalledWith(project(), ['delete-files'], []);
+      // Modules before the project's own policy.
+      expect((await cfbs()).build.map((item: { name: string }) => item.name)).toEqual(['masterfiles', 'delete-files', './main.cf']);
+      expect(JSON.parse(await fs.readFile(inputFile(), 'utf-8'))).toEqual([{ ...files, response: [{ path: '/etc/hosts.equiv' }] }]);
+      expect(await open()).toMatchObject({ moduleInputs: { 'delete-files': [{ variable: 'files', response: [{ path: '/etc/hosts.equiv' }] }] } });
+
+      sync.mockClear();
+      expect((await save({ buildModules })).ok).toBe(true);
+      expect(sync).not.toHaveBeenCalled();
+    });
+
+    it('removes a module the project dropped, and its input file', async () => {
+      await open();
+      await save({ buildModules: [{ name: 'delete-files', input: { files: [] } }] });
+      expect((await save({ buildModules: [] })).ok).toBe(true);
+      expect(sync).toHaveBeenLastCalledWith(project(), [], ['delete-files']);
+      await expect(fs.stat(join(project(), 'delete-files'))).rejects.toThrow();
+    });
+
+    it('refuses a module name that isn’t one, and leaves a module project alone', async () => {
+      await open();
+      expect(await save({ buildModules: [{ name: '../evil' }] })).toMatchObject({ ok: false, message: 'Invalid modules' });
+      expect((await save({ buildModules: [{ name: 'delete-files' }], storage: { type: 'module', masterfiles: null } })).ok).toBe(true);
+      expect(sync).not.toHaveBeenCalled();
+    });
+
+    it('fails the save, writing nothing, when cfbs can’t add a module', async () => {
+      sync.mockRejectedValue(new Error('Couldn’t download delete-files — check your network connection.'));
+      await open();
+      expect(await save({ buildModules: [{ name: 'delete-files' }] })).toMatchObject({ ok: false, message: expect.stringContaining('network') });
+      await expect(fs.stat(join(project(), 'main.cf'))).rejects.toThrow();
+    });
   });
 
   it('saves only into a project opened in this session', async () => {
