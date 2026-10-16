@@ -212,3 +212,9 @@ describe('pattern safety', () => {
     expect(() => run('regex-replace', { pattern, replacement: '', options: 'g' }, 'aaaa')).not.toThrow();
   });
 });
+
+describe('difference (Remove entries)', () => {
+  it('drops every entry that is in the list', () => {
+    expect(run('difference', { entries: 'b\nx' }, ['a', 'b', 'c', 'b'])).toEqual(['a', 'c']);
+  });
+});

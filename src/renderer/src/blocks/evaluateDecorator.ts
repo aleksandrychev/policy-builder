@@ -236,6 +236,10 @@ export function evaluateDecorator(decorator: Decorator, given: Record<string, st
       return nth(asList(input), params.index);
     case 'length':
       return String(asList(input).length);
+    case 'difference': {
+      const removed = new Set((params.entries ?? '').split('\n').filter(Boolean));
+      return asList(input).filter(entry => !removed.has(entry));
+    }
     default:
       return applyFallback(decorator, params, input) ?? input;
   }
