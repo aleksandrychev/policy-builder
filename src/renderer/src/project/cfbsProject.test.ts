@@ -41,6 +41,14 @@ describe('cfbsProject', () => {
     expect(restored.derivedNodes).toEqual(state.derivedNodes);
   });
 
+  it('keeps the advice the project ignores', () => {
+    const { state } = buildProject();
+    const saved = toCfbsProject({ ...state, dismissedAdvice: ['python3'] }, IDENTITY);
+    expect(saved.project.dismissed_advice).toEqual(['python3']);
+    expect(fromBuilderProject(asBuilderJson(saved)).dismissedAdvice).toEqual(['python3']);
+    expect('dismissed_advice' in toCfbsProject({ ...state, dismissedAdvice: [] }, IDENTITY).project).toBe(false);
+  });
+
   it('mirrors the file tree: a top-level file is a file module, a top-level folder a directory module', () => {
     const { fileId, folderId, state } = buildProject();
     const { project, modules } = toCfbsProject(state, IDENTITY);

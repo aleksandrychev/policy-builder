@@ -1,11 +1,16 @@
 import type { SvgIconComponent } from '@mui/icons-material';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
+import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined';
+import ForkRightIcon from '@mui/icons-material/ForkRight';
+import HttpIcon from '@mui/icons-material/Http';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MemoryOutlinedIcon from '@mui/icons-material/MemoryOutlined';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlineOutlined';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -25,5 +30,11 @@ export const PROMISE_TYPE_ICONS: Record<string, SvgIconComponent> = {
   reports: ArticleOutlinedIcon,
   commands: TerminalIcon,
   processes: MemoryOutlinedIcon,
-  methods: AccountTreeOutlinedIcon
+  methods: AccountTreeOutlinedIcon,
+  // Custom promise types, from CFEngine Build modules.
+  git: ForkRightIcon,
+  systemd: CloudSyncOutlinedIcon,
+  http: HttpIcon,
+  ansible: PlaylistPlayIcon,
+  promise: ExtensionOutlinedIcon
 };

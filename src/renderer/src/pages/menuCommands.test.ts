@@ -18,7 +18,7 @@ function context(overrides: Partial<Omit<ProjectCommandContext, 'edit' | 'view'>
       undo: vi.fn(),
       ungroup: vi.fn()
     },
-    view: { showTab: vi.fn(), tidy: vi.fn(), toggleMaximized: vi.fn(), zoom: vi.fn() },
+    view: { showSideView: vi.fn(), showTab: vi.fn(), tidy: vi.fn(), toggleMaximized: vi.fn(), zoom: vi.fn() },
     ...overrides
   } satisfies ProjectCommandContext;
 }

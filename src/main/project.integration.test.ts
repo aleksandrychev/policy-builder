@@ -233,3 +233,68 @@ describe('module projects', () => {
     expect(await buildNames()).toEqual(['./main.cf', './services/']);
   });
 });
+
+describe('CFEngine Build modules', () => {
+  // A module in a local git repository, listed by a custom index: cfbs adds and fetches it offline.
+  async function localModule(): Promise<string> {
+    const repo = join(temp, 'tiny-module');
+    await fs.mkdir(repo);
+    await fs.writeFile(join(repo, 'policy.cf'), 'bundle agent tiny_main\n{\n  reports:\n    "$(tiny:main.greeting)";\n}\n');
+    git(repo, 'init', '-q');
+    git(repo, 'add', '.');
+    git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', 'Tiny module');
+    const commit = git(repo, 'rev-parse', 'HEAD');
+    // cfbs takes a custom index by a path relative to the project.
+    const index = join(project(), 'index.json');
+    const entry = {
+      description: 'A tiny module',
+      tags: ['experimental'],
+      repo: `file://${repo}`,
+      by: 'https://github.com/example',
+      version: '1.0.0',
+      commit,
+      steps: [
+        'copy policy.cf services/cfbs/modules/tiny-module/policy.cf',
+        'input ./input.json def.json',
+        'policy_files services/cfbs/modules/tiny-module/policy.cf',
+        'bundles tiny_main'
+      ],
+      input: [{ type: 'string', variable: 'greeting', namespace: 'tiny', bundle: 'main', label: 'Greeting' }]
+    };
+    await fs.writeFile(index, JSON.stringify({ name: 'test-index', type: 'index', index: { 'tiny-module': entry } }));
+    await fs.writeFile(join(project(), 'cfbs.json'), JSON.stringify({ ...(await readJson(join(project(), 'cfbs.json'))), index: './index.json' }));
+    return commit;
+  }
+
+  beforeEach(() => vi.stubEnv('CFBS_GLOBAL_DIR', join(temp, 'cfbs-global')));
+
+  it('adds a module with cfbs on save, writes its answers, builds with them, and removes it', async () => {
+    const content = builderContent([mainFile]);
+    expect((await create(content)).ok).toBe(true);
+    const commit = await localModule();
+
+    const buildModules = [{ name: 'tiny-module', input: { greeting: 'hello' } }];
+    expect(await save({ ...content, buildModules })).toEqual({ ok: true, masterfiles: null });
+    expect(await buildNames()).toEqual(['tiny-module', './main.cf']);
+    expect(((await readJson(join(project(), 'cfbs.json'))).build as Json[])[0]).toMatchObject({ commit, added_by: 'cfbs add' });
+    expect(await readJson(join(project(), 'tiny-module', 'input.json'))).toEqual([expect.objectContaining({ variable: 'greeting', response: 'hello' })]);
+    expect(await open()).toMatchObject({ moduleInputs: { 'tiny-module': [expect.objectContaining({ response: 'hello' })] } });
+
+    execFileSync(join(process.cwd(), 'python/.venv/bin/cfbs'), ['build'], { cwd: project(), stdio: 'pipe' });
+    expect(await readJson(join(project(), 'out', 'masterfiles', 'def.json'))).toMatchObject({ variables: { 'tiny:main.greeting': { value: 'hello' } } });
+
+    expect(await save({ ...content, buildModules: [] })).toEqual({ ok: true, masterfiles: null });
+    expect(await buildNames()).toEqual(['./main.cf']);
+    expect(await exists(join(project(), 'tiny-module'))).toBe(false);
+  });
+
+  it('fails the save, leaving the project as it was, for a module cfbs doesn’t know', async () => {
+    const content = builderContent([mainFile]);
+    expect((await create(content)).ok).toBe(true);
+    await localModule();
+    const before = await fs.readFile(join(project(), 'cfbs.json'), 'utf-8');
+    const result = await save({ ...content, buildModules: [{ name: 'no-such-module' }] });
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining('no-such-module') });
+    expect(await fs.readFile(join(project(), 'cfbs.json'), 'utf-8')).toBe(before);
+  });
+});

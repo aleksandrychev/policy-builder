@@ -16,9 +16,11 @@ import { moduleNameFor } from './moduleName';
 const snapshotOf = (state: RootState): ProjectData => ({
   canvas: state.canvas,
   derivedNodes: state.derivedNodes,
+  dismissedAdvice: state.dismissedAdvice,
   edges: state.edges,
   files: state.files,
   groups: state.groups,
+  modules: state.modules,
   testEnvironments: state.testEnvironments
 });
 
@@ -188,7 +190,7 @@ export function useProjectSession() {
       const result = await window.api.openProject(path ? { path } : {});
       if (!result) return;
       if (!result.ok) throw new Error(result.message);
-      const { data, ...project } = loadCfbsProject(result.cfbs, result.builder, folderNameOf(result.path), result.testEnvironments);
+      const { data, ...project } = loadCfbsProject(result.cfbs, result.builder, folderNameOf(result.path), result.testEnvironments, result.moduleInputs);
       dispatch(projectLoaded({ ...project, path: result.path }, data));
       dispatch(historyCleared());
       markSaved();

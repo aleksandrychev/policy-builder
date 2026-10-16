@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import cfpb_backend
-from cfpb_backend import main
+from cfpb_backend import InitFailed, add_build_modules, main
 
 UNFORMATTED = 'bundle agent main\n{\n  reports:\n  "hello"    ;\n}\n'
 FORMATTED = 'bundle agent main\n{\n  reports:\n    "hello";\n}\n'
@@ -458,3 +458,58 @@ def test_sigterm_runs_the_cleanup_before_exiting():
     stdout, _ = process.communicate(timeout=10)
     assert stdout == "cleaned up\n"
     assert process.returncode == 143
+
+
+def test_modules_takes_a_project_and_module_names(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Nothing runs for a folder without cfbs.json, or a name cfbs wouldn't take.
+    request = lambda **parts: json.dumps({"directory": str(tmp_path), **parts})
+    assert _run(["modules"], request(add=["delete-files"]), monkeypatch)[0] == 2
+    (tmp_path / "cfbs.json").write_text("{}")
+    assert _run(["modules"], request(add=["../evil"]), monkeypatch)[0] == 2
+    code, stdout, _ = _run(["modules"], request(add=[], remove=[]), monkeypatch)
+    assert code == 0 and json.loads(stdout) == {"added": [], "removed": []}
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_add_build_modules_adds_them_with_cfbs_and_writes_their_answers(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    import subprocess
+
+    monkeypatch.setenv("CFBS_GLOBAL_DIR", str(tmp_path / "cfbs-global"))
+    # A module in a local git repository, listed by a custom index: cfbs adds it offline.
+    repo = tmp_path / "tiny-module"
+    repo.mkdir()
+    (repo / "policy.cf").write_text("bundle agent tiny_main {}\n")
+    git = lambda *args: subprocess.run(
+        ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    git("init", "-q")
+    git("add", ".")
+    git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qm", "Tiny")
+    question = {
+        "type": "string",
+        "variable": "greeting",
+        "namespace": "tiny",
+        "bundle": "main",
+        "label": "Greeting",
+        "question": "Say what?",
+    }
+    entry = {"description": "Tiny", "tags": [], "repo": f"file://{repo}", "by": "x", "version": "1.0.0"}
+    entry |= {
+        "commit": git("rev-parse", "HEAD"),
+        "steps": ["copy policy.cf services/tiny/policy.cf"],
+        "input": [question],
+    }
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "index.json").write_text(json.dumps({"type": "index", "index": {"tiny-module": entry}}))
+    (project / "cfbs.json").write_text(
+        json.dumps({"name": "t", "description": "t", "type": "policy-set", "index": "./index.json", "build": []})
+    )
+
+    added = add_build_modules(str(project), [{"name": "tiny-module", "input": {"greeting": "hi"}}])
+
+    assert added == ["tiny-module"]
+    assert [e["name"] for e in json.loads((project / "cfbs.json").read_text())["build"]] == ["tiny-module"]
+    assert json.loads((project / "tiny-module" / "input.json").read_text()) == [{**question, "response": "hi"}]
+    with pytest.raises(InitFailed, match="Invalid module name"):
+        add_build_modules(str(project), [{"name": "../evil"}])

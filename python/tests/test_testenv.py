@@ -600,3 +600,33 @@ def test_a_policy_the_hub_refuses_is_traced_to_its_block():
 
     assert (problem["block"], problem["fileId"], problem["file"], problem["line"]) == ("mark", "f", "./site.cf", line)
     assert problem["message"] == "Attempted to give a scalar to a non-scalar type"
+
+
+def test_a_test_build_adds_the_project_modules_before_its_policy(tmp_path: Path, monkeypatch):
+    (tmp_path / "masterfiles" / "3.27.1").mkdir(parents=True)
+    (tmp_path / "masterfiles" / "3.27.1" / "cfbs.json").write_text("{}")
+    calls = []
+    monkeypatch.setattr(cfpb_backend, "add_build_modules", lambda work, modules: calls.append(("add", modules)))
+    monkeypatch.setattr(
+        cfpb_backend, "_update_cfbs_json", lambda *args: (calls.append(("policy",)), _stop_building())[1]
+    )
+    modules = [{"name": "delete-files", "input": {"files": []}}, {"name": "library-x", "addedBy": "promise-type-x"}]
+    with pytest.raises(_Built):
+        cfpb_testenv.build_policy({"buildModules": modules}, "3.27.1", str(tmp_path), str(tmp_path / "work"))
+    assert calls == [("add", modules), ("policy",)]
+
+
+def test_a_promise_modules_error_is_traced_by_the_place_it_names():
+    lines = [
+        "    info: Successfully installed package 'git'",
+        "   error: Unknown attribute 'comment' for git promise with promiser '/srv/app' (/var/cfengine/inputs/services/cfbs/site.cf:30)",
+        "/var/cfengine/inputs/services/cfbs/site.cf:56:3: error: Undefined promise type 'json'",
+    ]
+    source_map = {"./site.cf": {"clone": [[25, 35]], "config": [[50, 60]]}}
+
+    first, second = cfpb_testenv.find_problems(lines, source_map, {"clone": "f", "config": "f"})
+
+    # The info line before it was another promise's.
+    assert (first["block"], first["line"], first["cause"]) == ("clone", 30, [])
+    assert (second["block"], second["line"]) == ("config", 56)
+    assert second["message"].startswith("Undefined promise type 'json'")

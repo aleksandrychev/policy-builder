@@ -29,6 +29,8 @@ export type NativeEdit = 'copy' | 'cut' | 'delete' | 'paste' | 'redo' | 'selectA
 // What the builder saves: its cfbs.json modules (`build` entries for a policy set, the one
 // `provides` entry for a module), and its own data for .policy-builder/project.json.
 export interface ProjectContent {
+  // The CFEngine Build modules a policy set has (cfbs add / remove on save), with input answers.
+  buildModules?: { addedBy?: string; input?: Record<string, unknown>; name: string }[];
   modules: object[];
   project: object;
   provided: object;
@@ -266,6 +268,21 @@ export interface GitStatus {
 
 export type OperationResult<T> = ({ ok: true } & T) | { details: string; message: string; ok: false };
 
+/** The CFEngine Build module index: downloaded, or offline the last copy (none: index null). */
+export interface ModuleIndexResult {
+  error?: string;
+  fetchedAt: string | null;
+  index: Record<string, unknown> | null;
+  offline: boolean;
+}
+
+/** A module's details on build.cfengine.com (README as HTML, author, downloads, versions, links); null if unlisted. */
+export interface ModuleDetailsResult {
+  details: Record<string, unknown> | null;
+  error?: string;
+  offline: boolean;
+}
+
 export interface MasterfilesVersions {
   latest: string;
 }
@@ -275,6 +292,8 @@ export interface OpenedProject {
   builder: Record<string, unknown> | null;
   // The parsed cfbs.json.
   cfbs: Record<string, unknown>;
+  // Each CFEngine Build module's parsed <name>/input.json, when it has one.
+  moduleInputs: Record<string, unknown>;
   path: string;
   // The parsed .policy-builder/test-environments.json's environments, null without.
   testEnvironments: unknown[] | null;
@@ -325,6 +344,10 @@ declare global {
       getLayoutSettings: () => Promise<LayoutSettings | null>;
       /** Newest 3.27.x masterfiles release (built-in fallback when offline). */
       getMasterfilesVersions: () => Promise<MasterfilesVersions>;
+      /** A module's details as build.cfengine.com shows them: README, author, downloads, versions, links. */
+      getModuleDetails: (name: string) => Promise<ModuleDetailsResult>;
+      /** The CFEngine Build module index (once per session, or again with refresh). */
+      getModuleIndex: (refresh?: boolean) => Promise<ModuleIndexResult>;
       /** The file-system path of a File dropped onto the window. */
       getPathForFile: (file: File) => string;
       /** The last few opened/created projects, most recent first. */

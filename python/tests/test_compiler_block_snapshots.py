@@ -23,6 +23,11 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
     "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
+    "custom-promise": {
+        "promise_type": "json",
+        "promiser": "/etc/app/config.json",
+        "attributes": 'field = name\nvalue = shop\nlist = { "a", "b" }',
+    },
     "custom-cfengine": {
         "promises": 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    depth_search => default:recurse("inf");',
         "definitions": 'body copy_from mirror(from)\n{\n  source => "$(from)";\n  purge => "true";\n}',
@@ -31,7 +36,26 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "create-edit-file": {"path": "/etc/app.conf", "content": 'name = "app"\nport = 8080\n'},
     "create-symlink": {"link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app"},
     "cron-job": {"command": "/usr/local/bin/backup.sh", "hours": "3", "minutes": "30"},
+    "ansible-playbook": {
+        "playbook": "/srv/ansible/site.yml",
+        "tags": "web\ndb",
+        "become_user": "",
+        "inventory": "",
+        "limit": "",
+    },
     "ensure-lines": {"path": "/etc/hosts", "lines": "127.0.0.1 app.local\n10.0.0.5 db.local"},
+    "git-checkout": {
+        "destination": "/srv/app",
+        "repository": "https://github.com/cfengine/starter_pack",
+        "version": "main",
+        "depth": "",
+    },
+    "http-request": {
+        "url": "https://cfengine.com/images/cfengine-logo.svg",
+        "file": "/var/cfengine/logo.svg",
+        "headers": "Accept: image/svg+xml",
+        "payload": "",
+    },
     "install-package": {"package_name": "nginx", "version": ""},
     "manage-service": {"service_name": "nginx"},
     "manage-users": {"username": "deploy"},
@@ -48,6 +72,13 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "set-config-values": {"path": "/etc/ssh/sshd_config", "settings": "PermitRootLogin no\nMaxAuthTries 3"},
     "set-permissions": {"path": "/etc/shadow", "mode": "640", "group": "shadow"},
     "signal-process": {"process_pattern": "nginx: master.*"},
+    "systemd-unit": {
+        "name": "myapp",
+        "exec_start": "/usr/bin/myapp --port 8080",
+        "after": "network-online.target",
+        "unit_description": "My app",
+        "service_user": "",
+    },
     "watch-file": {"path": "/etc/passwd\n/etc/group"},
 }
 

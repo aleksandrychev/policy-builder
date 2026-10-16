@@ -110,6 +110,10 @@ test.describe('with Docker', () => {
       const response = await fetch('http://localhost:8080/');
       expect(response.status).toBe(200);
       expect(await response.text()).toContain('CFEngine Policy Builder demo project');
+      // The logo the http promise downloaded (promise-type-http, added with its block).
+      const logo = await fetch('http://localhost:8080/cfengine-logo.svg');
+      expect(logo.status).toBe(200);
+      expect(await logo.text()).toContain('<svg');
     });
 
     await test.step('Stop, then Destroy containers', async () => {

@@ -35,7 +35,16 @@ import { ShipDialog, type ShipPlan, type ShipStep, planShip } from './deploy/shi
 // The project as saving writes it, without test environments: what a test run deployed.
 const snapshot = (): ProjectData => {
   const state = store.getState();
-  return { canvas: state.canvas, derivedNodes: state.derivedNodes, edges: state.edges, files: state.files, groups: state.groups, testEnvironments: [] };
+  return {
+    canvas: state.canvas,
+    derivedNodes: state.derivedNodes,
+    edges: state.edges,
+    files: state.files,
+    groups: state.groups,
+    modules: state.modules,
+    dismissedAdvice: state.dismissedAdvice,
+    testEnvironments: []
+  };
 };
 
 type GitResult = { details: string; message: string; ok: false } | { ok: true; status: GitStatus };

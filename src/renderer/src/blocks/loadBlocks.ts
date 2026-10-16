@@ -23,6 +23,7 @@ const CATEGORY_ORDER = [
   'Storage',
   'Reports',
   'Processes',
+  'From modules',
   'Methods'
 ];
 

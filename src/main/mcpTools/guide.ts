@@ -17,7 +17,7 @@ Policy Builder builds CFEngine policy from blocks on a canvas. You change the pr
 
 1. **begin_work** with one sentence on what you're about to do. The user sees it, and the editor is locked so they don't edit at the same time. Always pair it with **end_work**.
 2. **get_project_status** / **get_project_overview**: what's open, its files and their namespaces, what's selected. Open or create a project first if none is (create_project, open_project).
-3. **Plan from the block catalog**: list_block_types, then get_block_type for each type you'll use. Use its parameter names, options and required fields exactly; values are checked like the Properties form checks them.
+3. **Plan from the block catalog**: list_block_types, then get_block_type for each type you'll use (\`{ "blockType": "<its id>" }\`). Use its parameter names, options and required fields exactly; values are checked like the Properties form checks them.
 4. **Edit**: add_block, update_block, connect; variables and classes with add_entry; transformers; conditions. Each call is one undo step for the user. add_block takes a condition, a group and an arrow into the block (after) in the same call; add_blocks adds a list of blocks (chained by index) in one call, all or nothing; add_file takes a description and condition.
 5. **tidy_file** after adding or connecting several blocks, so the canvas reads top to bottom in run order.
 6. **Check**: get_warnings (empty required parameters, values a parameter doesn't take, and notCompiled: blocks or entries the policy leaves out, with why), then get_generated_policy for the file you changed: read the promises you meant to write.
@@ -56,6 +56,16 @@ const blocks = `# Blocks, arrows and groups
 ## Groups
 - group_blocks puts blocks into a frame that runs as one step (its own bundle). Arrows into and out of the group attach to its frame; an arrow out of a group reads the group's combined outcome.
 - Use groups for a set of blocks that belong together ("Configure nginx"), and set_group_condition to gate them all.
+
+## CFEngine Build modules
+- build.cfengine.com has ready-made modules: inventory, compliance reports, hardening, configured tasks (delete-files, allow-hosts, clamav…) and promise types. Before building something from blocks, search_modules for it; get_module shows what one does (its README), its input questions and dependencies.
+- add_module adds it to the project (a policy set); saving installs it with cfbs. A module with input needs every question answered: set_module_input with text, a list of texts, or rows keyed by the list's fields. get_project_overview lists the project's modules.
+- Modules run before the project's own policy, in their build order; they're not blocks and have no arrows.
+
+## Blocks from CFEngine Build modules
+- Git Checkout (git-checkout), Systemd Unit (systemd-unit), HTTP Request (http-request) and Run Ansible Playbook (ansible-playbook) are custom promise types (git:, systemd:, http:, ansible:). Adding one adds its module (promise-type-git…) to the project; saving installs it with cfbs (needs the internet once). Hosts need python3 (test hosts have it; get_warnings advises an Install Package block for python3 before such blocks, until the project has one or the user ignores the advice), and git or Ansible for those blocks.
+- Custom Promise (custom-promise) is any other module promise type (json, yaml, groups, sshd, symlinks, docker_compose, appstreams, assert): pick promise_type, set the promiser and attributes as \`name = value\` lines (a list: \`name = { "a", "b" }\`); its module is added the same way. Its README (the module's page) lists the attributes.
+- Use them rather than Run Command for cloning repositories, systemd units, HTTP requests and playbooks: they report kept/repaired properly, so arrows and How often work.
 
 ## Custom CFEngine (hand-written promises)
 - For what no block covers (a custom body, a promise type without a block, an attribute no block offers), the Custom CFEngine block (custom-cfengine) holds CFEngine text: \`promises\` (promise sections as in a bundle agent, e.g. \`files:\` then its promises) and \`definitions\` (the bodies and bundles they use). It runs as a bundle of its own, in order, with the block's condition, arrows, How often and note like any block.

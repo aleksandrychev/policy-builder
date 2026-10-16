@@ -10,6 +10,7 @@ import { compilePolicy, formatPolicy, lintCustom, warmUpSidecar } from './backen
 import { registerDeployHandlers } from './deploy';
 import { registerHubHandlers } from './hub';
 import { registerMcpHandlers } from './mcp';
+import { registerModuleHandlers } from './modules';
 import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
 import { registerTestEnvHandlers } from './testenv';
 
@@ -198,6 +199,10 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
           click: command(`tab-${index}`)
         })),
         { type: 'separator' },
+        { label: 'Toggle Side Bar', accelerator: 'CmdOrCtrl+B', enabled: hasProject, click: command('sidebar-toggle') },
+        { label: 'Blocks and Files', accelerator: 'Shift+CmdOrCtrl+E', enabled: hasProject, click: command('view-policy') },
+        { label: 'Modules', accelerator: 'Shift+CmdOrCtrl+X', enabled: hasProject, click: command('view-modules') },
+        { type: 'separator' },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', registerAccelerator: false, enabled: hasProject, click: command('zoomIn') },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', registerAccelerator: false, enabled: hasProject, click: command('zoomOut') },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', registerAccelerator: false, enabled: hasProject, click: command('zoomReset') },
@@ -365,6 +370,7 @@ app.whenReady().then(() => {
   });
 
   registerProjectHandlers(isTrustedFrame);
+  registerModuleHandlers(isTrustedFrame);
   registerTestEnvHandlers(isTrustedFrame);
   registerDeployHandlers(isTrustedFrame);
   registerHubHandlers(isTrustedFrame);

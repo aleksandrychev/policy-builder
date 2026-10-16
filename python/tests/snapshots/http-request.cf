@@ -1,0 +1,53 @@
+### example
+  # Case 0
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "GET",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "false";
+
+### method = 'POST'
+  # Case 1
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "POST",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "false";
+
+### method = 'PUT'
+  # Case 2
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "PUT",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "false";
+
+### method = 'DELETE'
+  # Case 3
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "DELETE",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "false";
+
+### method = 'PATCH'
+  # Case 4
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "PATCH",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "false";
+
+### insecure = 'true'
+  # Case 5
+  http:
+    "https://cfengine.com/images/cfengine-logo.svg"
+      method => "GET",
+      file => "/var/cfengine/logo.svg",
+      headers => { "Accept: image/svg+xml" },
+      insecure => "true";

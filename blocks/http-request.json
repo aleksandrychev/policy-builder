@@ -1,0 +1,101 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "http-request",
+  "version": 1,
+  "name": "HTTP Request",
+  "category": "From modules",
+  "description": "Sends an HTTP(S) request, e.g. to download a file or call an API.",
+  "compile_target": "own_bundle",
+  "requires_module": "promise-type-http",
+  "steps": [
+    {
+      "promise_type": "http",
+      "promiser": "{{url}}",
+      "attributes": {
+        "method": "{{method}}",
+        "file": {
+          "if_set": "file",
+          "value": "{{file}}"
+        },
+        "headers": {
+          "if_set": "headers",
+          "value": {
+            "list_param": "headers"
+          }
+        },
+        "payload": {
+          "if_set": "payload",
+          "value": "{{payload}}"
+        },
+        "insecure": "{{insecure}}"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "url",
+      "label": "URL",
+      "type": "string",
+      "required": true,
+      "help": "Starting with https:// or http://."
+    },
+    {
+      "name": "method",
+      "label": "Method",
+      "type": "string",
+      "required": true,
+      "default": "GET",
+      "options": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH"
+      ]
+    },
+    {
+      "name": "file",
+      "label": "Save the response to",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "path": "absolute",
+      "help": "Empty: the response is dropped (an OK status keeps the promise). The request runs on every agent run: set How often, or a condition."
+    },
+    {
+      "name": "headers",
+      "label": "Headers",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "allow_list": true,
+      "help": "One per line, Name: value."
+    },
+    {
+      "name": "payload",
+      "label": "Body",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "help": "Sent as is; @/some/path sends a file."
+    },
+    {
+      "name": "insecure",
+      "label": "Server certificate",
+      "type": "string",
+      "required": true,
+      "default": "false",
+      "options": [
+        {
+          "value": "false",
+          "label": "Checked"
+        },
+        {
+          "value": "true",
+          "label": "Not checked (insecure)"
+        }
+      ]
+    }
+  ]
+}

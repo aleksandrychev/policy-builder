@@ -70,6 +70,10 @@
       "type": "string",
       "description": "Palette grouping."
     },
+    "requires_module": {
+      "type": "string",
+      "description": "The CFEngine Build module providing the block's custom promise type: adding the block adds the module to the project."
+    },
     "compile_target": {
       "enum": [
         "own_bundle",
@@ -210,19 +214,37 @@
       ],
       "properties": {
         "promise_type": {
-          "enum": [
-            "vars",
-            "classes",
-            "users",
-            "files",
-            "packages",
-            "methods",
-            "processes",
-            "services",
-            "commands",
-            "storage",
-            "reports"
+          "anyOf": [
+            {
+            "enum": [
+              "vars",
+              "classes",
+              "users",
+              "files",
+              "packages",
+              "methods",
+              "processes",
+              "services",
+              "commands",
+              "storage",
+              "reports",
+              "git",
+              "systemd",
+              "http",
+              "ansible"
+            ],
+            "description": "git, systemd, http and ansible are custom promise types: the block's requires_module provides them."
+            },
+            {
+              "type": "string",
+              "pattern": "^\\{\\{[a-z_]+\\}\\}$",
+              "description": "A parameter holding the custom promise type's name (the Custom promise block)."
+            }
           ]
+        },
+        "attribute_rows": {
+          "type": "string",
+          "description": "A text parameter of `name = value` lines, each an attribute: a string, or a list of quoted strings ({ \"a\", \"b\" })."
         },
         "promiser": {
           "$ref": "common.v1.json#/$defs/template",

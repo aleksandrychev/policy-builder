@@ -13,7 +13,7 @@ import type {
   RecentProject,
   TargetCheck
 } from '../preload/api';
-import { compilePolicy, initCfbsProject, masterfilesEntry } from './backend';
+import { compilePolicy, initCfbsProject, masterfilesEntry, syncModules } from './backend';
 
 /**
  * The project:* IPC channels: creating a cfbs project on disk (via the Python
@@ -172,6 +172,22 @@ export function checkedBuilderModules(modules: unknown[], provided: Record<strin
   }
 }
 
+// A CFEngine Build module's name, as the index has them; also the folder its input.json is in.
+const INDEX_MODULE = /^[a-z0-9][a-z0-9._-]{0,100}$/i;
+export const isBuildModule = (module: unknown) =>
+  isRecord(module) &&
+  typeof module.name === 'string' &&
+  INDEX_MODULE.test(module.name) &&
+  (module.addedBy === undefined || (typeof module.addedBy === 'string' && INDEX_MODULE.test(module.addedBy))) &&
+  (module.input === undefined || isRecord(module.input));
+
+/** The CFEngine Build modules in a `build`: index entries carry a commit (the builder's own don't); not masterfiles. */
+const indexModuleEntries = (build: unknown[]) =>
+  build.filter(
+    (entry): entry is Record<string, unknown> & { name: string } =>
+      isRecord(entry) && typeof entry.name === 'string' && entry.name !== 'masterfiles' && typeof entry.commit === 'string'
+  );
+
 export function checkedContent(value: unknown): ProjectContent {
   const content = value as Partial<ProjectContent> | null;
   if (!isRecord(content) || !isRecord(content.project) || !Array.isArray(content.modules) || !isRecord(content.provided)) {
@@ -186,6 +202,9 @@ export function checkedContent(value: unknown): ProjectContent {
   const names = content.modules.map(module => (isRecord(module) ? module.name : undefined));
   if (names.length !== modules.size || !names.every(name => typeof name === 'string' && modules.has(name))) throw new InvalidRequest('Invalid policy module');
   checkedBuilderModules(content.modules, content.provided);
+  if (content.buildModules !== undefined && !(Array.isArray(content.buildModules) && content.buildModules.every(isBuildModule))) {
+    throw new InvalidRequest('Invalid modules');
+  }
   const environments = content.testEnvironments;
   if (environments !== undefined && !(Array.isArray(environments) && environments.every(isRecord) && environments.every(hasValidEnvFile))) {
     throw new InvalidRequest('Invalid test environments');
@@ -379,13 +398,88 @@ async function checkInProject(projectPath: string, path: string): Promise<void> 
 }
 
 /**
+ * Adds the modules the project gained since the last save and removes the ones it lost (only those
+ * added on their own: cfbs removes dependencies nothing needs any more). Returns the removed ones.
+ */
+async function syncBuildModules(
+  projectPath: string,
+  type: ProjectType,
+  cfbs: Record<string, unknown>,
+  wanted: ProjectContent['buildModules']
+): Promise<string[]> {
+  // Modules go into policy sets only.
+  if (!wanted || type !== 'policy-set') return [];
+  const entries = indexModuleEntries(Array.isArray(cfbs.build) ? cfbs.build : []);
+  const have = new Set(entries.map(entry => entry.name));
+  const names = new Set(wanted.map(module => module.name));
+  const add = wanted.filter(module => !module.addedBy && !have.has(module.name)).map(module => module.name);
+  const remove = entries.filter(entry => entry.added_by === 'cfbs add' && !names.has(entry.name)).map(entry => entry.name);
+  if (add.length || remove.length) await syncModules(projectPath, add, remove);
+  return entries.filter(entry => !names.has(entry.name)).map(entry => entry.name);
+}
+
+/**
+ * Each module's input answers as cfbs reads them: <name>/input.json, its questions (from its build
+ * entry) each with a `response`. A removed module's file goes.
+ */
+async function writeModuleInputs(
+  projectPath: string,
+  type: ProjectType,
+  cfbs: Record<string, unknown>,
+  modules: ProjectContent['buildModules'],
+  removed: string[]
+): Promise<void> {
+  if (!modules || type !== 'policy-set') return;
+  const entries = new Map(indexModuleEntries(Array.isArray(cfbs.build) ? cfbs.build : []).map(entry => [entry.name, entry]));
+  for (const { input, name } of modules) {
+    const questions = entries.get(name)?.input;
+    if (!input || !Array.isArray(questions)) continue;
+    const answered = questions.map(question =>
+      isRecord(question) && typeof question.variable === 'string' && question.variable in input ? { ...question, response: input[question.variable] } : question
+    );
+    const path = `./${name}/input.json`;
+    await checkInProject(projectPath, path);
+    await fs.mkdir(join(projectPath, name), { recursive: true });
+    await writeFileAtomic(join(projectPath, path), `${JSON.stringify(answered, null, 2)}\n`);
+  }
+  for (const name of removed) {
+    const path = `./${name}/input.json`;
+    await checkInProject(projectPath, path);
+    await fs.rm(join(projectPath, path), { force: true });
+    await removeEmptyFolders(projectPath, `./${name}`);
+  }
+}
+
+/** Each CFEngine Build module's <name>/input.json, parsed, for the ones that have one. */
+async function readModuleInputs(folder: string, cfbs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const inputs: Record<string, unknown> = {};
+  for (const { name } of indexModuleEntries(Array.isArray(cfbs.build) ? cfbs.build : [])) {
+    if (!INDEX_MODULE.test(name)) continue;
+    const text = await fs.readFile(join(folder, name, 'input.json'), 'utf-8').catch(() => null);
+    if (text === null) continue;
+    try {
+      inputs[name] = JSON.parse(text);
+    } catch {
+      // Unreadable: the module shows as not answered.
+    }
+  }
+  return inputs;
+}
+
+/**
  * Saves the project: its generated files first, then .policy-builder/project.json,
  * then cfbs.json. Files the previous save generated and this one doesn't are removed.
  */
 async function writeProjectContent(projectPath: string, content: ProjectContent, storage: ProjectStorage): Promise<{ masterfiles: string | null }> {
   const cfbsPath = join(projectPath, 'cfbs.json');
-  const existing = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
-  if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) throw new Error('cfbs.json is not a JSON object');
+  const readCfbs = async () => {
+    const parsed: unknown = JSON.parse(await fs.readFile(cfbsPath, 'utf-8'));
+    if (!isRecord(parsed)) throw new Error('cfbs.json is not a JSON object');
+    return parsed;
+  };
+  // CFEngine Build modules first: cfbs add downloads them, so a failure leaves everything as it was.
+  const removedModules = await syncBuildModules(projectPath, storage.type, await readCfbs(), content.buildModules);
+  const existing = await readCfbs();
   // A module becoming a policy set without masterfiles: fetch the entry before writing anything.
   const build: unknown[] = Array.isArray(existing.build) ? existing.build : [];
   const hasMasterfiles = build.some(entry => isRecord(entry) && entry.name === 'masterfiles');
@@ -421,6 +515,7 @@ async function writeProjectContent(projectPath: string, content: ProjectContent,
   await writeTestEnvironments(projectPath, content.testEnvironments);
   const merged = mergeCfbsJson(existing, saved, previous, storage.type, generated, masterfiles);
   await writeFileAtomic(cfbsPath, `${JSON.stringify(merged, null, 2)}\n`);
+  await writeModuleInputs(projectPath, storage.type, merged, content.buildModules, removedModules);
   const entry = (Array.isArray(merged.build) ? merged.build : []).find(item => isRecord(item) && item.name === 'masterfiles') as
     Record<string, unknown> | undefined;
   const version = entry ? (typeof entry.version === 'string' ? entry.version : 'master') : null;
@@ -557,9 +652,10 @@ async function openProject(event: IpcMainInvokeEvent, request: { path?: unknown 
   // A module opens only if the builder made it: saving rewrites what it provides.
   if (cfbs.type === 'module' && !builder) throw new InvalidRequest('This cfbs.json is a cfbs module that wasn’t made with the Policy Builder.');
   const testEnvironments = await readTestEnvironments(path);
+  const moduleInputs = await readModuleInputs(path, cfbs);
   knownProjects.add(path);
   await rememberRecent(path, typeof cfbs.name === 'string' && cfbs.name.trim() ? cfbs.name.trim() : basename(path));
-  return { ok: true as const, builder, cfbs, path, testEnvironments };
+  return { ok: true as const, builder, cfbs, moduleInputs, path, testEnvironments };
 }
 
 async function createProject(request: CreateProjectRequest) {
@@ -659,13 +755,25 @@ export function registerProjectHandlers(isTrustedFrame: (frame: WebFrameMain | n
   ipcMain.handle(
     'project:save',
     trusted(
-      async (_event, request: { modules?: unknown; path?: unknown; project?: unknown; provided?: unknown; storage?: unknown; testEnvironments?: unknown }) => {
+      async (
+        _event,
+        request: {
+          buildModules?: unknown;
+          modules?: unknown;
+          path?: unknown;
+          project?: unknown;
+          provided?: unknown;
+          storage?: unknown;
+          testEnvironments?: unknown;
+        }
+      ) => {
         try {
           const path = checkedAbsolutePath(request?.path, 'project path');
           if (!knownProjects.has(path)) throw new InvalidRequest('Not a project opened in this session');
           const content = checkedContent({
             project: request.project,
             modules: request.modules,
+            buildModules: request.buildModules,
             provided: request.provided,
             testEnvironments: request.testEnvironments
           });

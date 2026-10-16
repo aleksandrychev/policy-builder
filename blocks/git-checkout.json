@@ -1,0 +1,94 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "git-checkout",
+  "version": 1,
+  "name": "Git Checkout",
+  "category": "From modules",
+  "description": "Clones a git repository into a folder and keeps it at a branch, tag or commit.",
+  "compile_target": "own_bundle",
+  "requires_module": "promise-type-git",
+  "steps": [
+    {
+      "promise_type": "git",
+      "promiser": "{{destination}}",
+      "attributes": {
+        "repository": "{{repository}}",
+        "version": "{{version}}",
+        "update": "{{update}}",
+        "force": "{{force}}",
+        "depth": {
+          "if_set": "depth",
+          "value": "{{depth}}"
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "destination",
+      "label": "Folder",
+      "type": "string",
+      "required": true,
+      "path": "absolute",
+      "help": "Where the repository is cloned, e.g. /srv/app. Needs git on the host."
+    },
+    {
+      "name": "repository",
+      "label": "Repository URL",
+      "type": "string",
+      "required": true,
+      "help": "E.g. https://github.com/cfengine/starter_pack. A private one needs credentials for root (gitcredentials)."
+    },
+    {
+      "name": "version",
+      "label": "Branch, tag or commit",
+      "type": "string",
+      "required": true,
+      "help": "E.g. main or master: the git module can't follow the remote's default branch unnamed."
+    },
+    {
+      "name": "update",
+      "label": "Keep it updated",
+      "type": "string",
+      "required": true,
+      "default": "true",
+      "options": [
+        {
+          "value": "true",
+          "label": "Yes: pull new commits"
+        },
+        {
+          "value": "false",
+          "label": "No: clone once"
+        }
+      ]
+    },
+    {
+      "name": "force",
+      "label": "Local changes",
+      "type": "string",
+      "required": true,
+      "default": "false",
+      "options": [
+        {
+          "value": "false",
+          "label": "Keep them"
+        },
+        {
+          "value": "true",
+          "label": "Discard them"
+        }
+      ]
+    },
+    {
+      "name": "depth",
+      "label": "History depth",
+      "type": "number",
+      "required": false,
+      "integer": true,
+      "minimum": 1,
+      "help": "Empty: the full history. 1: the latest commit only."
+    }
+  ]
+}

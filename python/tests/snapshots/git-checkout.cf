@@ -1,0 +1,26 @@
+### example
+  # Case 0
+  git:
+    "/srv/app"
+      repository => "https://github.com/cfengine/starter_pack",
+      version => "main",
+      update => "true",
+      force => "false";
+
+### update = 'false'
+  # Case 1
+  git:
+    "/srv/app"
+      repository => "https://github.com/cfengine/starter_pack",
+      version => "main",
+      update => "false",
+      force => "false";
+
+### force = 'true'
+  # Case 2
+  git:
+    "/srv/app"
+      repository => "https://github.com/cfengine/starter_pack",
+      version => "main",
+      update => "true",
+      force => "true";

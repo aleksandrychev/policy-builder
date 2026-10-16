@@ -28,6 +28,7 @@ import type { BlockOutcome } from '../store/edgesSlice/types';
 import { changeMembership } from '../store/groupArrows';
 import { groupFramesFitted } from '../store/groupsSlice';
 import { inOneStep } from '../store/history';
+import { dependenciesOnSave } from './moduleTools';
 import { asRecord, checkedParams, parameterView, valueProblem } from './params';
 import { type CanvasEnv, type Input, type Tool, ToolError, canvasOf, optionalStr, str } from './shared';
 
@@ -64,6 +65,8 @@ function projectOverview(state: RootState, env: CanvasEnv) {
   const selected = state.canvas.find(block => block.instanceId === env.selectedInstanceId);
   return {
     project: state.project?.name ?? null,
+    // CFEngine Build modules, in build order (get_module for one); saving adds their dependencies too.
+    modules: state.modules.map(module => ({ name: module.name, addedFor: module.addedBy })),
     files: files.map(file => {
       const counts: Record<string, number> = {};
       for (const block of state.canvas.filter(item => item.fileId === file.id)) {
@@ -131,7 +134,10 @@ function blockType(blockTypeId: string) {
     takesArrows: isSequenced(descriptor),
     parameters: (descriptor.parameters ?? []).map(parameter),
     valueSources: descriptor.value_sources?.map(source => ({ id: source.id, label: source.label, parameters: source.parameters.map(parameter) })),
-    entries: descriptor.entries ? 'Holds a list of entries (one variable or class each): see list_value_sources, add_entry and update_entry.' : undefined
+    entries: descriptor.entries ? 'Holds a list of entries (one variable or class each): see list_value_sources, add_entry and update_entry.' : undefined,
+    requiresModule: descriptor.requires_module
+      ? `Its promise type comes from the CFEngine Build module ${descriptor.requires_module}: adding the block adds the module to the project (installed on save; hosts need python3).`
+      : undefined
   };
 }
 
@@ -184,7 +190,7 @@ async function warnings(state: RootState) {
       const problem = param.type === 'cases' || !value ? undefined : valueProblem(param, value);
       return problem ? [`${param.name} ${problem}`] : [];
     });
-    const advice = blockAdvice(block, state.edges);
+    const advice = blockAdvice(block, state.edges, state.canvas, state.dismissedAdvice);
     const customText = custom[block.instanceId]?.length ? custom[block.instanceId] : undefined;
     return empty.length || invalid.length || notCompiled || advice.length || customText
       ? [
@@ -457,9 +463,14 @@ function tidyFile(env: CanvasEnv, input: Input) {
 }
 
 export const CANVAS_TOOLS: Record<string, Tool> = {
-  get_project_overview: env => projectOverview(env.getState(), canvasOf(env)),
+  get_project_overview: async env => {
+    const overview = projectOverview(env.getState(), canvasOf(env));
+    const pending = await dependenciesOnSave(env.getState());
+    return pending.length ? { ...overview, modulesAddedOnSave: pending } : overview;
+  },
   get_file: (env, input) => fileDetail(env.getState(), str(input, 'fileId')),
-  list_block_types: () => blockDescriptors.map(({ id, name, category, description }) => ({ id, name, category, description })),
+  list_block_types: () =>
+    blockDescriptors.map(({ id, name, category, description, requires_module }) => ({ id, name, category, description, requiresModule: requires_module })),
   get_block_type: (_env, input) => blockType(str(input, 'blockType')),
   get_generated_policy: (env, input) => generatedPolicy(env.getState(), optionalStr(input, 'fileId')),
   get_warnings: env => warnings(env.getState()),

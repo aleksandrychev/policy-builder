@@ -39,6 +39,8 @@ const GROUP_OF: Record<string, Group> = {
   list_test_platforms: 'read',
   get_test_environments: 'read',
   get_test_results: 'read',
+  search_modules: 'read',
+  get_module: 'read',
 
   add_block: 'edit',
   add_blocks: 'edit',
@@ -59,6 +61,9 @@ const GROUP_OF: Record<string, Group> = {
   remove_transformer: 'edit',
   bind_parameter: 'edit',
   unbind_parameter: 'edit',
+  add_module: 'edit',
+  set_module_input: 'edit',
+  remove_module: 'edit',
 
   add_file: 'files',
   rename_file: 'files',
@@ -78,7 +83,16 @@ const GROUP_OF: Record<string, Group> = {
 };
 
 // Tools that remove project content, whatever their group.
-const DELETES = new Set(['remove_block', 'disconnect', 'remove_entry', 'remove_transformer', 'unbind_parameter', 'remove_file', 'remove_test_environment']);
+const DELETES = new Set([
+  'remove_block',
+  'disconnect',
+  'remove_entry',
+  'remove_transformer',
+  'unbind_parameter',
+  'remove_file',
+  'remove_test_environment',
+  'remove_module'
+]);
 
 export const knownTool = (name: string) => name in GROUP_OF;
 

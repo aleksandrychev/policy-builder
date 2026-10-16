@@ -1,0 +1,13 @@
+### example
+  # Case 0
+  ansible:
+    "/srv/ansible/site.yml"
+      tags => { "web", "db" },
+      become => "false";
+
+### become = 'true'
+  # Case 1
+  ansible:
+    "/srv/ansible/site.yml"
+      tags => { "web", "db" },
+      become => "true";

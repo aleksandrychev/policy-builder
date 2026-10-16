@@ -9,6 +9,7 @@ import { deriveNamespace } from '../store/filesSlice/deriveNamespace';
 import type { PolicyFile, PolicyFolder } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
 import type { UndoableKey } from '../store/history';
+import type { ModuleInputResponse, ProjectModule } from '../store/modulesSlice';
 import type { ProjectType } from '../store/projectSlice/types';
 import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
 import { moduleNameFor } from './moduleName';
@@ -30,6 +31,8 @@ type Position = { x: number; y: number };
 
 export interface ProjectMeta {
   current_file_id: string | null;
+  // Advice the project ignores (canvas/advice.ts keys).
+  dismissed_advice?: string[];
   // In file order; each file's `path` is where its policy is written.
   files: FileMeta[];
   // `path` is the folder's directory, e.g. "./services/".
@@ -84,6 +87,9 @@ export interface ProvidedModule {
 }
 
 export interface CfbsProjectContent {
+  // The CFEngine Build modules (a policy set's): saving adds and removes them with cfbs, and
+  // writes their input answers to <name>/input.json.
+  buildModules: { addedBy?: string; input?: Record<string, ModuleInputResponse>; name: string }[];
   // cfbs.json `build` entries, when stored as a policy set.
   modules: PolicyModule[];
   // .policy-builder/project.json.
@@ -259,10 +265,12 @@ export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjec
       module_name: identity.moduleName,
       folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
       files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
-      current_file_id: data.files.currentFileId
+      current_file_id: data.files.currentFileId,
+      ...(data.dismissedAdvice.length ? { dismissed_advice: data.dismissedAdvice } : {})
     },
     modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
     provided: toProvided(modules, identity),
+    buildModules: data.modules.map(({ addedBy, input, name }) => ({ name, ...(addedBy ? { addedBy } : {}), ...(input ? { input } : {}) })),
     testEnvironments: data.testEnvironments
   };
 }
@@ -357,7 +365,9 @@ function readBuilderProject(project: ProjectMeta): ProjectData {
     edges,
     files: { currentFileId, files, folders: folders.map(({ id, name, parentId }) => ({ id, name, parentId })) },
     groups,
-    // Read from their own file; see loadCfbsProject.
+    dismissedAdvice: Array.isArray(project.dismissed_advice) ? project.dismissed_advice.filter(key => typeof key === 'string') : [],
+    // Read from cfbs.json and their own files; see loadCfbsProject.
+    modules: [],
     testEnvironments: []
   };
 }
@@ -440,7 +450,13 @@ const ownPolicyFiles = (build: unknown[]) =>
     ])
     .flatMap(path => (typeof path === 'string' && /^\.\/[^/]+\.cf$/i.test(path) ? [path.slice(2, -3).toLowerCase()] : []));
 
-export function loadCfbsProject(json: unknown, builder: unknown, folderName: string, testEnvironments: unknown = null): LoadedProject {
+export function loadCfbsProject(
+  json: unknown,
+  builder: unknown,
+  folderName: string,
+  testEnvironments: unknown = null,
+  moduleInputs: unknown = null
+): LoadedProject {
   if (!isObject(json)) throw new Error('cfbs.json is not a JSON object');
   const type: ProjectType = json.type === 'module' ? 'module' : 'policy-set';
   const cfbsName = (typeof json.name === 'string' && json.name.trim()) || folderName;
@@ -451,10 +467,43 @@ export function loadCfbsProject(json: unknown, builder: unknown, folderName: str
   const identity = { description: typeof json.description === 'string' ? json.description : '', moduleName, name, type };
   const masterfiles = masterfilesOf(Array.isArray(json.build) ? json.build : []);
   const environments = environmentsFrom(testEnvironments);
+  const modules = indexModulesOf(Array.isArray(json.build) ? json.build : [], moduleInputs);
   const data = builder === null || builder === undefined ? null : fromBuilderProject(builder);
-  if (data && data.files.files.length > 0) return { ...identity, data: { ...data, testEnvironments: environments }, masterfiles };
+  if (data && data.files.files.length > 0) return { ...identity, data: { ...data, modules, testEnvironments: environments }, masterfiles };
   const files = filesReducer(undefined, projectFilesInitialized(name, ownPolicyFiles(Array.isArray(json.build) ? json.build : [])));
-  return { ...identity, data: { canvas: [], derivedNodes: {}, edges: [], files, groups: [], testEnvironments: environments }, masterfiles };
+  return {
+    ...identity,
+    data: { canvas: [], derivedNodes: {}, dismissedAdvice: [], edges: [], files, groups: [], modules, testEnvironments: environments },
+    masterfiles
+  };
+}
+
+// The input answers in a module's input.json (its questions, each with a `response`), by variable.
+function answersOf(input: unknown): Record<string, ModuleInputResponse> | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const answers = Object.fromEntries(
+    input
+      .filter(isObject)
+      .flatMap(question =>
+        typeof question.variable === 'string' && 'response' in question ? [[question.variable, question.response as ModuleInputResponse]] : []
+      )
+  );
+  return Object.keys(answers).length ? answers : undefined;
+}
+
+/**
+ * The CFEngine Build modules in a cfbs.json `build`, in its order: entries from the index carry
+ * their commit (the builder's own and local modules don't); masterfiles isn't one of them.
+ */
+export function indexModulesOf(build: unknown[], moduleInputs: unknown): ProjectModule[] {
+  const inputs = isObject(moduleInputs) ? moduleInputs : {};
+  return build.filter(isObject).flatMap(entry => {
+    const { name } = entry;
+    if (typeof name !== 'string' || name === 'masterfiles' || typeof entry.commit !== 'string') return [];
+    const addedBy = typeof entry.added_by === 'string' && entry.added_by !== 'cfbs add' ? entry.added_by : undefined;
+    const input = answersOf(inputs[name]);
+    return [{ name, ...(typeof entry.version === 'string' ? { version: entry.version } : {}), ...(addedBy ? { addedBy } : {}), ...(input ? { input } : {}) }];
+  });
 }
 
 /** The project folder's name for a project name: "Web Server Hardening" → "web-server-hardening". */

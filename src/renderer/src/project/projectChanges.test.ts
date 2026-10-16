@@ -27,6 +27,8 @@ const project = ({
   derivedNodes: {},
   edges,
   files: { currentFileId: null, files, folders: [] },
+  modules: [],
+  dismissedAdvice: [],
   groups,
   testEnvironments: []
 });

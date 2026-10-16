@@ -45,8 +45,17 @@ export interface ProjectCommandContext {
     ungroup: () => void;
   };
   textFocused: boolean;
-  view: { showTab: (index: number) => void; tidy: () => void; toggleMaximized: () => void; zoom: (control: keyof ZoomControls) => void };
+  view: {
+    // A side bar view, or null to collapse / reopen the side bar.
+    showSideView: (view: 'modules' | 'policy' | null) => void;
+    showTab: (index: number) => void;
+    tidy: () => void;
+    toggleMaximized: () => void;
+    zoom: (control: keyof ZoomControls) => void;
+  };
 }
+
+const SIDE_VIEW_COMMANDS: Record<string, 'modules' | 'policy' | null> = { 'sidebar-toggle': null, 'view-modules': 'modules', 'view-policy': 'policy' };
 
 const ZOOM_COMMANDS: Record<string, keyof ZoomControls> = { zoomIn: 'zoomIn', zoomOut: 'zoomOut', zoomReset: 'reset', zoomFit: 'fit' };
 
@@ -54,6 +63,7 @@ const ZOOM_COMMANDS: Record<string, keyof ZoomControls> = { zoomIn: 'zoomIn', zo
 function routeViewCommand(command: string, { canvasShowing, view }: ProjectCommandContext): boolean {
   const tab = /^tab-([0-3])$/.exec(command);
   if (tab) view.showTab(Number(tab[1]));
+  else if (command in SIDE_VIEW_COMMANDS) view.showSideView(SIDE_VIEW_COMMANDS[command]);
   else if (command !== 'tidy' && command !== 'maximize' && !(command in ZOOM_COMMANDS)) return false;
   else if (!canvasShowing) return true;
   else if (command === 'tidy') view.tidy();

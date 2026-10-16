@@ -66,7 +66,7 @@ export function registerTestTools(server: McpServer, answer: Answer) {
     'set_test_environment',
     {
       description:
-        'Creates a test environment (no environmentId) or changes one; only the fields given change. `hosts` replaces the host list: hosts matched by id or name are kept (with their containers), others are added or removed. Platforms are checked against list_test_platforms. A new environment defaults to Community, latest, x86_64 and one ubuntu-22 host named hub. One undo step; nothing runs. Returns the environment’s id.',
+        'Creates a test environment (no environmentId) or changes one; only the fields given change. `hosts` replaces the host list: hosts matched by id or name are kept (with their containers), others are added or removed. Platforms are checked against list_test_platforms. A new environment defaults to Community, latest, x86_64 and one ubuntu-22 host named hub. Saved with the project (so it leaves unsaved changes); one undo step; nothing runs. Returns the environment’s id.',
       inputSchema: {
         environmentId: z.string().optional().describe('The environment to change; omit to create one'),
         name: z.string().optional(),

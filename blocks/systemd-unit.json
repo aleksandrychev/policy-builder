@@ -1,0 +1,206 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "systemd-unit",
+  "version": 1,
+  "name": "Systemd Unit",
+  "category": "From modules",
+  "description": "Keeps a systemd service running or stopped, and can write its unit file.",
+  "compile_target": "own_bundle",
+  "requires_module": "promise-type-systemd",
+  "steps": [
+    {
+      "promise_type": "systemd",
+      "promiser": "{{name}}",
+      "attributes": {
+        "state": "{{state}}",
+        "enabled": "{{enabled}}",
+        "daemon_reload": "{{daemon_reload}}",
+        "unit_description": {
+          "if_set": "unit_description",
+          "value": "{{unit_description}}"
+        },
+        "service_exec_start": {
+          "if_set": "exec_start",
+          "value": {
+            "list_param": "exec_start"
+          }
+        },
+        "service_type": {
+          "if_set": "service_type",
+          "value": "{{service_type}}"
+        },
+        "service_user": {
+          "if_set": "service_user",
+          "value": "{{service_user}}"
+        },
+        "service_restart": {
+          "if_set": "restart",
+          "value": "{{restart}}"
+        },
+        "unit_after": {
+          "if_set": "after",
+          "value": {
+            "list_param": "after"
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "name",
+      "label": "Service name",
+      "type": "string",
+      "required": true,
+      "help": "E.g. myapp (myapp.service)."
+    },
+    {
+      "name": "state",
+      "label": "State",
+      "type": "string",
+      "required": true,
+      "default": "started",
+      "options": [
+        {
+          "value": "started",
+          "label": "Running"
+        },
+        {
+          "value": "stopped",
+          "label": "Stopped"
+        },
+        {
+          "value": "absent",
+          "label": "Removed (with its unit file)"
+        },
+        {
+          "value": "restart",
+          "label": "Restarted on every run"
+        },
+        {
+          "value": "reload",
+          "label": "Reloaded on every run"
+        }
+      ]
+    },
+    {
+      "name": "enabled",
+      "label": "Start on boot",
+      "type": "string",
+      "required": true,
+      "default": "true",
+      "options": [
+        {
+          "value": "true",
+          "label": "Yes"
+        },
+        {
+          "value": "false",
+          "label": "No"
+        }
+      ]
+    },
+    {
+      "name": "daemon_reload",
+      "label": "Reload systemd first",
+      "type": "string",
+      "required": true,
+      "default": "false",
+      "options": [
+        {
+          "value": "true",
+          "label": "Yes"
+        },
+        {
+          "value": "false",
+          "label": "No"
+        }
+      ],
+      "help": "daemon-reload before acting, e.g. after a unit file changed outside this block."
+    },
+    {
+      "name": "unit_description",
+      "label": "Description",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "help": "Setting any unit field below writes the unit file (/etc/systemd/system/<name>.service)."
+    },
+    {
+      "name": "exec_start",
+      "label": "Start commands",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "allow_list": true,
+      "help": "ExecStart, one per line, e.g. /usr/bin/myapp --port 8080."
+    },
+    {
+      "name": "service_type",
+      "label": "Type",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "Default (simple)"
+        },
+        {
+          "value": "simple",
+          "label": "simple"
+        },
+        {
+          "value": "forking",
+          "label": "forking"
+        },
+        {
+          "value": "oneshot",
+          "label": "oneshot"
+        },
+        {
+          "value": "notify",
+          "label": "notify"
+        }
+      ]
+    },
+    {
+      "name": "service_user",
+      "label": "Run as user",
+      "type": "string",
+      "required": false,
+      "default": ""
+    },
+    {
+      "name": "restart",
+      "label": "Restart",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "Never"
+        },
+        {
+          "value": "on-failure",
+          "label": "On failure"
+        },
+        {
+          "value": "always",
+          "label": "Always"
+        }
+      ]
+    },
+    {
+      "name": "after",
+      "label": "Start after",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "allow_list": true,
+      "help": "Units, one per line, e.g. network-online.target."
+    }
+  ]
+}

@@ -35,6 +35,8 @@ export type { NewClassDefinition } from './properties/NewClassModal';
 interface PropertiesPanelProps {
   // Valid settings that are probably not meant (canvas/advice.ts).
   advice?: string[];
+  // A fix one piece of advice offers, as a button on it.
+  adviceAction?: { label: string; onClick: () => void; onIgnore?: () => void; text: string };
   allInstances: BlockInstance[];
   currentFileId: string | null;
   descriptor: BlockDescriptor | undefined;
@@ -141,8 +143,20 @@ export function PropertiesPanel(props: PropertiesPanelProps) {
   const labelField = (
     <>
       {props.advice?.map(text => (
-        <Alert key={text} severity="warning" sx={{ fontSize: 12 }}>
+        <Alert key={text} severity="warning" icon={false} sx={{ fontSize: 12 }}>
           {text}
+          {props.adviceAction?.text === text && (
+            <Box sx={{ mt: 1 }}>
+              <Button color="inherit" variant="outlined" size="small" onClick={props.adviceAction.onClick}>
+                {props.adviceAction.label}
+              </Button>
+              {props.adviceAction.onIgnore && (
+                <Button color="inherit" size="small" onClick={props.adviceAction.onIgnore} sx={{ ml: 1 }}>
+                  Ignore in this project
+                </Button>
+              )}
+            </Box>
+          )}
         </Alert>
       ))}
       <TextField label="Label" value={instance.label} onChange={event => onLabelChange(event.target.value)} fullWidth size="small" sx={inputSx} />

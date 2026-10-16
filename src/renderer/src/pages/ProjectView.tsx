@@ -8,9 +8,10 @@ import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent, Pointe
 import type { ReactFlowInstance } from '@xyflow/react';
 
 import { duplicateDefinitionKeys, newDefinitionEntry } from '../blocks/definitionEntries';
+import { initialParams } from '../blocks/initialParams';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
-import { primaryPromiseType, resolveBlockShape } from '../blocks/resolveBlockShape';
+import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
 import { blockAdvice } from '../canvas/advice';
 import type { ChainOwner } from '../canvas/dataChains';
@@ -19,6 +20,7 @@ import { describeFileCondition } from '../canvas/fileCondition';
 import { GATE_EDGE_PREFIX, type Gate, deriveGates, gateKey } from '../canvas/gates';
 import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
+import { ActivityBar } from '../components/ActivityBar';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
 import { DeploymentView } from '../components/DeploymentView';
@@ -35,6 +37,7 @@ import { TestResultsView } from '../components/TestResultsView';
 import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { AgentLock } from '../components/agent/AgentLock';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
+import { ModulePageOr } from '../components/modules/ModulePage';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
 import { buildClassNameOptions } from '../components/properties/classOptions';
@@ -127,12 +130,16 @@ import {
 } from '../store/groupsSlice';
 import { historyBatchEnded, historyBatchStarted, inOneStep, redone, undone } from '../store/history';
 import { selectCurrentProject } from '../store/projectSlice/selectors';
+import { SideBar } from './SideBar';
 import { routeProjectCommand, useProjectMenuCommands } from './menuCommands';
 import { definedNames } from './pasteCopies';
 import { useClipboardActions } from './useClipboardActions';
 import { useGroupActions } from './useGroupActions';
 import { isEditableTarget, modalOpen, useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { useProjectModules } from './useProjectModules';
+import { usePythonAdvice } from './usePythonAdvice';
 import { useSelection } from './useSelection';
+import { useSideBar } from './useSideBar';
 
 const UNDO_KEY = navigator.platform.startsWith('Mac') ? '⌘Z' : 'Ctrl+Z';
 const GROUP_KEY = navigator.platform.startsWith('Mac') ? '⌘G' : 'Ctrl+G';
@@ -183,11 +190,6 @@ function OtherTab({
   if (tab === 3)
     return <DeploymentView compiled={policy.compiled} dirty={dirty} onOpenTests={onOpenTests} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
   return <TestResultsView onShowBlock={onShowBlock} />;
-}
-
-function initialParams(descriptor: BlockDescriptor): Record<string, string> {
-  const { parameters } = resolveBlockShape(descriptor, undefined);
-  return Object.fromEntries(parameters.map(parameter => [parameter.name, String(parameter.default ?? '')]));
 }
 
 // The Properties panel with nothing selected: the open file's settings.
@@ -350,8 +352,15 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const canRedo = useAppSelector(state => state.history.future.length > 0);
   // In-app "full screen": side panels hidden, properties as an overlay.
   const [maximized, setMaximized] = useState(false);
-  // Test Results and Deployment have their own layout: no block palette or Properties panel.
-  const showSidebars = !maximized && activeTab < 2;
+  const sideBar = useSideBar({ activeTab, maximized, setActiveTab, setMaximized });
+  const modules = useProjectModules(sideBar.activeView === 'modules', PROJECT_TABS[activeTab]);
+  const pythonAdvice = usePythonAdvice(allInstances);
+  const dismissedAdvice = useAppSelector(state => state.dismissedAdvice);
+  // Another tab, or the canvas's file or a block: the module page closes.
+  const showTab = (tab: number) => {
+    modules.close();
+    setActiveTab(tab);
+  };
   const testActivity = useTestActivity();
   // Looking at the Test Results tab acknowledges how the last action ended.
   useEffect(() => {
@@ -797,7 +806,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         ungroup: ungroupSelection
       },
       view: {
-        showTab: setActiveTab,
+        showSideView: sideBar.show,
+        showTab,
         tidy: () => setTidyConfirmOpen(true),
         toggleMaximized: () => setMaximized(current => !current),
         zoom: control => zoomControlsRef.current?.[control]()
@@ -828,7 +838,16 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onDragCancel: useStableCallback(() => setDragPreview(null))
   };
   // The sidebars are memoized: they get stable callbacks, and counts that change only with them.
-  const paletteAddBlock = useStableCallback((descriptor: BlockDescriptor) => addBlockToCanvas(descriptor));
+  const wantModules = useStableCallback(modules.want);
+  const browseModules = useStableCallback((search: string) => {
+    modules.browse(search);
+    sideBar.show('modules');
+  });
+  const paletteAddBlock = useStableCallback((descriptor: BlockDescriptor) => {
+    sideBar.toCanvas();
+    modules.close();
+    addBlockToCanvas(descriptor);
+  });
   const blockCountsJson = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const instance of allInstances) counts[instance.fileId] = (counts[instance.fileId] ?? 0) + 1;
@@ -839,6 +858,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onSelectFile: useStableCallback((fileId: string) => {
       dispatch(fileSelected({ fileId }));
       setSelectedInstanceId(null);
+      sideBar.toCanvas();
+      modules.close();
     }),
     onAddFile: useStableCallback(handleAddFile),
     onAddFolder: useStableCallback(handleAddFolder),
@@ -971,7 +992,8 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onArrowOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
             onArrowRemove={edgeId => dispatch(edgeRemoved({ edgeId }))}
             onLabelChange={label => selectedInstance && dispatch(blockLabelChanged({ instanceId: selectedInstance.instanceId, label }))}
-            advice={blockAdvice(selectedInstance, allEdges)}
+            advice={blockAdvice(selectedInstance, allEdges, allInstances, dismissedAdvice)}
+            adviceAction={pythonAdvice(selectedInstance)}
             onRunIntervalChange={runInterval => selectedInstance && dispatch(blockRunIntervalChanged({ instanceId: selectedInstance.instanceId, runInterval }))}
             onNoteChange={note => selectedInstance && dispatch(blockNoteChanged({ instanceId: selectedInstance.instanceId, note }))}
             onParamChange={(paramName, value, entryId) =>
@@ -1035,7 +1057,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
           fileGate={describeFileCondition(currentFile?.condition)}
           blockCount={instances.length}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={showTab}
           tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
           onSave={onSave}
           onOpenSettings={onOpenSettings}
@@ -1047,19 +1069,17 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
           {locked && <AgentLock />}
-          {showSidebars && (
-            <>
-              <Box
-                sx={{
-                  width: `${layout.leftSidebarFraction * 100}%`,
-                  flexShrink: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: 'background.paper'
-                }}
-              >
+          <ActivityBar active={sideBar.activeView} badges={{ modules: modules.needingInput }} onSelect={sideBar.show} />
+          <SideBar
+            view={sideBar.activeView}
+            widthFraction={layout.leftSidebarFraction}
+            onResize={handleLeftResize}
+            onResizeEnd={commitLayout}
+            modules={modules}
+            policy={
+              <>
                 <Box sx={{ height: `${layout.paletteHeightFraction * 100}%`, minHeight: 0, flexShrink: 0 }}>
-                  <BlockPalette onAddBlock={paletteAddBlock} />
+                  <BlockPalette onAddBlock={paletteAddBlock} modules={modules.catalog.modules} onBrowseModules={browseModules} onSearch={wantModules} />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
                 <Box sx={{ flex: 1, minHeight: 0 }}>
@@ -1078,141 +1098,143 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                     onMove={explorer.onMove}
                   />
                 </Box>
-              </Box>
-              <ResizeHandle label="Resize left sidebar" orientation="vertical" onResize={handleLeftResize} onResizeEnd={commitLayout} />
-            </>
-          )}
+              </>
+            }
+          />
 
-          {activeTab === 0 ? (
-            <FlowCanvas
-              // One React Flow per file: remounting fits the view to the file just opened.
-              key={currentFileId ?? 'none'}
-              scanning={locked}
-              allInstances={allInstances}
-              instances={instances}
-              edges={edges}
-              files={files}
-              currentFileId={currentFileId}
-              derivedPositions={derivedPositions}
-              selectedGateKey={selectedGateKey}
-              onSelectGate={key => {
-                setSelectedGateKey(key);
-                if (key) {
-                  setMultiSelectedIds([]);
-                  setSelectedInstanceId(null);
+          <ModulePageOr page={modules.page}>
+            {activeTab === 0 ? (
+              <FlowCanvas
+                // One React Flow per file: remounting fits the view to the file just opened.
+                key={currentFileId ?? 'none'}
+                scanning={locked}
+                allInstances={allInstances}
+                instances={instances}
+                edges={edges}
+                files={files}
+                currentFileId={currentFileId}
+                derivedPositions={derivedPositions}
+                selectedGateKey={selectedGateKey}
+                onSelectGate={key => {
+                  setSelectedGateKey(key);
+                  if (key) {
+                    setMultiSelectedIds([]);
+                    setSelectedInstanceId(null);
+                    setSelectedEdgeId(null);
+                  }
+                }}
+                onDerivedMove={(key, position) => dispatch(derivedNodeMoved({ key, position }))}
+                dataCallbacks={{
+                  open: owner => {
+                    setMultiSelectedIds([]);
+                    setSelectedInstanceId(owner.instanceId);
+                    setFocusEntryId(owner.entryId ?? null);
+                    setSelectedEdgeId(null);
+                    setSelectedGateKey(null);
+                  },
+                  remove: removeChain,
+                  addStep: (owner, decoratorId) => dispatch(decoratorAdded(owner.instanceId, decoratorId, owner.entryId)),
+                  moveStep: (owner, fromIndex, toIndex) =>
+                    dispatch(decoratorMoved({ instanceId: owner.instanceId, entryId: owner.entryId, fromIndex, toIndex })),
+                  removeStep: (owner, decoratorInstanceId) =>
+                    dispatch(decoratorRemoved({ instanceId: owner.instanceId, entryId: owner.entryId, decoratorInstanceId })),
+                  sampleChange: (owner, value) => dispatch(sampleInputChanged({ instanceId: owner.instanceId, entryId: owner.entryId, value }))
+                }}
+                onGateLink={(gate, instanceId) => {
+                  const target = instances.find(instance => instance.instanceId === instanceId);
+                  if (target?.condition?.className) announce(`Replaced "${target.label}"'s previous condition`);
+                  dispatch(conditionSet({ instanceId, condition: gate.condition }));
+                }}
+                onGateLinkRemove={instanceId => {
+                  dispatch(conditionRemoved({ instanceId }));
                   setSelectedEdgeId(null);
+                }}
+                onGateModeChange={(gate, mode) => changeGateMode(gate, mode)}
+                onGateRemove={gate => removeGateByKey(gate.key)}
+                onFileConditionRemove={() => currentFile && dispatch(fileConditionRemoved({ fileId: currentFile.id }))}
+                duplicateKeys={duplicateKeys}
+                cutPendingId={cutPendingId}
+                measured={measured}
+                maximized={maximized}
+                selectedInstanceId={selectedInstanceId}
+                selectedChainEntryId={focusEntryId}
+                multiSelectedIds={multiSelectedIds}
+                onMultiSelect={handleMultiSelect}
+                groups={groups}
+                selectedGroupId={selectedGroupId}
+                onSelectGroup={handleSelectGroup}
+                {...groupCanvasCallbacks}
+                selectedEdgeId={selectedEdgeId}
+                onInit={instance => {
+                  flowRef.current = instance;
+                }}
+                onSelectInstance={instanceId => (instanceId ? selectOnly(instanceId) : clearSelection())}
+                onSelectEdge={edgeId => {
+                  setSelectedEdgeId(edgeId);
+                  if (edgeId) {
+                    setMultiSelectedIds([]);
+                    setSelectedInstanceId(null);
+                    setSelectedGateKey(null);
+                  }
+                }}
+                onRemove={handleRemove}
+                onMove={(instanceId, position) => dispatch(blockMoved({ instanceId, position }))}
+                onNodeDragStart={() => {
+                  dragBatchRef.current = true;
+                  dispatch(historyBatchStarted());
+                }}
+                onNodeDragStop={() => {
+                  dragBatchRef.current = false;
+                  dispatch(historyBatchEnded());
+                }}
+                onMeasured={(sizes, compact) => {
+                  setMeasured(current => ({ ...current, ...sizes }));
+                  if (!compact) setLayoutSizes(current => ({ ...current, ...sizes }));
+                }}
+                onConnect={(source, target, outcomes) => currentFileId && dispatch(edgeAdded({ fileId: currentFileId, source, target, outcomes }))}
+                onEdgeOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
+                onEdgeRemove={edgeId => {
+                  dispatch(edgeRemoved({ edgeId }));
+                  if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+                }}
+                onInvalidConnection={announce}
+                onTidy={() => setTidyConfirmOpen(true)}
+                onToggleMaximize={() => setMaximized(current => !current)}
+                zoomControlsRef={zoomControlsRef}
+                toolbarExtra={
+                  maximized && (
+                    <Button size="small" startIcon={<AddIcon />} onClick={event => setAddBlockAnchor(event.currentTarget)}>
+                      Add block
+                    </Button>
+                  )
                 }
-              }}
-              onDerivedMove={(key, position) => dispatch(derivedNodeMoved({ key, position }))}
-              dataCallbacks={{
-                open: owner => {
-                  setMultiSelectedIds([]);
-                  setSelectedInstanceId(owner.instanceId);
-                  setFocusEntryId(owner.entryId ?? null);
-                  setSelectedEdgeId(null);
-                  setSelectedGateKey(null);
-                },
-                remove: removeChain,
-                addStep: (owner, decoratorId) => dispatch(decoratorAdded(owner.instanceId, decoratorId, owner.entryId)),
-                moveStep: (owner, fromIndex, toIndex) => dispatch(decoratorMoved({ instanceId: owner.instanceId, entryId: owner.entryId, fromIndex, toIndex })),
-                removeStep: (owner, decoratorInstanceId) =>
-                  dispatch(decoratorRemoved({ instanceId: owner.instanceId, entryId: owner.entryId, decoratorInstanceId })),
-                sampleChange: (owner, value) => dispatch(sampleInputChanged({ instanceId: owner.instanceId, entryId: owner.entryId, value }))
-              }}
-              onGateLink={(gate, instanceId) => {
-                const target = instances.find(instance => instance.instanceId === instanceId);
-                if (target?.condition?.className) announce(`Replaced "${target.label}"'s previous condition`);
-                dispatch(conditionSet({ instanceId, condition: gate.condition }));
-              }}
-              onGateLinkRemove={instanceId => {
-                dispatch(conditionRemoved({ instanceId }));
-                setSelectedEdgeId(null);
-              }}
-              onGateModeChange={(gate, mode) => changeGateMode(gate, mode)}
-              onGateRemove={gate => removeGateByKey(gate.key)}
-              onFileConditionRemove={() => currentFile && dispatch(fileConditionRemoved({ fileId: currentFile.id }))}
-              duplicateKeys={duplicateKeys}
-              cutPendingId={cutPendingId}
-              measured={measured}
-              maximized={maximized}
-              selectedInstanceId={selectedInstanceId}
-              selectedChainEntryId={focusEntryId}
-              multiSelectedIds={multiSelectedIds}
-              onMultiSelect={handleMultiSelect}
-              groups={groups}
-              selectedGroupId={selectedGroupId}
-              onSelectGroup={handleSelectGroup}
-              {...groupCanvasCallbacks}
-              selectedEdgeId={selectedEdgeId}
-              onInit={instance => {
-                flowRef.current = instance;
-              }}
-              onSelectInstance={instanceId => (instanceId ? selectOnly(instanceId) : clearSelection())}
-              onSelectEdge={edgeId => {
-                setSelectedEdgeId(edgeId);
-                if (edgeId) {
-                  setMultiSelectedIds([]);
-                  setSelectedInstanceId(null);
-                  setSelectedGateKey(null);
-                }
-              }}
-              onRemove={handleRemove}
-              onMove={(instanceId, position) => dispatch(blockMoved({ instanceId, position }))}
-              onNodeDragStart={() => {
-                dragBatchRef.current = true;
-                dispatch(historyBatchStarted());
-              }}
-              onNodeDragStop={() => {
-                dragBatchRef.current = false;
-                dispatch(historyBatchEnded());
-              }}
-              onMeasured={(sizes, compact) => {
-                setMeasured(current => ({ ...current, ...sizes }));
-                if (!compact) setLayoutSizes(current => ({ ...current, ...sizes }));
-              }}
-              onConnect={(source, target, outcomes) => currentFileId && dispatch(edgeAdded({ fileId: currentFileId, source, target, outcomes }))}
-              onEdgeOutcomesChange={(edgeId, outcomes) => dispatch(edgeOutcomesChanged({ edgeId, outcomes }))}
-              onEdgeRemove={edgeId => {
-                dispatch(edgeRemoved({ edgeId }));
-                if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
-              }}
-              onInvalidConnection={announce}
-              onTidy={() => setTidyConfirmOpen(true)}
-              onToggleMaximize={() => setMaximized(current => !current)}
-              zoomControlsRef={zoomControlsRef}
-              toolbarExtra={
-                maximized && (
-                  <Button size="small" startIcon={<AddIcon />} onClick={event => setAddBlockAnchor(event.currentTarget)}>
-                    Add block
-                  </Button>
-                )
-              }
-            />
-          ) : (
-            <OtherTab
-              tab={activeTab}
-              onSave={onSave}
-              onReload={onReload}
-              dirty={dirty}
-              onOpenTests={() => setActiveTab(2)}
-              compiled={compiled}
-              currentFileId={currentFileId}
-              selectedId={selectedGroupId ?? selectedInstanceId}
-              onSelect={id => selectInFile(id)}
-              onFollow={(fileId, id) => {
-                dispatch(fileSelected({ fileId }));
-                selectInFile(id);
-              }}
-              onShowBlock={(fileId, id) => {
-                // A problem's block (or group) on the canvas, selected.
-                dispatch(fileSelected({ fileId }));
-                setActiveTab(0);
-                selectInFile(id);
-              }}
-            />
-          )}
+              />
+            ) : (
+              <OtherTab
+                tab={activeTab}
+                onSave={onSave}
+                onReload={onReload}
+                dirty={dirty}
+                onOpenTests={() => setActiveTab(2)}
+                compiled={compiled}
+                currentFileId={currentFileId}
+                selectedId={selectedGroupId ?? selectedInstanceId}
+                onSelect={id => selectInFile(id)}
+                onFollow={(fileId, id) => {
+                  dispatch(fileSelected({ fileId }));
+                  selectInFile(id);
+                }}
+                onShowBlock={(fileId, id) => {
+                  // A problem's block (or group) on the canvas, selected.
+                  dispatch(fileSelected({ fileId }));
+                  setActiveTab(0);
+                  selectInFile(id);
+                }}
+              />
+            )}
+          </ModulePageOr>
 
-          {showSidebars && (
+          {sideBar.showProperties(modules.page !== undefined) && (
             <>
               <ResizeHandle label="Resize properties panel" orientation="vertical" onResize={handleRightResize} onResizeEnd={commitLayout} />
               <Box
