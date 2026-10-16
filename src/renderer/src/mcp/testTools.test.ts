@@ -210,6 +210,19 @@ describe('runs', () => {
     expect(result.log).toEqual(['[hub] error: Package nginx not installed']);
   });
 
+  it('names the blocks that keep a host from converging, and those with How often', async () => {
+    const host = environment.hosts[0].id;
+    runtimes.set(environment.id, {
+      ...EMPTY,
+      hosts: { [host]: { state: 'done', converged: false, stillRepairing: [blockId], everyRun: [] } },
+      lastRun: { at: 0, content: '', hosts: 1, passed: true }
+    });
+    const result = await call('get_test_results');
+    expect(result.status).toBe('not converged');
+    expect(result.hosts[0].stillRepairing).toEqual([expect.objectContaining({ id: blockId, label: 'Install nginx' })]);
+    expect(result.hosts[0].everyRun).toBeUndefined();
+  });
+
   it('only starts when not waiting, and refuses while busy', async () => {
     finishesWithProblem();
     expect(await call('run_tests', { wait: false, hosts: ['HUB'] })).toMatchObject({ started: true });

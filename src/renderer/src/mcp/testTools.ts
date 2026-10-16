@@ -239,6 +239,10 @@ function resultsOf(state: RootState, environment: TestEnvironment, logLines: num
         state: known?.state,
         step: known?.step,
         converged: known?.converged,
+        // Why it hasn't converged: the blocks still changing something in the last run.
+        stillRepairing: known?.stillRepairing?.length ? known.stillRepairing.map(describe) : undefined,
+        // Blocks with How often: test runs ignore it (no locks), so they repair every time without stopping it converging.
+        everyRun: known?.everyRun?.length ? known.everyRun.map(describe) : undefined,
         agentRuns: runs.length || undefined,
         compliance: last && { kept: last.kept, repaired: last.repaired, notKept: last.notKept, exit: last.exit },
         // The first run does most of the work: its repairs and failures don't show in the last one.

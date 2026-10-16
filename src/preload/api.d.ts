@@ -140,7 +140,9 @@ export type TestEnvEvent =
   | { current: number; t: 'progress'; total: number }
   | { host?: string | null; line: string; stream?: string; t: 'log' }
   | { host?: string; message: string; step: string; t: 'step' }
-  | { container?: string; converged?: boolean; host: string; ip?: string; state: string; t: 'host' }
+  // When done: stillRepairing, the block ids still repairing in its last run; everyRun, those with How
+  // often (they run on every test run, which ignores locks, so they don't stop it converging).
+  | { container?: string; converged?: boolean; everyRun?: string[]; host: string; ip?: string; state: string; stillRepairing?: string[]; t: 'host' }
   | { exit: number; host: string; kept?: number; notKept?: number; repaired?: number; run: number; t: 'result' }
   | { host: string; setup_code: string | null; t: 'hub'; url: string | null }
   | { image: string; os: string | null; platform: string | null; t: 'detected' }

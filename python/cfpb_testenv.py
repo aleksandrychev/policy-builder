@@ -879,6 +879,13 @@ BELONGS = re.compile(r"Promise belongs to bundle '([^']+)' in file '([^']+)' nea
 # Roll-ups of an error already reported on its own line.
 ROLLUP = re.compile(r"Method '[^']+' failed in some repairs|Errors encountered when actuating|Not all promises")
 INPUTS = "/var/cfengine/inputs/services/cfbs/"
+# What a run changed, by the promiser its info line names: a command run, a file copied to (not
+# from), else the first quoted name (Created file '/x', Updated file '/x' with content '...').
+EXECUTED = re.compile(r"Executing '[^']*' \.\.\. '(.*)'$")
+COPIED = re.compile(r"Copied file '.*' to '(.*?)(?:\.cfnew)?'")
+QUOTED = re.compile(r"'([^']*)'")
+# Info lines about a repair already counted, or about no change.
+NOT_A_REPAIR = re.compile(r"^(Completed execution|Last \d+ quoted lines)")
 # A failed command names only its promiser (expanded): no "belongs to" line.
 COMMAND_FAILED = re.compile(r"related to promiser '(.*)' -- ")
 QUOTED_PROMISER = re.compile(r'\s+"((?:\\.|[^"\\])*)"(?:\s|$)')
@@ -902,7 +909,9 @@ def add_problems(problems: dict[tuple, dict], found: list[dict], run: int) -> No
 
 
 def _promiser_at(promiser: str, policies: dict[str, str]) -> tuple[str, int] | None:
-    """Where the project's policy writes `promiser` (path, 1-based line); its variables match anything."""
+    """Where the project's policy writes `promiser` (path, 1-based line); its variables match anything,
+    so the promise with the most literal text wins ("/bin/echo x" over "$(vars.package)")."""
+    best, literal = None, -1
     for path, policy in policies.items():
         if not path.endswith(".cf"):
             continue
@@ -910,11 +919,48 @@ def _promiser_at(promiser: str, policies: dict[str, str]) -> tuple[str, int] | N
             quoted = QUOTED_PROMISER.match(line)
             if not quoted:
                 continue
-            text = re.sub(r"\\(.)", r"\1", quoted.group(1))
-            pattern = ".*".join(re.escape(part) for part in VARIABLE.split(text))
-            if re.fullmatch(pattern, promiser, re.S):
-                return path, number
-    return None
+            parts = VARIABLE.split(re.sub(r"\\(.)", r"\1", quoted.group(1)))
+            if len("".join(parts)) > literal and re.fullmatch(".*".join(map(re.escape, parts)), promiser, re.S):
+                best, literal = (path, number), len("".join(parts))
+    return best
+
+
+def find_repairs(lines: list[str], source_map: dict, policies: dict) -> set[str]:
+    """The blocks a run repaired something with, from its info lines (reports count as kept)."""
+    blocks = set()
+    for raw in lines:
+        line = raw.strip()
+        if not line.startswith("info:"):
+            continue
+        text = line[len("info:") :].strip()
+        if NOT_A_REPAIR.match(text):
+            continue
+        named = EXECUTED.search(text) or COPIED.search(text)
+        candidates = [named[1]] if named else QUOTED.findall(text)[:1]
+        for candidate in candidates:
+            found = _promiser_at(candidate, policies)
+            block = _block_at(source_map.get(found[0], {}), found[1]) if found else None
+            if block:
+                blocks.add(block)
+                break
+    return blocks
+
+
+def periodic_blocks(project: dict, library=None) -> set[str]:
+    """Blocks with How often: in a test run (locks ignored, a host without any) they run every time.
+    A run_interval parameter left at its default (Run Command's daily) is in the block's descriptor."""
+    from cfpb_compiler import Library, params_with_defaults
+
+    library = library or Library.load()
+    periodic = set()
+    for file in project.get("files", []):
+        for block in file.get("blocks", []):
+            declared = library.descriptors.get(block.get("blockId"), {}).get("parameters", [])
+            params = params_with_defaults(declared, block.get("params") or {})
+            own = str(params.get("run_interval") or "").strip()
+            if str(block.get("runInterval") or "").strip() or own:
+                periodic.add(block["instanceId"])
+    return periodic
 
 
 def find_problems(lines: list[str], source_map: dict, block_files: dict, policies: dict | None = None) -> list[dict]:
@@ -1011,6 +1057,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         for file in project.get("files", [])
         for item in [b["instanceId"] for b in file.get("blocks", [])] + [g["id"] for g in file.get("groups", [])]
     }
+    periodic = periodic_blocks(project)
     dotenv = read_dotenv(request.get("envFile"))
     max_runs = env.get("maxRuns") if isinstance(env.get("maxRuns"), int) and 1 <= env["maxRuns"] <= 10 else MAX_RUNS
     for host in sorted(hosts, key=lambda h: h is not hub_host):
@@ -1020,6 +1067,7 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
         emit("host", host=host["id"], state="running")
         result = None
         problems: dict[tuple, dict] = {}
+        repairing: set[str] = set()
         for number in range(1, max_runs + 1):
             emit("step", host=host["id"], step="run", message=f"Run {number} of {max_runs}")
             # update.cf's errors are problems too (its compliance isn't in the summary we read).
@@ -1036,16 +1084,31 @@ def run(request: dict, masterfiles_dir: str | None = None) -> None:
                 *find_problems(output, source_map, block_files, policies),
             ]
             add_problems(problems, found, number)
+            repairing = find_repairs(output, source_map, policies)
             if code != 0 or result.get("repaired", 0) == 0:
+                break
+            # Only blocks with How often still repair: they would on every run here.
+            if number > 1 and repairing and repairing <= periodic:
                 break
         # Every run's: a promise that failed in the first run isn't always tried again (a restart
         # behind a change that's done by then), and a later run then looks clean.
         emit("problems", host=host["id"], problems=list(problems.values()))
         # Done unless the agent itself failed; still repairing after MAX_RUNS is "not converged" (an
         # Enterprise hub repairs a little on every run).
-        converged = bool(result) and result["exit"] == 0 and result.get("repaired", 1) == 0
+        # Blocks with How often repairing every run count as converged: test runs ignore locks.
+        settled = result.get("repaired", 1) == 0 if result else False
+        only_periodic = bool(repairing) and repairing <= periodic
+        converged = bool(result) and result["exit"] == 0 and (settled or only_periodic)
         failed = not result or result["exit"] != 0
-        emit("host", host=host["id"], state="failed" if failed else "done", converged=converged)
+        emit(
+            "host",
+            host=host["id"],
+            state="failed" if failed else "done",
+            converged=converged,
+            # In the last run: blocks repairing that shouldn't, and those with How often.
+            stillRepairing=sorted(repairing - periodic) if not settled else [],
+            everyRun=sorted(repairing & periodic) if not settled else [],
+        )
     emit("done")
 
 

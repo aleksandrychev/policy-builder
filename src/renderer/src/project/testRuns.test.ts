@@ -102,8 +102,16 @@ describe('testRuns', () => {
     emit('run-1', { t: 'host', host: 'h1', state: 'running', container: 'c1', ip: '10.0.0.2' });
     expect(runtime.current.hosts.h1).toMatchObject({ state: 'running', step: 'Bootstrapping', container: 'c1', ip: '10.0.0.2' });
 
-    emit('run-1', { t: 'host', host: 'h1', state: 'done', converged: true });
-    expect(runtime.current.hosts.h1).toEqual({ state: 'done', step: undefined, container: 'c1', ip: '10.0.0.2', converged: true });
+    emit('run-1', { t: 'host', host: 'h1', state: 'done', converged: true, stillRepairing: [], everyRun: ['curl'] });
+    expect(runtime.current.hosts.h1).toEqual({
+      state: 'done',
+      step: undefined,
+      container: 'c1',
+      ip: '10.0.0.2',
+      converged: true,
+      stillRepairing: [],
+      everyRun: ['curl']
+    });
   });
 
   it('collects results, problems and the hub', async () => {
