@@ -105,7 +105,7 @@ wheels = [
 
 [[package]]
 name = "cfengine"
-version = "0.23.2"
+version = "0.23.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cf-remote" },
@@ -116,9 +116,9 @@ dependencies = [
     { name = "tree-sitter" },
     { name = "tree-sitter-cfengine" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/49/2c/059566fa40ee15213f56c9cf757c2b655864ca25bb3d66ff3f8b3bfbed0b/cfengine-0.23.2.tar.gz", hash = "sha256:cc16a94a39f1cc1fbcc7b2e3a00356709a592b5654997f5b83b9c5c678048509", size = 228865, upload-time = "2026-10-01T12:57:02.036Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/a4/8dbfc0013ffdc7bd0d9b4a4a239f513fcfcd947b897693e91e6ad574a864/cfengine-0.23.3.tar.gz", hash = "sha256:1a2a9a2fe100d3b22126fbe828bc4033d4744e2b851c05bce73e9c3a361f74cc", size = 229378, upload-time = "2026-10-09T16:45:08.975Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/99/d568c247596e9be5222d8a81a53b0d73a02f013e61dc45c405c3e13ee195/cfengine-0.23.2-py3-none-any.whl", hash = "sha256:eec3203f52b46f7ffcb78a7002f7640d298b3480a65049a9831ec6e2c4a72ed3", size = 121144, upload-time = "2026-10-01T12:57:00.717Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/64/fa268e379baf051e95761c59c4f3771657494da6075d5abb71075e46fe88/cfengine-0.23.3-py3-none-any.whl", hash = "sha256:b7dad899189c7de7255aa1bbefe31d2e9dbdb32094673f6c9bd71461474ffbd2", size = 121451, upload-time = "2026-10-09T16:45:07.316Z" },
 ]
 
 [[package]]
