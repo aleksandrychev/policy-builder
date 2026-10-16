@@ -23,6 +23,11 @@ EXAMPLES: dict[str, dict[str, str]] = {
     "comment-lines": {"path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*"},
     "copy-directory": {"destination": "/opt/app/static", "source": "/srv/build/static"},
     "copy-file": {"destination": "/etc/motd", "source": "/srv/files/motd", "server": ""},
+    "custom-promise": {
+        "promise_type": "json",
+        "promiser": "/etc/app/config.json",
+        "attributes": 'field = name\nvalue = shop\nlist = { "a", "b" }',
+    },
     "custom-cfengine": {
         "promises": 'files:\n  "/var/www/site"\n    copy_from => mirror("/srv/site"),\n    depth_search => default:recurse("inf");',
         "definitions": 'body copy_from mirror(from)\n{\n  source => "$(from)";\n  purge => "true";\n}',

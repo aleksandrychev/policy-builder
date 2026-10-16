@@ -4,6 +4,7 @@ import ArticleOutlinedIcon from '@mui/icons-material/ArticleOutlined';
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined';
 import ForkRightIcon from '@mui/icons-material/ForkRight';
 import HttpIcon from '@mui/icons-material/Http';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -34,5 +35,6 @@ export const PROMISE_TYPE_ICONS: Record<string, SvgIconComponent> = {
   git: ForkRightIcon,
   systemd: CloudSyncOutlinedIcon,
   http: HttpIcon,
-  ansible: PlaylistPlayIcon
+  ansible: PlaylistPlayIcon,
+  promise: ExtensionOutlinedIcon
 };

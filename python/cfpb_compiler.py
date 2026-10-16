@@ -399,6 +399,50 @@ def unquote(string: str) -> str:
     return re.sub(r"\\([\\\"'])", r"\1", string[1:-1])
 
 
+PROMISE_TYPE = re.compile(r"^[a-z][a-z0-9_]*$")
+ATTRIBUTE_ROW = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*=\s*(.*?)\s*$")
+# A list of quoted strings, written as in CFEngine: { "a", "b" }.
+QUOTED_LIST = re.compile(r'^\{\s*(?:"(?:[^"\\]|\\.)*"\s*(?:,\s*"(?:[^"\\]|\\.)*"\s*)*)?\}$')
+# Handled by the agent and set by the block itself (condition, arrows, How often, note).
+AGENT_ATTRIBUTES = {
+    "if",
+    "unless",
+    "ifvarclass",
+    "classes",
+    "action",
+    "comment",
+    "depends_on",
+    "handle",
+    "meta",
+    "with",
+}
+
+
+def promise_type_of(step: dict, params: dict) -> str:
+    """A step's promise type; a templated one (the Custom promise block) is the picked custom type."""
+    kind = step["promise_type"]
+    if not kind.startswith("{{"):
+        return kind
+    picked = params.get(kind.strip("{}"), "").strip()
+    if not PROMISE_TYPE.match(picked):
+        raise Skip("no promise type picked" if not picked else f"{picked!r} isn't a promise type name")
+    return picked
+
+
+def attribute_rows(text: str) -> list[str]:
+    """`name = value` lines as attributes: a value is a string, or a list of quoted strings."""
+    lines = []
+    for row in lines_of(text):
+        found = ATTRIBUTE_ROW.match(row)
+        if not found:
+            raise Skip(f"{row.strip()!r} isn't an attribute: write name = value")
+        name, value = found.groups()
+        if name in AGENT_ATTRIBUTES:
+            raise Skip(f"{name} is set by the block itself (condition, arrows, How often, note)")
+        lines.append(f"{name} => {value if QUOTED_LIST.match(value) else quote(value)}")
+    return lines
+
+
 def attributes_of(step: dict, ctx: Context) -> list[str]:
     lines = []
     for key, value in step.get("attributes", {}).items():
@@ -1021,6 +1065,8 @@ class FileCompiler:
         # The promise iterates as a whole: its attributes see the same list variable.
         ctx.params = promiser_params
         attributes = attributes_of(step, ctx)
+        if "attribute_rows" in step:
+            attributes += attribute_rows(params.get(step["attribute_rows"], ""))
         variables += ctx.locals
         # A computed template is only known at run time: it renders against datastate().
         template_bound = any(p.get("mustache") and p["name"] in computed for p in declared)
@@ -1028,7 +1074,7 @@ class FileCompiler:
         if template_data:
             variables += template_data
             attributes.append(f"template_data => @({prefix}template_data)")
-        return variables, step["promise_type"], quote(promiser), attributes
+        return variables, promise_type_of(step, params), quote(promiser), attributes
 
     def custom_block(self, block: dict, name: str, params: dict[str, str]) -> str:
         """A Custom CFEngine block's text: its promises as a bundle named after the block, then

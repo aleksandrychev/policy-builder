@@ -16,6 +16,7 @@ LIBRARY = Library.load()
 
 # Sample values by parameter name; anything else gets its default, first option, or a placeholder.
 SAMPLES = {
+    "attributes": "field = name\nvalue = shop",
     "path": "/etc/hosts",
     "destination": "/tmp/cfpb-test/out",
     "source": "/tmp/cfpb-test/in",
@@ -199,7 +200,7 @@ def test_every_block_source_and_decorator_passes_cf_promises_and_lint(tmp_path: 
     # Custom promise types are declared by their modules' enable.cf (cfbs appends it to services/init.cf).
     declared = "".join(
         f'promise agent {kind} {{ path => "/var/cfengine/modules/promises/{kind}.py"; interpreter => "/usr/bin/python3"; }}\n'
-        for kind in ("git", "systemd", "http", "ansible")
+        for kind in ("git", "systemd", "http", "ansible", "json")
     )
     (tmp_path / "promises.cf").write_text(
         'body common control { inputs => { "stdlib.cf", "all.cf" }; bundlesequence => { "all:main" }; }\n'

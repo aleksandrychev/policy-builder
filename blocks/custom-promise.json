@@ -1,0 +1,94 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "custom-promise",
+  "version": 1,
+  "name": "Custom Promise",
+  "category": "From modules",
+  "description": "A promise of a CFEngine Build module's promise type, e.g. json or groups.",
+  "compile_target": "own_bundle",
+  "requires_module": "promise-type-{{promise_type}}",
+  "steps": [
+    {
+      "promise_type": "{{promise_type}}",
+      "promiser": "{{promiser}}",
+      "attribute_rows": "attributes",
+      "attributes": {}
+    }
+  ],
+  "parameters": [
+    {
+      "name": "promise_type",
+      "label": "Promise type",
+      "type": "string",
+      "required": true,
+      "default": "json",
+      "options": [
+        {
+          "value": "appstreams",
+          "label": "AppStream modules"
+        },
+        {
+          "value": "assert",
+          "label": "assert (for test policy)"
+        },
+        {
+          "value": "docker_compose",
+          "label": "docker_compose (Docker Compose)"
+        },
+        {
+          "value": "groups",
+          "label": "groups (local groups)"
+        },
+        {
+          "value": "json",
+          "label": "json (edit JSON files)"
+        },
+        {
+          "value": "sshd",
+          "label": "sshd (sshd configuration)"
+        },
+        {
+          "value": "symlinks",
+          "label": "symlinks"
+        },
+        {
+          "value": "yaml",
+          "label": "yaml (edit YAML files)"
+        },
+        {
+          "value": "git",
+          "label": "git"
+        },
+        {
+          "value": "systemd",
+          "label": "systemd"
+        },
+        {
+          "value": "http",
+          "label": "http"
+        },
+        {
+          "value": "ansible",
+          "label": "ansible"
+        }
+      ],
+      "help": "Adds its module (promise-type-…) to the project. Its README on the module's page lists the attributes."
+    },
+    {
+      "name": "promiser",
+      "label": "Promiser",
+      "type": "string",
+      "required": true,
+      "help": "What the promise is about, e.g. a file path or a group name."
+    },
+    {
+      "name": "attributes",
+      "label": "Attributes",
+      "type": "text",
+      "required": false,
+      "default": "",
+      "help": "One per line, name = value. A list: name = { \"a\", \"b\" }."
+    }
+  ]
+}

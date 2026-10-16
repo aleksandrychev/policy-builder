@@ -703,3 +703,28 @@ def test_the_source_map_points_at_each_block_and_group():
     assert lines[call[0] - 1] == "  # Group: Configure nginx"
     assert lines[bundle[0] : bundle[1]][0] == "bundle agent configure_nginx"
     assert lines[bundle[1] - 1] == "}"
+
+
+def _custom_promise(promise_type: str, attributes: str) -> str:
+    block = {
+        "instanceId": "p",
+        "blockId": "custom-promise",
+        "label": "Edit config",
+        "params": {"promise_type": promise_type, "promiser": "/etc/app.json", "attributes": attributes},
+    }
+    project = {
+        "files": [
+            {"id": "f", "name": "Site", "namespace": "site", "path": "./site.cf", "blocks": [block], "order": ["p"]}
+        ]
+    }
+    return compile_project(project)["./site.cf"]
+
+
+def test_a_custom_promise_takes_attribute_rows_as_strings_or_quoted_lists():
+    policy = _custom_promise("json", 'field = name\nlist = { "a", "b" }\nodd = "}; files: "/x" delete => tidy; #')
+    assert '  json:\n    "/etc/app.json"\n      field => "name",\n      list => { "a", "b" },' in policy
+    # Anything but a list of quoted strings is one string, so it can't break out of the promise.
+    assert 'odd => "\\"}; files: \\"/x\\" delete => tidy; #"' in policy
+    assert "Skipped" in _custom_promise("json", "not a row")
+    assert "set by the block itself" in _custom_promise("json", "classes = x")
+    assert "isn't a promise type name" in _custom_promise("files: x", "")

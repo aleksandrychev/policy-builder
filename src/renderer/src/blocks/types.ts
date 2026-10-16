@@ -103,6 +103,8 @@ export type Expression =
   | TemplateFileExpression;
 
 export interface BlockStep {
+  // A text parameter of `name = value` lines, each an attribute (Custom Promise).
+  attribute_rows?: string;
   attributes?: Record<string, Expression>;
   // git, systemd, http, ansible: custom promise types, from the descriptor's requires_module.
   promise_type:
@@ -120,7 +122,9 @@ export interface BlockStep {
     | 'git'
     | 'systemd'
     | 'http'
-    | 'ansible';
+    | 'ansible'
+    // A parameter holding a custom promise type's name (Custom Promise).
+    | `{{${string}}}`;
   promiser: Template;
 }
 

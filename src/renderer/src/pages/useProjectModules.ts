@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { requiredModule } from '../blocks/requiredModule';
 import { modulesToAdd, modulesToRemove } from '../modules/catalog';
 import { needsInput } from '../modules/moduleInput';
 import { useModuleCatalog } from '../modules/useModuleCatalog';
@@ -17,7 +17,7 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
   const projectModules = useAppSelector(state => state.modules);
   const canvas = useAppSelector(state => state.canvas);
   // The blocks whose promise type a module provides, by label.
-  const usedBy = (name: string) => canvas.filter(block => blockDescriptorsById.get(block.blockId)?.requires_module === name).map(block => block.label);
+  const usedBy = (name: string) => canvas.filter(block => requiredModule(block) === name).map(block => block.label);
   const [openName, setOpenName] = useState<string | null>(null);
   const [openInput, setOpenInput] = useState(false);
   const catalog = useModuleCatalog(viewOpen || openName !== null);

@@ -16,6 +16,7 @@ export function resolveBlockShape(descriptor: BlockDescriptor, valueSourceId: st
 }
 
 export function primaryPromiseType(descriptor: BlockDescriptor): string | undefined {
-  if (descriptor.steps) return descriptor.steps[0]?.promise_type;
+  // A promise type picked in a parameter (Custom Promise): any custom promise.
+  if (descriptor.steps) return descriptor.steps[0]?.promise_type.startsWith('{{') ? 'promise' : descriptor.steps[0]?.promise_type;
   return descriptor.value_sources?.[0]?.steps[0]?.promise_type;
 }

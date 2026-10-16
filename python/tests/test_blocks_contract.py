@@ -146,6 +146,9 @@ def _check_steps(steps: list[dict], params: list[dict], where: str, problems: li
     for index, step in enumerate(steps):
         at = f"{where}/steps/{index}"
         used.update(PLACEHOLDER.findall(step["promiser"]))
+        used.update(PLACEHOLDER.findall(step["promise_type"]))
+        if "attribute_rows" in step:
+            used.add(step["attribute_rows"])
         for attribute, value in step.get("attributes", {}).items():
             used.update(_walk(value, top_level=True, in_decorator=False, problems=problems, where=f"{at}/{attribute}"))
             if (

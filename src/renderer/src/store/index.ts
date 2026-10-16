@@ -2,7 +2,7 @@ import { type TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux
 
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 
-import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { requiredModule } from '../blocks/requiredModule';
 import canvasReducer from './canvasSlice';
 import clipboardReducer from './clipboardSlice';
 import derivedNodesReducer from './derivedNodesSlice';
@@ -34,9 +34,7 @@ const withRequiredModules: typeof contentReducer = (state, action) => {
   const next = contentReducer(state, action);
   if (next.canvas === state?.canvas) return next;
   const present = new Set(next.modules.map(module => module.name));
-  const missing = [...new Set(next.canvas.map(block => blockDescriptorsById.get(block.blockId)?.requires_module))].filter(
-    (name): name is string => name !== undefined && !present.has(name)
-  );
+  const missing = [...new Set(next.canvas.map(requiredModule))].filter((name): name is string => name !== undefined && !present.has(name));
   return missing.length ? { ...next, modules: [...next.modules, ...missing.map(name => ({ name }))] } : next;
 };
 
