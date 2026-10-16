@@ -120,3 +120,12 @@ def test_blocks_around_a_custom_one_keep_their_lines():
     assert lines[ranges["c"][2][1] - 1] == "}"
     [[first, last]] = ranges["r"]
     assert lines[first - 1].strip() == "# After it" and '"done"' in "\n".join(lines[first - 1 : last])
+
+
+def test_a_perms_body_without_rxdirs_is_pointed_out():
+    # CFEngine 3.28 warns on every run: "Using the default value 'false' for attribute rxdirs".
+    promises = 'files:\n  "/srv/app/.managed"\n    create => "true",\n    perms => locked;'
+    [problem] = check(promises, 'body perms locked\n{\n  mode => "600";\n}', "site")
+    assert (problem["field"], problem["line"]) == ("definitions", 1)
+    assert problem["message"].startswith("body perms locked doesn't set rxdirs")
+    assert check(promises, 'body perms locked\n{\n  mode => "600";\n  rxdirs => "false";\n}', "site") == []

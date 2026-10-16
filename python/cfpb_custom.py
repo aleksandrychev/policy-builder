@@ -61,7 +61,23 @@ def check(promises: str, definitions: str, namespace: str) -> list[dict]:
         if line < promises_at:
             field, first = "promises", line
         problems.append({"field": field, "line": line - first + 1, "column": int(found["column"]), "message": message})
-    return problems
+    return problems + _perms_without_rxdirs(definitions)
+
+
+PERMS_BODY = re.compile(r"^\s*body\s+perms\s+(\w+)", re.M)
+
+
+def _perms_without_rxdirs(definitions: str) -> list[dict]:
+    """CFEngine 3.28 warns on every run about a body perms that doesn't set rxdirs."""
+    found = []
+    for match in PERMS_BODY.finditer(definitions):
+        rest = definitions[match.end() :]
+        body = rest[: rest.find("}") + 1] if "}" in rest else rest
+        if "rxdirs" not in body:
+            line = definitions[: match.start()].count("\n") + 1
+            message = f'body perms {match[1]} doesn\'t set rxdirs: CFEngine warns about it on every run (add rxdirs => "false", or "true" for directories)'
+            found.append({"field": "definitions", "line": line, "column": 1, "message": message})
+    return found
 
 
 def syntax_error(promises: str, definitions: str, namespace: str) -> str | None:
