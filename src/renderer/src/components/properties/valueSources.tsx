@@ -12,6 +12,7 @@ import EditNoteOutlinedIcon from '@mui/icons-material/EditNoteOutlined';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import LinkIcon from '@mui/icons-material/Link';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
 import SettingsEthernetIcon from '@mui/icons-material/SettingsEthernet';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -22,6 +23,10 @@ export const VALUE_SOURCE_ICONS: Record<string, SvgIconComponent> = {
   list: FormatListBulletedIcon,
   'per-condition': AltRouteIcon,
   'structured-data-literal': DataObjectIcon,
+  // Another variable's value: the badge ($(…), @(…), mergedata()) tells them apart.
+  variable: LinkIcon,
+  'list-variable': LinkIcon,
+  'data-variable': LinkIcon,
   'command-output': TerminalIcon,
   'file-lines': FormatListBulletedIcon,
   'file-content': DescriptionOutlinedIcon,
