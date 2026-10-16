@@ -400,7 +400,9 @@ def unquote(string: str) -> str:
 
 
 PROMISE_TYPE = re.compile(r"^[a-z][a-z0-9_]*$")
-ATTRIBUTE_ROW = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*=\s*(.*?)\s*$")
+# name = value, or as CFEngine writes it (name => value,): the separator and a trailing , or ; are optional sugar.
+ATTRIBUTE_ROW = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*=>?\s*(.*?)\s*[,;]?\s*$")
+QUOTED = re.compile(r'^"((?:[^"\\]|\\.)*)"$')
 # A list of quoted strings, written as in CFEngine: { "a", "b" }.
 QUOTED_LIST = re.compile(r'^\{\s*(?:"(?:[^"\\]|\\.)*"\s*(?:,\s*"(?:[^"\\]|\\.)*"\s*)*)?\}$')
 # Handled by the agent and set by the block itself (condition, arrows, How often, note).
@@ -439,7 +441,13 @@ def attribute_rows(text: str) -> list[str]:
         name, value = found.groups()
         if name in AGENT_ATTRIBUTES:
             raise Skip(f"{name} is set by the block itself (condition, arrows, How often, note)")
-        lines.append(f"{name} => {value if QUOTED_LIST.match(value) else quote(value)}")
+        if QUOTED_LIST.match(value):
+            lines.append(f"{name} => {value}")
+            continue
+        # A quoted string is the text inside the quotes ("shop" is shop), escapes undone.
+        quoted = QUOTED.match(value)
+        text = re.sub(r'\\(["\\])', r"\1", quoted.group(1)) if quoted else value
+        lines.append(f"{name} => {quote(text)}")
     return lines
 
 

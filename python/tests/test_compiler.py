@@ -725,6 +725,9 @@ def test_a_custom_promise_takes_attribute_rows_as_strings_or_quoted_lists():
     assert '  json:\n    "/etc/app.json"\n      field => "name",\n      list => { "a", "b" },' in policy
     # Anything but a list of quoted strings is one string, so it can't break out of the promise.
     assert 'odd => "\\"}; files: \\"/x\\" delete => tidy; #"' in policy
+    # As CFEngine writes them: => and a trailing comma, a quoted string.
+    written = _custom_promise("json", 'string => "shop",\nother = "say \\"hi\\""\nbare = shop')
+    assert 'string => "shop",' in written and 'other => "say \\"hi\\"",' in written and 'bare => "shop";' in written
     assert "Skipped" in _custom_promise("json", "not a row")
     assert "set by the block itself" in _custom_promise("json", "classes = x")
     assert "isn't a promise type name" in _custom_promise("files: x", "")
