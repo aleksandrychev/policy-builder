@@ -111,7 +111,9 @@ Test environments are Docker containers running real CFEngine: the policy set is
 Reading results:
 - A problem names the block it came from: fix that block, then run again.
 - The first run after a host is set up does most of the work (installing, writing files). If a run reports everything kept on a fresh host, read the log (get_test_results with logLines) for errors from that first run.
-- **not converged**: a host still repaired something in its last run, so a promise changes the host every time (a command that always runs, a file rewritten each run). complianceByRun shows it; find the block before calling the policy done.
+- **not converged**: a host still repaired something in its last run, so a promise changes the host every time (a command that always runs, a file rewritten each run). The host's stillRepairing names the blocks; fix them before calling the policy done.
+- **How often in a test**: test runs ignore it (each run is seconds after the last, on a host with no locks), so a block with How often runs every time. Those that repair are listed as everyRun and don't stop the host converging; reports with How often print every run too, and count as kept.
+- **The hub refuses the policy** (status failed, "The hub refused the policy: …"): the hub's problems name the block and line, as a test run's do. Read get_generated_policy at that line.
 - Policy changed since the last run shows as \`policyChangedSince\`: run again to test the current blocks.`;
 
 const translating = `# Translating existing CFEngine policy
