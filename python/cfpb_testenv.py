@@ -964,6 +964,10 @@ def _setup_code(engine, hub, hub_host: dict) -> None:
 # cf-agent's own location for what it's reporting on, e.g.
 # "info: Promise belongs to bundle 'x' in file '/var/cfengine/inputs/services/cfbs/security.cf' near line 74".
 BELONGS = re.compile(r"Promise belongs to bundle '([^']+)' in file '([^']+)' near line (\d+)")
+# A promise module's error names its place itself: "… (/var/cfengine/inputs/services/cfbs/site.cf:30)".
+IN_FILE = re.compile(r"(/[^\s():']+\.cf):(\d+)")
+# A parser's error: "/var/cfengine/inputs/services/cfbs/site.cf:30:3: error: Undefined promise type 'git'".
+PARSE_ERROR = re.compile(r"^(/\S+\.cf):(\d+):\d+: error: (.*)$")
 # Roll-ups of an error already reported on its own line.
 ROLLUP = re.compile(r"Method '[^']+' failed in some repairs|Errors encountered when actuating|Not all promises")
 INPUTS = "/var/cfengine/inputs/services/cfbs/"
@@ -1060,6 +1064,9 @@ def find_problems(lines: list[str], source_map: dict, block_files: dict, policie
     location: tuple[str, str, int] | None = None
     for raw in lines:
         line = raw.strip()
+        parsed = PARSE_ERROR.match(line)
+        if parsed:
+            line = f"error: {parsed.group(3)} ({parsed.group(1)}:{parsed.group(2)})"
         belongs = BELONGS.search(line)
         if belongs:
             location = (belongs.group(1), belongs.group(2), int(belongs.group(3)))
@@ -1073,6 +1080,10 @@ def find_problems(lines: list[str], source_map: dict, block_files: dict, policie
         message = line[len("error:") :].strip()
         if ROLLUP.search(message) and problems:
             continue
+        # Its own place: the info lines before it are another promise's.
+        named = IN_FILE.search(message) if not location else None
+        if named:
+            location, context = (None, named.group(1), int(named.group(2))), []
         command = COMMAND_FAILED.search(message) if not location and policies else None
         found = _promiser_at(command.group(1), policies) if command else None
         if found:

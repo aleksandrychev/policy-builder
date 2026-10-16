@@ -614,3 +614,19 @@ def test_a_test_build_adds_the_project_modules_before_its_policy(tmp_path: Path,
     with pytest.raises(_Built):
         cfpb_testenv.build_policy({"buildModules": modules}, "3.27.1", str(tmp_path), str(tmp_path / "work"))
     assert calls == [("add", modules), ("policy",)]
+
+
+def test_a_promise_modules_error_is_traced_by_the_place_it_names():
+    lines = [
+        "    info: Successfully installed package 'git'",
+        "   error: Unknown attribute 'comment' for git promise with promiser '/srv/app' (/var/cfengine/inputs/services/cfbs/site.cf:30)",
+        "/var/cfengine/inputs/services/cfbs/site.cf:56:3: error: Undefined promise type 'json'",
+    ]
+    source_map = {"./site.cf": {"clone": [[25, 35]], "config": [[50, 60]]}}
+
+    first, second = cfpb_testenv.find_problems(lines, source_map, {"clone": "f", "config": "f"})
+
+    # The info line before it was another promise's.
+    assert (first["block"], first["line"], first["cause"]) == ("clone", 30, [])
+    assert (second["block"], second["line"]) == ("config", 56)
+    assert second["message"].startswith("Undefined promise type 'json'")
