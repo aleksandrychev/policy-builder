@@ -129,3 +129,9 @@ def test_a_perms_body_without_rxdirs_is_pointed_out():
     assert (problem["field"], problem["line"]) == ("definitions", 1)
     assert problem["message"].startswith("body perms locked doesn't set rxdirs")
     assert check(promises, 'body perms locked\n{\n  mode => "600";\n  rxdirs => "false";\n}', "site") == []
+    # A list's braces don't end the body: rxdirs after it still counts.
+    owned = 'body perms locked\n{\n  mode => "600";\n  owners => { "root" };\n  rxdirs => "false";\n}'
+    assert check(promises, owned, "site") == []
+    assert check(promises, 'body perms locked\n{\n  owners => { "root" };\n  mode => "}";\n}', "site")[0][
+        "message"
+    ].startswith("body perms locked")

@@ -67,13 +67,30 @@ def check(promises: str, definitions: str, namespace: str) -> list[dict]:
 PERMS_BODY = re.compile(r"^\s*body\s+perms\s+(\w+)", re.M)
 
 
+def _body_of(text: str, start: int) -> str:
+    """A body's text from `start`: to the brace closing its opening one (lists like
+    owners => { "root" } have braces too), quoted strings skipped."""
+    depth, quote, opened = 0, None, False
+    for index in range(start, len(text)):
+        char = text[index]
+        if quote:
+            quote = None if char == quote and text[index - 1] != "\\" else quote
+        elif char in "\"'":
+            quote = char
+        elif char == "{":
+            depth, opened = depth + 1, True
+        elif char == "}":
+            depth -= 1
+            if opened and depth == 0:
+                return text[start : index + 1]
+    return text[start:]
+
+
 def _perms_without_rxdirs(definitions: str) -> list[dict]:
     """CFEngine 3.28 warns on every run about a body perms that doesn't set rxdirs."""
     found = []
     for match in PERMS_BODY.finditer(definitions):
-        rest = definitions[match.end() :]
-        body = rest[: rest.find("}") + 1] if "}" in rest else rest
-        if "rxdirs" not in body:
+        if "rxdirs" not in _body_of(definitions, match.end()):
             line = definitions[: match.start()].count("\n") + 1
             message = f'body perms {match[1]} doesn\'t set rxdirs: CFEngine warns about it on every run (add rxdirs => "false", or "true" for directories)'
             found.append({"field": "definitions", "line": line, "column": 1, "message": message})
