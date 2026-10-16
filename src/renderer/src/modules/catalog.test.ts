@@ -27,6 +27,8 @@ describe('the module catalog', () => {
     expect(names(filterCatalog(modules, { ...all, search: 'sshd' }))).toEqual(['library-sshd-config']);
     expect(filterCatalog(modules, { ...all, search: 'old' })).toEqual([{ module: byName.get('promise-type-git'), alias: 'git-old' }]);
     expect(names(filterCatalog(modules, { ...all, supportedOnly: true }))).toEqual(['delete-files']);
+    expect(names(filterCatalog(modules, { ...all, search: 'files deletes' }))).toEqual(['delete-files']);
+    expect(filterCatalog(modules, { ...all, search: 'delete git' })).toEqual([]);
   });
 
   it('adds a module with its dependencies, and removes those nothing else needs', () => {

@@ -125,8 +125,11 @@ export interface CatalogMatch {
   module: CatalogModule;
 }
 
-const matchesTerm = (module: CatalogModule, term: string) =>
-  module.name.toLowerCase().includes(term) || module.description.toLowerCase().includes(term) || module.tags.some(tag => tag.toLowerCase().includes(term));
+// Every word of the search, in any order, in the name, description or tags ("delete files").
+const matchesTerm = (module: CatalogModule, term: string) => {
+  const text = [module.name, module.description, ...module.tags].join(' ').toLowerCase();
+  return term.split(/\s+/).every(word => text.includes(word));
+};
 
 // Tag chip, Supported and libraries; the search is matched by filterCatalog.
 function keeps(module: CatalogModule, { supportedOnly, tag }: CatalogFilter, term: string, showLibraries: boolean) {
