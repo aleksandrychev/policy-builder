@@ -20,7 +20,11 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
   const usedBy = (name: string) => canvas.filter(block => requiredModule(block) === name).map(block => block.label);
   const [openName, setOpenName] = useState<string | null>(null);
   const [openInput, setOpenInput] = useState(false);
-  const catalog = useModuleCatalog(viewOpen || openName !== null);
+  // The Blocks palette's search asks for the list too, to point at modules that match.
+  const [wanted, setWanted] = useState(false);
+  // A search to open the Modules view with (Browse modules…), and a count that remounts it.
+  const [browsing, setBrowsing] = useState({ search: '', count: 0 });
+  const catalog = useModuleCatalog(viewOpen || openName !== null || wanted);
   const open = openName ? catalog.byName.get(openName) : undefined;
   const web = useModuleDetails(open);
 
@@ -61,6 +65,9 @@ export function useProjectModules(viewOpen: boolean, backLabel: string) {
 
   return {
     add,
+    browse: (search: string) => setBrowsing(current => ({ search, count: current.count + 1 })),
+    browsing,
+    want: () => setWanted(true),
     catalog,
     close,
     isNeedingInput,

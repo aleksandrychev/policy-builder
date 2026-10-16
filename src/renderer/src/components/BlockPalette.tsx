@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
-import { Box, ButtonBase, InputAdornment, TextField, Typography } from '@mui/material';
+import { Box, ButtonBase, InputAdornment, Link, TextField, Typography } from '@mui/material';
 
 import { useDraggable } from '@dnd-kit/core';
 
@@ -10,6 +10,7 @@ import { blockDescriptors, groupBlocksByCategory } from '../blocks/loadBlocks';
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
+import { type CatalogModule, filterCatalog } from '../modules/catalog';
 
 // Namespaced so ProjectView's onDragEnd can tell a palette drag (add) apart
 // from a canvas-card drag (reorder), which uses bare instanceIds.
@@ -75,7 +76,34 @@ function CategoryGroup({ category, blocks, onAdd }: { blocks: BlockDescriptor[];
   );
 }
 
-export const BlockPalette = memo(function BlockPalette({ onAddBlock }: { onAddBlock: (block: BlockDescriptor) => void }) {
+interface BlockPaletteProps {
+  // The CFEngine Build modules, to point at those a search no block matches finds (empty until loaded).
+  modules?: CatalogModule[];
+  onAddBlock: (block: BlockDescriptor) => void;
+  onBrowseModules?: (search: string) => void;
+  // Typing in the search: the module list loads.
+  onSearch?: () => void;
+}
+
+// No block matches: modules may, for what no block covers.
+function NoBlocks({ modules = [], onBrowseModules, search }: Pick<BlockPaletteProps, 'modules' | 'onBrowseModules'> & { search: string }) {
+  const count = useMemo(() => filterCatalog(modules, { search, supportedOnly: false, tag: null }).length, [modules, search]);
+  return (
+    <Box sx={{ textAlign: 'center', mt: 2 }}>
+      <Typography sx={{ fontSize: 13, color: 'text.muted' }}>No blocks match “{search}”.</Typography>
+      {count > 0 && onBrowseModules && (
+        <Typography sx={{ fontSize: 13, color: 'text.muted', mt: 1 }}>
+          {count === 1 ? 'One module matches' : `${count} modules match`}.{' '}
+          <Link component="button" onClick={() => onBrowseModules(search)} sx={{ fontSize: 13, verticalAlign: 'baseline' }}>
+            Browse modules…
+          </Link>
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+export const BlockPalette = memo(function BlockPalette({ modules, onAddBlock, onBrowseModules, onSearch }: BlockPaletteProps) {
   const [search, setSearch] = useState('');
 
   const groups = useMemo(() => {
@@ -94,7 +122,10 @@ export const BlockPalette = memo(function BlockPalette({ onAddBlock }: { onAddBl
         </Box>
         <TextField
           value={search}
-          onChange={event => setSearch(event.target.value)}
+          onChange={event => {
+            setSearch(event.target.value);
+            onSearch?.();
+          }}
           placeholder="Search blocks…"
           variant="standard"
           fullWidth
@@ -112,7 +143,7 @@ export const BlockPalette = memo(function BlockPalette({ onAddBlock }: { onAddBl
       </Box>
 
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1, py: 1 }}>
-        {groups.size === 0 && <Typography sx={{ fontSize: 13, color: 'text.muted', textAlign: 'center', mt: 2 }}>No blocks match “{search}”.</Typography>}
+        {groups.size === 0 && <NoBlocks search={search} modules={modules} onBrowseModules={onBrowseModules} />}
         {[...groups.entries()].map(([category, blocks]) => (
           <CategoryGroup key={category} category={category} blocks={blocks} onAdd={onAddBlock} />
         ))}

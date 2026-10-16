@@ -61,6 +61,8 @@ function Section({ children, count, title }: { children: ReactNode; count: numbe
 
 interface ModulesViewProps {
   catalog: ModuleCatalog;
+  // What the search starts with (Browse modules… from the Blocks palette).
+  initialSearch?: string;
   isNeedingInput: (name: string) => boolean;
   onAdd: (name: string) => void;
   onEditInput: (name: string) => void;
@@ -72,8 +74,19 @@ interface ModulesViewProps {
 }
 
 /** The CFEngine Build modules: the project's, then the whole index, searched and filtered by tag. */
-export function ModulesView({ catalog, isNeedingInput, onAdd, onEditInput, onRemove, onSelect, projectModules, selectedName, usedBy }: ModulesViewProps) {
-  const [filter, setFilter] = useState<CatalogFilter>({ search: '', supportedOnly: false, tag: null });
+export function ModulesView({
+  catalog,
+  initialSearch = '',
+  isNeedingInput,
+  onAdd,
+  onEditInput,
+  onRemove,
+  onSelect,
+  projectModules,
+  selectedName,
+  usedBy
+}: ModulesViewProps) {
+  const [filter, setFilter] = useState<CatalogFilter>({ search: initialSearch, supportedOnly: false, tag: null });
   const [showLibraries, setShowLibraries] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 

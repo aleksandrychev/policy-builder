@@ -839,6 +839,11 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     onDragCancel: useStableCallback(() => setDragPreview(null))
   };
   // The sidebars are memoized: they get stable callbacks, and counts that change only with them.
+  const wantModules = useStableCallback(modules.want);
+  const browseModules = useStableCallback((search: string) => {
+    modules.browse(search);
+    sideBar.show('modules');
+  });
   const paletteAddBlock = useStableCallback((descriptor: BlockDescriptor) => {
     sideBar.toCanvas();
     modules.close();
@@ -1074,7 +1079,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             policy={
               <>
                 <Box sx={{ height: `${layout.paletteHeightFraction * 100}%`, minHeight: 0, flexShrink: 0 }}>
-                  <BlockPalette onAddBlock={paletteAddBlock} />
+                  <BlockPalette onAddBlock={paletteAddBlock} modules={modules.catalog.modules} onBrowseModules={browseModules} onSearch={wantModules} />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
                 <Box sx={{ flex: 1, minHeight: 0 }}>

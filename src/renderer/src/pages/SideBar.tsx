@@ -25,6 +25,8 @@ export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFra
       <Box sx={{ width: `${widthFraction * 100}%`, flexShrink: 0, display: 'flex', flexDirection: 'column', bgcolor: 'background.paper' }}>
         {view === 'modules' ? (
           <ModulesView
+            key={modules.browsing.count}
+            initialSearch={modules.browsing.search}
             catalog={modules.catalog}
             projectModules={modules.projectModules}
             selectedName={modules.openName}
