@@ -117,7 +117,15 @@ export function TestResultsView({ onShowBlock }: { onShowBlock: (fileId: string,
   const request = (hosts?: string[]) => {
     const state = store.getState();
     const content = toCfbsProject(
-      { canvas: state.canvas, derivedNodes: state.derivedNodes, edges: state.edges, files: state.files, groups: state.groups, testEnvironments: [] },
+      {
+        canvas: state.canvas,
+        derivedNodes: state.derivedNodes,
+        edges: state.edges,
+        files: state.files,
+        groups: state.groups,
+        modules: state.modules,
+        testEnvironments: []
+      },
       project!
     );
     const masterfiles = project?.masterfiles ?? (environment!.version !== 'latest' ? environment!.version : versions.latest);

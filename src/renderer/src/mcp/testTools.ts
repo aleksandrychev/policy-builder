@@ -88,7 +88,15 @@ const latestRelease = () =>
 
 const contentOf = (state: RootState, project: Project) =>
   toCfbsProject(
-    { canvas: state.canvas, derivedNodes: state.derivedNodes, edges: state.edges, files: state.files, groups: state.groups, testEnvironments: [] },
+    {
+      canvas: state.canvas,
+      derivedNodes: state.derivedNodes,
+      edges: state.edges,
+      files: state.files,
+      groups: state.groups,
+      modules: state.modules,
+      testEnvironments: []
+    },
     project
   );
 

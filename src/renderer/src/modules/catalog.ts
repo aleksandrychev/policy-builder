@@ -2,11 +2,25 @@
 
 export type ModuleKind = 'configured' | 'library' | 'policy' | 'promise-type';
 
-export interface ModuleInputQuestion {
+// A list question's field (one per column of its rows; a single one for a list of texts).
+export interface ModuleInputField {
+  default?: string;
+  key?: string;
   label?: string;
   question?: string;
   type: string;
+}
+
+export interface ModuleInputQuestion {
+  default?: string;
+  label?: string;
+  question?: string;
+  // A list's fields: several (rows of named fields), or one (a list of texts).
+  subtype?: ModuleInputField | ModuleInputField[];
+  type: string;
   variable?: string;
+  // A list's "add another" question.
+  while?: string;
 }
 
 export interface CatalogModule {
@@ -29,6 +43,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
 const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
 
+const inputField = (field: Record<string, unknown>): ModuleInputField => ({
+  default: text(field.default),
+  key: text(field.key),
+  label: text(field.label),
+  question: text(field.question),
+  type: text(field.type) ?? 'string'
+});
+
+function inputQuestion(question: Record<string, unknown>): ModuleInputQuestion {
+  const { subtype } = question;
+  return {
+    ...inputField(question),
+    subtype: Array.isArray(subtype) ? subtype.filter(isRecord).map(inputField) : isRecord(subtype) ? inputField(subtype) : undefined,
+    variable: text(question.variable),
+    while: text(question.while)
+  };
+}
+
 function kindOf(tags: string[], input: unknown[]): ModuleKind {
   if (tags.includes('promise-type')) return 'promise-type';
   if (tags.includes('library')) return 'library';
@@ -48,12 +80,7 @@ export function parseIndex(index: Record<string, unknown>): CatalogModule[] {
       dependencies: strings(entry.dependencies),
       description: text(entry.description) ?? '',
       experimental: tags.includes('experimental'),
-      input: input.map(question => ({
-        label: text(question.label),
-        question: text(question.question),
-        type: text(question.type) ?? 'string',
-        variable: text(question.variable)
-      })),
+      input: input.map(inputQuestion),
       kind: kindOf(tags, input),
       name,
       repo: text(entry.repo),

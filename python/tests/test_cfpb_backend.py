@@ -458,3 +458,13 @@ def test_sigterm_runs_the_cleanup_before_exiting():
     stdout, _ = process.communicate(timeout=10)
     assert stdout == "cleaned up\n"
     assert process.returncode == 143
+
+
+def test_modules_takes_a_project_and_module_names(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    # Nothing runs for a folder without cfbs.json, or a name cfbs wouldn't take.
+    request = lambda **parts: json.dumps({"directory": str(tmp_path), **parts})
+    assert _run(["modules"], request(add=["delete-files"]), monkeypatch)[0] == 2
+    (tmp_path / "cfbs.json").write_text("{}")
+    assert _run(["modules"], request(add=["../evil"]), monkeypatch)[0] == 2
+    code, stdout, _ = _run(["modules"], request(add=[], remove=[]), monkeypatch)
+    assert code == 0 and json.loads(stdout) == {"added": [], "removed": []}

@@ -30,7 +30,7 @@ export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFra
             selectedName={modules.openName}
             isNeedingInput={modules.isNeedingInput}
             onSelect={modules.open}
-            onEditInput={modules.open}
+            onEditInput={modules.openInput}
             onAdd={modules.add}
             onRemove={modules.remove}
           />

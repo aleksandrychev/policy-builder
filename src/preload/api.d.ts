@@ -29,6 +29,8 @@ export type NativeEdit = 'copy' | 'cut' | 'delete' | 'paste' | 'redo' | 'selectA
 // What the builder saves: its cfbs.json modules (`build` entries for a policy set, the one
 // `provides` entry for a module), and its own data for .policy-builder/project.json.
 export interface ProjectContent {
+  // The CFEngine Build modules a policy set has (cfbs add / remove on save), with input answers.
+  buildModules?: { addedBy?: string; input?: Record<string, unknown>; name: string }[];
   modules: object[];
   project: object;
   provided: object;
@@ -290,6 +292,8 @@ export interface OpenedProject {
   builder: Record<string, unknown> | null;
   // The parsed cfbs.json.
   cfbs: Record<string, unknown>;
+  // Each CFEngine Build module's parsed <name>/input.json, when it has one.
+  moduleInputs: Record<string, unknown>;
   path: string;
   // The parsed .policy-builder/test-environments.json's environments, null without.
   testEnvironments: unknown[] | null;

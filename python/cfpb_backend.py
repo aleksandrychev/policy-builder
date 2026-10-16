@@ -6,6 +6,7 @@ diagnostics on stderr, non-zero exit on failure.
   cfpb-backend compile    builder project on stdin -> {"files": {path: policy}} on stdout
   cfpb-backend masterfiles  {"version"} on stdin -> the masterfiles build entry on stdout
   cfpb-backend build      {"path"} on stdin -> the built policy set and its checks on stdout
+  cfpb-backend modules    {"directory", "add", "remove"} on stdin -> cfbs add / remove there
 
 Calls cfengine_cli and cfbs in-process. Import cfengine_cli.format, never
 cfengine_cli.main — that one pulls in cf_remote and ~27 MB of libcloud.
@@ -306,6 +307,56 @@ def init_command() -> int:
     return 0
 
 
+# A module name in the CFEngine Build index (cfbs takes these as they are).
+INDEX_MODULE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,100}$", re.I)
+
+
+def _run_cfbs(directory: str, argv: list[str], what: str) -> None:
+    """cfbs in the project folder; a failure raises with its last error line."""
+    import cfbs.main
+    from cfbs.cfbs_config import CFBSConfig
+
+    CFBSConfig.instance = None  # process-wide singleton: each run reads cfbs.json afresh
+    with _cfbs_session(directory, ["--non-interactive", *argv]) as tee:
+        try:
+            code = cfbs.main.main()
+        except SystemExit as exit:
+            code = exit.code if isinstance(exit.code, int) else 1
+    if code == 0:
+        return
+    output = "".join(tee.chunks)
+    if any(hint in output.lower() for hint in NETWORK_HINTS):
+        raise InitFailed(f"Couldn't download {what} — check your network connection.")
+    errors = [line[len("Error: ") :] for line in output.splitlines() if line.startswith("Error: ")]
+    raise InitFailed(f"cfbs {argv[0]} failed: {errors[-1]}" if errors else f"cfbs {argv[0]} failed (exit {code})")
+
+
+def modules_command() -> int:
+    """Adds and removes CFEngine Build modules in a project's cfbs.json (with their dependencies,
+    as cfbs does: added before the module, removed once nothing needs them)."""
+    try:
+        request = json.loads(sys.stdin.read())
+        directory, add, remove = request["directory"], request.get("add", []), request.get("remove", [])
+        names = [*add, *remove]
+        if not os.path.isfile(os.path.join(directory, "cfbs.json")) or not all(
+            isinstance(name, str) and INDEX_MODULE.match(name) for name in names
+        ):
+            raise ValueError
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        print('Expected {"directory": <a cfbs project>, "add": [names], "remove": [names]} on stdin', file=sys.stderr)
+        return 2
+    try:
+        if remove:
+            _run_cfbs(directory, ["remove", *remove], ", ".join(remove))
+        if add:
+            _run_cfbs(directory, ["add", *add], ", ".join(add))
+    except InitFailed as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(json.dumps({"added": add, "removed": remove}))
+    return 0
+
+
 def masterfiles_command() -> int:
     """The masterfiles build entry cfbs init writes for a version, from a throwaway project:
     for turning a module into a policy set."""
@@ -523,6 +574,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("lint-custom", help="check Custom CFEngine blocks' text")
     commands.add_parser("build", help="build a saved project's policy set and check it")
     commands.add_parser("deploy", help="deploy a built policy set to a hub with cf-remote")
+    commands.add_parser("modules", help="add / remove CFEngine Build modules in a project")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
     testenv.add_argument(
         "action",
@@ -556,6 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         "masterfiles": masterfiles_command,
         "build": build_command,
         "deploy": deploy_command,
+        "modules": modules_command,
     }
     return commands.get(args.command, format_command)()
 

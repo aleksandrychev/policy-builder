@@ -384,6 +384,13 @@ export function warmUpSidecar(): void {
  * The masterfiles build entry cfbs writes for `version` ("3.27.1" or "master"), for turning a
  * module into a policy set. Needs the network, like New Project.
  */
+/** Adds and removes CFEngine Build modules in a project's cfbs.json (cfbs add / remove; may download). */
+export async function syncModules(directory: string, add: string[], remove: string[]): Promise<void> {
+  const result = await runSidecar(['modules'], JSON.stringify({ directory, add, remove }), INIT_TIMEOUT_MS);
+  logStderr(result.stderr);
+  if (result.code !== 0) throw sidecarError(result, INIT_TIMEOUT_MS);
+}
+
 export async function masterfilesEntry(version: string): Promise<Record<string, unknown>> {
   const result = await runSidecar(['masterfiles'], JSON.stringify({ version }), INIT_TIMEOUT_MS);
   logStderr(result.stderr);

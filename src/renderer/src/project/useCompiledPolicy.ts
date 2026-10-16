@@ -37,7 +37,7 @@ export function useCompiledPolicy(enabled: boolean): CompiledPolicyState {
   const groups = useAppSelector(state => state.groups);
 
   const meta = useMemo(
-    () => (project ? toCfbsProject({ canvas, derivedNodes, edges, files, groups, testEnvironments: [] }, project).project : null),
+    () => (project ? toCfbsProject({ canvas, derivedNodes, edges, files, groups, modules: [], testEnvironments: [] }, project).project : null),
     [project, canvas, derivedNodes, edges, files, groups]
   );
   // What the compiler is sent.

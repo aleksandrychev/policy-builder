@@ -6,7 +6,8 @@ import { Box, Button, CircularProgress, Link, Tab, Tabs, Typography } from '@mui
 import { type CatalogModule, sourceUrl } from '../../modules/catalog';
 import type { ReadmeNode } from '../../modules/moduleDetails';
 import type { ModuleDetailsState } from '../../modules/useModuleDetails';
-import type { ProjectModule } from '../../store/modulesSlice';
+import type { ModuleInputResponse, ProjectModule } from '../../store/modulesSlice';
+import { ModuleInputForm } from './ModuleInputForm';
 import { KIND_LABELS, ModuleBadges } from './ModuleRow';
 
 const readmeSx = {
@@ -52,8 +53,11 @@ interface ModulePageProps {
   needsInput: boolean;
   onAdd: () => void;
   onBack: () => void;
+  onInputChange: (variable: string, response: ModuleInputResponse) => void;
   onOpenModule: (name: string) => void;
   onRemove: () => void;
+  // The Input tab first (Edit input).
+  openInput?: boolean;
   web: ModuleDetailsState;
   // The dependencies adding it would bring that the project doesn't have yet.
   wouldAdd: string[];
@@ -83,8 +87,21 @@ function Description({ web }: { web: ModuleDetailsState }) {
 }
 
 /** A module's page, as on build.cfengine.com: description, links, stats, versions and what it needs. */
-export function ModulePage({ added, backLabel, module, needsInput, onAdd, onBack, onOpenModule, onRemove, web, wouldAdd }: ModulePageProps) {
-  const [tab, setTab] = useState(0);
+export function ModulePage({
+  added,
+  backLabel,
+  module,
+  needsInput,
+  onAdd,
+  onBack,
+  onInputChange,
+  onOpenModule,
+  onRemove,
+  openInput,
+  web,
+  wouldAdd
+}: ModulePageProps) {
+  const [tab, setTab] = useState(openInput && module.input.length > 0 ? 2 : 0);
   const details = web.details;
   const repo = module.repo?.startsWith('https://') ? module.repo.replace(/\/$/, '') : undefined;
   const source = sourceUrl(module);
@@ -169,17 +186,23 @@ export function ModulePage({ added, backLabel, module, needsInput, onAdd, onBack
                 ))}
               {tab === 2 && (
                 <>
-                  <Muted>{added ? 'Its questions, answered in the project:' : 'After adding, it asks:'}</Muted>
-                  {module.input.map((question, index) => (
-                    <Typography key={question.variable ?? index} sx={{ fontSize: 13, mt: 1 }}>
-                      <strong>{question.label ?? question.variable}</strong>
-                      {question.question && ` — ${question.question}`}
-                      <Typography component="span" sx={{ fontSize: 12, color: 'text.muted' }}>
-                        {' '}
-                        ({question.type === 'list' ? 'a list' : 'text'})
-                      </Typography>
-                    </Typography>
-                  ))}
+                  {added ? (
+                    <ModuleInputForm questions={module.input} answers={added.module.input ?? {}} onChange={onInputChange} />
+                  ) : (
+                    <>
+                      <Muted>Add the module to answer its questions:</Muted>
+                      {module.input.map((question, index) => (
+                        <Typography key={question.variable ?? index} sx={{ fontSize: 13, mt: 1 }}>
+                          <strong>{question.label ?? question.variable}</strong>
+                          {question.question && ` — ${question.question}`}
+                          <Typography component="span" sx={{ fontSize: 12, color: 'text.muted' }}>
+                            {' '}
+                            ({question.type === 'list' ? 'a list' : 'text'})
+                          </Typography>
+                        </Typography>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
             </Box>
@@ -212,7 +235,7 @@ export function ModulePage({ added, backLabel, module, needsInput, onAdd, onBack
               <>
                 <SideHeading>In this project</SideHeading>
                 <Muted>
-                  Runs after your policy, {added.index + 1} of {added.total} modules.
+                  Runs before your policy, {added.index + 1} of {added.total} modules.
                 </Muted>
               </>
             )}
@@ -252,5 +275,6 @@ export function ModulePage({ added, backLabel, module, needsInput, onAdd, onBack
 
 /** The open module's page over the center area, or else what it shows (`children`). */
 export function ModulePageOr({ children, page }: { children: ReactNode; page?: ModulePageProps }) {
-  return page ? <ModulePage {...page} /> : children;
+  // A page per module: another one starts on its own tab.
+  return page ? <ModulePage key={`${page.module.name}:${page.openInput ? 'input' : ''}`} {...page} /> : children;
 }
