@@ -266,6 +266,21 @@ export interface GitStatus {
 
 export type OperationResult<T> = ({ ok: true } & T) | { details: string; message: string; ok: false };
 
+/** The CFEngine Build module index: downloaded, or offline the last copy (none: index null). */
+export interface ModuleIndexResult {
+  error?: string;
+  fetchedAt: string | null;
+  index: Record<string, unknown> | null;
+  offline: boolean;
+}
+
+/** A module's details on build.cfengine.com (README as HTML, author, downloads, versions, links); null if unlisted. */
+export interface ModuleDetailsResult {
+  details: Record<string, unknown> | null;
+  error?: string;
+  offline: boolean;
+}
+
 export interface MasterfilesVersions {
   latest: string;
 }
@@ -325,6 +340,10 @@ declare global {
       getLayoutSettings: () => Promise<LayoutSettings | null>;
       /** Newest 3.27.x masterfiles release (built-in fallback when offline). */
       getMasterfilesVersions: () => Promise<MasterfilesVersions>;
+      /** A module's details as build.cfengine.com shows them: README, author, downloads, versions, links. */
+      getModuleDetails: (name: string) => Promise<ModuleDetailsResult>;
+      /** The CFEngine Build module index (once per session, or again with refresh). */
+      getModuleIndex: (refresh?: boolean) => Promise<ModuleIndexResult>;
       /** The file-system path of a File dropped onto the window. */
       getPathForFile: (file: File) => string;
       /** The last few opened/created projects, most recent first. */

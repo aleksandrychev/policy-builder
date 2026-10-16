@@ -9,6 +9,7 @@ import edgesReducer from './edgesSlice';
 import filesReducer from './filesSlice';
 import groupsReducer from './groupsSlice';
 import { withHistory } from './history';
+import modulesReducer from './modulesSlice';
 import projectReducer, { projectClosed } from './projectSlice';
 import testEnvironmentsReducer from './testEnvironmentsSlice';
 
@@ -20,6 +21,7 @@ const appReducer = withHistory(
     edges: edgesReducer,
     files: filesReducer,
     groups: groupsReducer,
+    modules: modulesReducer,
     project: projectReducer,
     testEnvironments: testEnvironmentsReducer
   })

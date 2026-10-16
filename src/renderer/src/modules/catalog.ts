@@ -1,0 +1,166 @@
+// The CFEngine Build index (build.cfengine.com) as the Modules view lists it.
+
+export type ModuleKind = 'configured' | 'library' | 'policy' | 'promise-type';
+
+export interface ModuleInputQuestion {
+  label?: string;
+  question?: string;
+  type: string;
+  variable?: string;
+}
+
+export interface CatalogModule {
+  aliases: string[];
+  by?: string;
+  dependencies: string[];
+  description: string;
+  experimental: boolean;
+  input: ModuleInputQuestion[];
+  kind: ModuleKind;
+  name: string;
+  repo?: string;
+  subdirectory?: string;
+  supported: boolean;
+  tags: string[];
+  version?: string;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined);
+
+function kindOf(tags: string[], input: unknown[]): ModuleKind {
+  if (tags.includes('promise-type')) return 'promise-type';
+  if (tags.includes('library')) return 'library';
+  return input.length ? 'configured' : 'policy';
+}
+
+/** The index's modules, A–Z; aliases (old names) are folded into the module they point to. */
+export function parseIndex(index: Record<string, unknown>): CatalogModule[] {
+  const modules = new Map<string, CatalogModule>();
+  for (const [name, entry] of Object.entries(index)) {
+    if (!isRecord(entry) || 'alias' in entry) continue;
+    const tags = strings(entry.tags);
+    const input = Array.isArray(entry.input) ? entry.input.filter(isRecord) : [];
+    modules.set(name, {
+      aliases: [],
+      by: text(entry.by)?.replace(/^https:\/\/github\.com\//, ''),
+      dependencies: strings(entry.dependencies),
+      description: text(entry.description) ?? '',
+      experimental: tags.includes('experimental'),
+      input: input.map(question => ({
+        label: text(question.label),
+        question: text(question.question),
+        type: text(question.type) ?? 'string',
+        variable: text(question.variable)
+      })),
+      kind: kindOf(tags, input),
+      name,
+      repo: text(entry.repo),
+      subdirectory: text(entry.subdirectory),
+      supported: tags.includes('supported'),
+      tags,
+      version: text(entry.version)
+    });
+  }
+  for (const [name, entry] of Object.entries(index)) {
+    const target = isRecord(entry) ? text(entry.alias) : undefined;
+    if (target) modules.get(target)?.aliases.push(name);
+  }
+  return [...modules.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Where a module's source lives: its repo, or its folder in it. */
+export const sourceUrl = (module: CatalogModule) =>
+  module.repo && module.subdirectory ? `${module.repo.replace(/\/$/, '')}/tree/HEAD/${module.subdirectory}` : module.repo;
+
+// The tag chips: the frequent tags; the rest are found by searching.
+export const TAG_CHIPS: { label: string; tag: string }[] = [
+  { label: 'Security', tag: 'security' },
+  { label: 'Inventory', tag: 'inventory' },
+  { label: 'Compliance', tag: 'compliance' },
+  { label: 'Management', tag: 'management' },
+  { label: 'Promise types', tag: 'promise-type' },
+  { label: 'Windows', tag: 'windows' },
+  { label: 'SSH', tag: 'ssh' },
+  { label: 'Libraries', tag: 'library' }
+];
+
+export interface CatalogFilter {
+  search: string;
+  supportedOnly: boolean;
+  tag: string | null;
+}
+
+export interface CatalogMatch {
+  // The alias the search matched, when only an old name did.
+  alias?: string;
+  module: CatalogModule;
+}
+
+const matchesTerm = (module: CatalogModule, term: string) =>
+  module.name.toLowerCase().includes(term) || module.description.toLowerCase().includes(term) || module.tags.some(tag => tag.toLowerCase().includes(term));
+
+// Tag chip, Supported and libraries; the search is matched by filterCatalog.
+function keeps(module: CatalogModule, { supportedOnly, tag }: CatalogFilter, term: string, showLibraries: boolean) {
+  if ((tag && !module.tags.includes(tag)) || (supportedOnly && !module.supported)) return false;
+  if (module.kind !== 'library' || showLibraries || tag === 'library') return true;
+  return term !== '' && module.name.toLowerCase().includes(term);
+}
+
+/**
+ * The modules a filter keeps: name, description, tags or an alias contain the search, the tag
+ * chip and Supported apply. Libraries only show with their chip or when searched for by name.
+ */
+export function filterCatalog(modules: CatalogModule[], filter: CatalogFilter, showLibraries = false): CatalogMatch[] {
+  const term = filter.search.trim().toLowerCase();
+  const matches: CatalogMatch[] = [];
+  for (const module of modules) {
+    if (!keeps(module, filter, term, showLibraries)) continue;
+    if (!term || matchesTerm(module, term)) {
+      matches.push({ module });
+      continue;
+    }
+    const alias = module.aliases.find(name => name.toLowerCase().includes(term));
+    if (alias) matches.push({ module, alias });
+  }
+  return matches;
+}
+
+export interface AddedModule {
+  addedBy?: string;
+  name: string;
+  version?: string;
+}
+
+/** What adding `name` adds: the module, then its dependencies (theirs too) not in the project yet. */
+export function modulesToAdd(catalog: Map<string, CatalogModule>, name: string, present: AddedModule[]): AddedModule[] {
+  const have = new Set(present.map(module => module.name));
+  const added: AddedModule[] = [];
+  const visit = (current: string, addedBy?: string) => {
+    if (have.has(current)) return;
+    have.add(current);
+    added.push({ name: current, version: catalog.get(current)?.version, ...(addedBy ? { addedBy } : {}) });
+    for (const dependency of catalog.get(current)?.dependencies ?? []) visit(dependency, name);
+  };
+  visit(name);
+  return added;
+}
+
+/** What removing `name` removes: it, and the dependencies it brought that nothing left needs. */
+export function modulesToRemove(catalog: Map<string, CatalogModule>, name: string, present: AddedModule[]): string[] {
+  const removed = new Set([name]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const kept = present.filter(module => !removed.has(module.name));
+    const needed = new Set(kept.flatMap(module => catalog.get(module.name)?.dependencies ?? []));
+    for (const module of kept) {
+      if (module.addedBy && removed.has(module.addedBy) && !needed.has(module.name)) {
+        removed.add(module.name);
+        changed = true;
+      }
+    }
+  }
+  return present.filter(module => removed.has(module.name)).map(module => module.name);
+}

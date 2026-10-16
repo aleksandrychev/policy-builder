@@ -15,6 +15,8 @@ import type {
   MasterfilesVersions,
   McpPermissions,
   McpStatus,
+  ModuleDetailsResult,
+  ModuleIndexResult,
   NativeEdit,
   OpenedProject,
   OperationResult,
@@ -199,6 +201,8 @@ const api = {
 
   /** Newest 3.27.x masterfiles release (built-in fallback when offline). */
   getMasterfilesVersions: (): Promise<MasterfilesVersions> => invoke('project:masterfiles-versions'),
+  getModuleIndex: (refresh?: boolean): Promise<ModuleIndexResult> => invoke('modules:index', refresh === true),
+  getModuleDetails: (name: string): Promise<ModuleDetailsResult> => invoke('modules:details', name),
 
   /** Checks whether a project folder can be created at parent/folderName. */
   checkProjectTarget: (parent: string, folderName: string): Promise<TargetCheck> => invoke('project:check-target', { parent, folderName }),
