@@ -17,7 +17,7 @@ Policy Builder builds CFEngine policy from blocks on a canvas. You change the pr
 
 1. **begin_work** with one sentence on what you're about to do. The user sees it, and the editor is locked so they don't edit at the same time. Always pair it with **end_work**.
 2. **get_project_status** / **get_project_overview**: what's open, its files and their namespaces, what's selected. Open or create a project first if none is (create_project, open_project).
-3. **Plan from the block catalog**: list_block_types, then get_block_type for each type you'll use. Use its parameter names, options and required fields exactly; values are checked like the Properties form checks them.
+3. **Plan from the block catalog**: list_block_types, then get_block_type for each type you'll use (\`{ "blockType": "<its id>" }\`). Use its parameter names, options and required fields exactly; values are checked like the Properties form checks them.
 4. **Edit**: add_block, update_block, connect; variables and classes with add_entry; transformers; conditions. Each call is one undo step for the user. add_block takes a condition, a group and an arrow into the block (after) in the same call; add_blocks adds a list of blocks (chained by index) in one call, all or nothing; add_file takes a description and condition.
 5. **tidy_file** after adding or connecting several blocks, so the canvas reads top to bottom in run order.
 6. **Check**: get_warnings (empty required parameters, values a parameter doesn't take, and notCompiled: blocks or entries the policy leaves out, with why), then get_generated_policy for the file you changed: read the promises you meant to write.

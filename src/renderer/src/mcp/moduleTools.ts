@@ -40,18 +40,27 @@ function policySet(state: RootState) {
 
 const usedBy = (state: RootState, name: string) => state.canvas.filter(block => requiredModule(block) === name).map(block => block.label);
 
-// The README as plain text, headings and list items on lines of their own.
-function readmeText(nodes: ReadmeNode[]): string {
-  const blocks = new Set(['p', 'div', 'pre', 'li', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'dd', 'blockquote', 'figure', 'br', 'hr']);
-  return nodes
-    .map(node => {
-      if (typeof node === 'string') return node;
-      const inner = readmeText(node.children);
-      if (node.tag === 'img') return `[image: ${node.alt ?? ''}]`;
-      if (node.tag === 'a' && node.href && inner.trim() && inner.trim() !== node.href) return `${inner} (${node.href})`;
-      return blocks.has(node.tag) ? `\n${node.tag === 'li' ? '- ' : ''}${inner}\n` : inner;
-    })
+// The README as plain text: headings, paragraphs and list items on lines of their own, a table's
+// rows as "a | b"; the markup's own whitespace collapses, except in code blocks.
+const BLOCKS = new Set(['p', 'div', 'pre', 'li', 'tr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'dt', 'dd', 'blockquote', 'figure', 'br', 'hr', 'table']);
+
+function readmeText(nodes: ReadmeNode[], pre = false): string {
+  const parts = nodes.map(node => {
+    if (typeof node === 'string') return pre ? node : node.replace(/\s+/g, ' ');
+    if (node.tag === 'img') return `[image: ${node.alt ?? ''}]`;
+    const inner = readmeText(node.children, pre || node.tag === 'pre');
+    if (node.tag === 'a' && node.href && inner.trim() && inner.trim() !== node.href) return `${inner} (${node.href})`;
+    if (node.tag === 'td' || node.tag === 'th') return `${inner.trim()} | `;
+    if (node.tag === 'tr')
+      return `\n${inner
+        .trim()
+        .replace(/\s*\|$/, '')
+        .replace(/ {2,}/g, ' ')}\n`;
+    return BLOCKS.has(node.tag) ? `\n${node.tag === 'li' ? '- ' : ''}${inner.trim()}\n` : inner;
+  });
+  return parts
     .join('')
+    .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n');
 }
 
@@ -194,7 +203,8 @@ async function setModuleInput(env: ToolEnv, input: Input) {
   if (!isSupported(question)) throw new ToolError(`${variable}'s input type isn’t supported in the builder: answer it with cfbs input`);
   env.dispatch(moduleInputChanged({ name: module.name, variable, response: checkedResponse(question, input.response) }));
   const added = env.getState().modules.find(item => item.name === module.name);
-  return { needsInput: needsInput(module.input, added?.input) || undefined };
+  const unanswered = module.input.filter(item => item.variable && !isAnswered(item, added?.input?.[item.variable])).map(item => item.variable);
+  return { name: module.name, variable, answer: added?.input?.[variable], ...(unanswered.length ? { unanswered } : { complete: true }) };
 }
 
 export const MODULE_TOOLS: Record<string, Tool> = {

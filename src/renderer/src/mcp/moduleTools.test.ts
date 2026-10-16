@@ -42,7 +42,11 @@ beforeEach(() => {
   installApi({
     getModuleIndex: async () => ({ index: INDEX, fetchedAt: '2026-10-16T00:00:00Z', offline: false }),
     getModuleDetails: async () => ({
-      details: { readme: '<h2>Use</h2><p>Lists <a href="https://x.test/y">files</a>.</p>', author: { name: 'Nick' } },
+      details: {
+        readme:
+          '<h2>Use</h2><p>Lists <a href="https://x.test/y">files</a>.</p><table><tr><th>Name</th>\n\t<th>Type</th></tr><tr><td>string</td><td>text</td></tr></table>',
+        author: { name: 'Nick' }
+      },
       offline: false
     })
   });
@@ -65,6 +69,8 @@ describe('module tools', () => {
     expect(module.input).toMatchObject([{ variable: 'files', type: 'list', fields: [{ key: 'path' }, { key: 'why', default: 'Unknown' }] }]);
     expect(module.readme).toContain('Use');
     expect(module.readme).toContain('files (https://x.test/y)');
+    expect(module.readme).toContain('Name | Type\n');
+    expect(module.readme).toContain('string | text');
     expect(await refusal('get_module', { name: 'nope' })).toMatch(/No module nope/);
   });
 
@@ -72,7 +78,12 @@ describe('module tools', () => {
     expect(await call('add_module', { name: 'promise-type-git' })).toMatchObject({ added: ['promise-type-git', 'library-for-promise-types-in-python'] });
     expect(await call('add_module', { name: 'delete-files' })).toMatchObject({ input: expect.stringContaining('set_module_input') });
     expect(await refusal('set_module_input', { name: 'delete-files', variable: 'files', response: [{ path: '/a', reason: 'x' }] })).toMatch(/no field reason/);
-    expect(await call('set_module_input', { name: 'delete-files', variable: 'files', response: [{ path: '/a' }] })).toEqual({});
+    expect(await call('set_module_input', { name: 'delete-files', variable: 'files', response: [{ path: '/a' }] })).toEqual({
+      name: 'delete-files',
+      variable: 'files',
+      answer: [{ path: '/a', why: 'Unknown' }],
+      complete: true
+    });
     expect(store.getState().modules.find(m => m.name === 'delete-files')?.input).toEqual({ files: [{ path: '/a', why: 'Unknown' }] });
     expect((await call('get_module', { name: 'delete-files' })).project).toEqual({ usedBy: [] });
     store.dispatch(undone());
