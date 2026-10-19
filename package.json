@@ -1,6 +1,6 @@
 {
   "name": "cfengine-policy-builder",
-  "version": "0.1.1",
+  "version": "1.2.0",
   "description": "CFEngine Policy Builder - visual CFEngine policy builder (Electron + React)",
   "author": {
     "name": "Northern.tech",
