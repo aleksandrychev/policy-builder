@@ -61,35 +61,3 @@
       field => "name",
       value => "shop",
       list => { "a", "b" };
-
-### promise_type = 'git'
-  # Case 8
-  git:
-    "/etc/app/config.json"
-      field => "name",
-      value => "shop",
-      list => { "a", "b" };
-
-### promise_type = 'systemd'
-  # Case 9
-  systemd:
-    "/etc/app/config.json"
-      field => "name",
-      value => "shop",
-      list => { "a", "b" };
-
-### promise_type = 'http'
-  # Case 10
-  http:
-    "/etc/app/config.json"
-      field => "name",
-      value => "shop",
-      list => { "a", "b" };
-
-### promise_type = 'ansible'
-  # Case 11
-  ansible:
-    "/etc/app/config.json"
-      field => "name",
-      value => "shop",
-      list => { "a", "b" };

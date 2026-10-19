@@ -55,22 +55,6 @@
         {
           "value": "yaml",
           "label": "yaml (edit YAML files)"
-        },
-        {
-          "value": "git",
-          "label": "git"
-        },
-        {
-          "value": "systemd",
-          "label": "systemd"
-        },
-        {
-          "value": "http",
-          "label": "http"
-        },
-        {
-          "value": "ansible",
-          "label": "ansible"
         }
       ],
       "help": "Adds its module (promise-type-…) to the project. Its README lists the attributes: on the module's page, or get_module for AI agents."
