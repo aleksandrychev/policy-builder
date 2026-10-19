@@ -155,7 +155,7 @@ test('opens a project whose builder data is still in cfbs.json, and moves it out
 test('Project Settings converts a policy set to a module and back', async ({ app, window, scratchDir, consoleErrors }) => {
   const path = writeProject(scratchDir, 'convert', builderProject, builderData);
   const statusBar = window.locator('footer');
-  const settings = window.getByRole('button', { name: 'Project settings' });
+  const settings = window.getByRole('navigation', { name: 'Side bar views' }).getByRole('button', { name: 'Project settings' });
   const store = async (as: 'Module' | 'Policy set') => {
     await settings.click();
     await window.getByRole('radio', { name: new RegExp(`^${as}`) }).check();
