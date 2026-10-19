@@ -1069,7 +1069,13 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
           {locked && <AgentLock />}
-          <ActivityBar active={sideBar.activeView} badges={{ modules: modules.needingInput }} onSelect={sideBar.show} />
+          <ActivityBar
+            active={sideBar.activeView}
+            badges={{ modules: modules.needingInput }}
+            onSelect={sideBar.show}
+            onOpenSettings={onOpenSettings}
+            settingsDisabled={locked}
+          />
           <SideBar
             view={sideBar.activeView}
             widthFraction={layout.leftSidebarFraction}
