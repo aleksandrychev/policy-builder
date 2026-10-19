@@ -1083,7 +1083,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
           {locked && <AgentLock />}
           <ActivityBar
             active={sideBar.activeView}
-            badges={{ modules: modules.needingInput }}
+            badges={{ modules: { count: modules.needingInput, title: `${modules.needingInput} needing input` } }}
             onSelect={showSideView}
             onOpenSettings={onOpenSettings}
             settingsDisabled={locked}

@@ -17,7 +17,8 @@ export const SIDE_VIEWS: { icon: SvgIconComponent; id: SideView; label: string; 
 interface ActivityBarProps {
   // The open view; null while the side bar is collapsed.
   active: SideView | null;
-  badges?: Partial<Record<SideView, number>>;
+  // A count on a view's icon, and what it counts (in the tooltip).
+  badges?: Partial<Record<SideView, { count: number; title: string }>>;
   // The settings at the bottom, as VS Code's Manage: the project's.
   onOpenSettings?: () => void;
   onSelect: (view: SideView) => void;
@@ -58,9 +59,9 @@ export function ActivityBar({ active, badges = {}, onOpenSettings, onSelect, set
     >
       {SIDE_VIEWS.map(({ icon: Icon, id, label, shortcut: keys }) => {
         const selected = active === id;
-        const count = badges[id] ?? 0;
+        const { count = 0, title = '' } = badges[id] ?? {};
         return (
-          <Tooltip key={id} title={`${label} (${keys})`} placement="right">
+          <Tooltip key={id} title={`${label} (${keys})${count > 0 ? ` · ${title}` : ''}`} placement="right">
             <ButtonBase aria-label={label} aria-pressed={selected} onClick={() => onSelect(id)} sx={buttonSx(selected)}>
               <Badge badgeContent={count} color="warning" max={99} overlap="circular" sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 16, minWidth: 16 } }}>
                 <Icon sx={{ fontSize: 22 }} />

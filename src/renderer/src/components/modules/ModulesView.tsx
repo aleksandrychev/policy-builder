@@ -80,6 +80,33 @@ function Section({ children, count, success, title }: { children: ReactNode; cou
   );
 }
 
+// Above the project's modules: those with a question unanswered, a click from the first one's Input tab.
+function NeedsInputHint({ names, onAnswer }: { names: string[]; onAnswer: (name: string) => void }) {
+  if (names.length === 0) return null;
+  const text =
+    names.length === 1 ? `${names[0]} needs input before saving can install it.` : `${names.length} modules need input before saving can install them.`;
+  return (
+    <ButtonBase
+      onClick={() => onAnswer(names[0])}
+      sx={(theme: Theme) => ({
+        display: 'flex',
+        width: '100%',
+        justifyContent: 'flex-start',
+        mb: 1,
+        px: 1.25,
+        py: 0.75,
+        borderRadius: '6px',
+        textAlign: 'left',
+        color: theme.palette.warning.dark,
+        bgcolor: alpha(theme.palette.warning.main, 0.08),
+        '&:hover': { bgcolor: alpha(theme.palette.warning.main, 0.16) }
+      })}
+    >
+      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{text} Answer →</Typography>
+    </ButtonBase>
+  );
+}
+
 interface ModulesViewProps {
   // False in a module project: modules go into policy sets.
   canAdd: boolean;
@@ -151,6 +178,9 @@ export function ModulesView({
       dependencies: top.module.addedBy === undefined ? visible.filter(({ module }) => module.addedBy === top.module.name) : []
     }));
   }, [projectModules, catalog.byName, filter, filtering]);
+
+  // The project's modules with a question unanswered: cfbs can't install them yet.
+  const waiting = projectModules.filter(module => isNeedingInput(module.name));
 
   const rowProps = (module: CatalogModule) => ({
     module,
@@ -246,6 +276,7 @@ export function ModulesView({
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pb: 1.5, pt: 0.5 }}>
         {(projectModules.length > 0 || !filtering) && (
           <Section title="In this project" count={inProject.reduce((count, top) => count + 1 + top.dependencies.length, 0)} success>
+            <NeedsInputHint names={waiting.map(module => module.name)} onAnswer={onEditInput} />
             {inProject.length === 0 ? (
               <Typography sx={{ fontSize: 12, color: 'text.muted', px: 1.25, py: 0.75 }}>
                 {filtering ? 'None of them match.' : 'No modules yet. Add one from the list below.'}

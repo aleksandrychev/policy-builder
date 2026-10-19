@@ -5,6 +5,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import CodeIcon from '@mui/icons-material/Code';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import LibraryBooksOutlinedIcon from '@mui/icons-material/LibraryBooksOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -39,12 +40,13 @@ const chipSx = (color?: 'info' | 'warning') => (theme: Theme) => ({
   '& .MuiChip-label': { px: 1 }
 });
 
-/** A module's badges: Experimental, Needs input, Promise type. */
-export function ModuleBadges({ module, needsInput }: { module: CatalogModule; needsInput: boolean }) {
+/** A module's badges: Experimental, Needs input (or, not added yet, Asks for input), Promise type. */
+export function ModuleBadges({ asksInput, module, needsInput }: { asksInput?: boolean; module: CatalogModule; needsInput: boolean }) {
   return (
     <>
       {module.experimental && <Chip label="Experimental" size="small" sx={chipSx('warning')} />}
       {needsInput && <Chip label="Needs input" size="small" sx={chipSx('info')} />}
+      {asksInput && !needsInput && <Chip label="Asks for input" size="small" sx={chipSx('info')} />}
       {module.kind === 'promise-type' && <Chip label="Promise type" size="small" sx={chipSx()} />}
     </>
   );
@@ -144,6 +146,8 @@ export function ModuleRow({
   usedBy
 }: ModuleRowProps) {
   const KindIcon = KIND_ICONS[module.kind];
+  // In the project with a question unanswered: cfbs can't install it yet.
+  const missingInput = inProject && needsInput;
   return (
     <Box
       role="button"
@@ -162,11 +166,11 @@ export function ModuleRow({
         p: 1.5,
         mb: 1,
         border: '1px solid',
-        borderColor: selected ? 'primary.main' : 'divider',
+        borderColor: selected ? 'primary.main' : missingInput ? 'warning.main' : 'divider',
         borderRadius: '6px',
         cursor: 'pointer',
         bgcolor: 'background.paper',
-        '&:hover': { borderColor: selected ? 'primary.main' : 'text.disabled' },
+        '&:hover': { borderColor: selected ? 'primary.main' : missingInput ? 'warning.dark' : 'text.disabled' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 }
       }}
     >
@@ -222,8 +226,23 @@ export function ModuleRow({
               {module.description}
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75, mt: 1, '&:empty': { display: 'none' } }}>
-              <ModuleBadges module={module} needsInput={needsInput} />
+              <ModuleBadges module={module} needsInput={false} asksInput={!inProject && needsInput} />
             </Box>
+            {missingInput && (
+              <Button
+                size="small"
+                color="warning"
+                variant="outlined"
+                startIcon={<EditNoteIcon />}
+                onClick={event => {
+                  event.stopPropagation();
+                  onEditInput();
+                }}
+                sx={{ mt: 1, py: 0.25, fontSize: 12 }}
+              >
+                Answer its input
+              </Button>
+            )}
           </>
         )}
         {dependencies.length > 0 && (

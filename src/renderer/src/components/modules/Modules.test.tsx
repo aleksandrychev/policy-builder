@@ -101,13 +101,16 @@ describe('the Modules view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to project' }));
     expect(store.getState().modules).toEqual([{ name: 'delete-files', version: '2.0.0' }]);
     expect(within(sideBar()).getByText('1')).toBeInTheDocument(); // needs input
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Input' }));
+    // The project's list points at it, and its card answers it.
+    expect(screen.getByText(/delete-files needs input before saving can install it/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Answer its input' }));
+    expect(screen.getByRole('tab', { name: 'Input' })).toHaveAttribute('aria-selected', 'true');
     // The Input tab's Add (the module list's rows have theirs).
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' }).at(-1)!);
     fireEvent.change(screen.getByRole('textbox', { name: 'Path' }), { target: { value: '/etc/hosts.equiv' } });
     expect(store.getState().modules[0].input).toEqual({ files: [{ path: '/etc/hosts.equiv', why: 'Unknown' }] });
     expect(within(sideBar()).queryByText('1')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Answer its input' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Back to Canvas/ }));
     expect(screen.queryByRole('heading', { name: 'delete-files' })).not.toBeInTheDocument();
