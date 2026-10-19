@@ -214,37 +214,24 @@
       ],
       "properties": {
         "promise_type": {
-          "anyOf": [
-            {
-            "enum": [
-              "vars",
-              "classes",
-              "users",
-              "files",
-              "packages",
-              "methods",
-              "processes",
-              "services",
-              "commands",
-              "storage",
-              "reports",
-              "git",
-              "systemd",
-              "http",
-              "ansible"
-            ],
-            "description": "git, systemd, http and ansible are custom promise types: the block's requires_module provides them."
-            },
-            {
-              "type": "string",
-              "pattern": "^\\{\\{[a-z_]+\\}\\}$",
-              "description": "A parameter holding the custom promise type's name (the Custom promise block)."
-            }
-          ]
-        },
-        "attribute_rows": {
-          "type": "string",
-          "description": "A text parameter of `name = value` lines, each an attribute: a string, or a list of quoted strings ({ \"a\", \"b\" })."
+          "enum": [
+            "vars",
+            "classes",
+            "users",
+            "files",
+            "packages",
+            "methods",
+            "processes",
+            "services",
+            "commands",
+            "storage",
+            "reports",
+            "git",
+            "systemd",
+            "http",
+            "ansible"
+          ],
+          "description": "git, systemd, http and ansible are custom promise types: the block's requires_module provides them."
         },
         "promiser": {
           "$ref": "common.v1.json#/$defs/template",

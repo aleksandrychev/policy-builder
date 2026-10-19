@@ -26,12 +26,6 @@ CUSTOM = {
         'commands:\n  "/bin/true"\n    contain => default:in_shell;',
     ],
     "definitions": [""],
-    # Custom Promise's attribute rows: tricky values, and a list.
-    "attributes": [
-        *(f"value = {text}" for text in ['say "hi"', "C:\\temp\\", "a\\b and $(sys.fqhost)"]),
-        'names = { "a", "say \\"hi\\"" }',
-        "",
-    ],
 }
 
 

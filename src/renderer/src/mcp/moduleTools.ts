@@ -131,7 +131,7 @@ async function getModule(env: ToolEnv, input: Input) {
     aliases: module.aliases.length ? module.aliases : undefined,
     promiseType:
       module.kind === 'promise-type'
-        ? 'Adds a promise type: use its block (list_block_types, category "From modules") or Custom Promise. Hosts need python3.'
+        ? 'Adds a promise type: use its block (list_block_types, category "From modules"), if it has one. Hosts need python3.'
         : undefined,
     input: module.input.length
       ? module.input.map(question => ({

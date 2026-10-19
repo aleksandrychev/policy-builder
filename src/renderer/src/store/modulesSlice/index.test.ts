@@ -22,12 +22,3 @@ describe('modules a block needs', () => {
     expect(store.getState().modules).toEqual([]);
   });
 });
-
-describe('a Custom Promise block', () => {
-  it('brings the module of the promise type it picks', () => {
-    const store = makeStore();
-    const fileId = addFile(store);
-    addBlock(store, fileId, { blockId: 'custom-promise', params: { promise_type: 'docker_compose', promiser: 'app' } });
-    expect(store.getState().modules).toEqual([{ name: 'promise-type-docker-compose' }]);
-  });
-});
