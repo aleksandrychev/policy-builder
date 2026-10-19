@@ -114,6 +114,7 @@ export default function App() {
             key={project.id}
             locked={agentWorking}
             dirty={dirty}
+            saving={session.isSaving}
             onSave={session.save}
             onReload={session.reloadProject}
             onOpenSettings={() => setSettingsOpen(true)}

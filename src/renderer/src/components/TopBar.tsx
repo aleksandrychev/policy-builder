@@ -6,7 +6,7 @@ import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { Box, Button, ButtonBase, IconButton, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Button, ButtonBase, CircularProgress, IconButton, Typography, alpha, useTheme } from '@mui/material';
 
 import type { ProjectType } from '../store/projectSlice/types';
 import { BlockNodesIcon } from './icons/BlockNodesIcon';
@@ -82,6 +82,8 @@ interface TopBarProps {
   projectName: string;
   // A project that isn't on disk yet (the demo) is saved with Save As.
   savedToDisk: boolean;
+  // A save is running: the button spins.
+  saving?: boolean;
   // Shown after a tab's name, by tab index (the test environments' spinner / check).
   tabBadges?: Partial<Record<number, ReactNode>>;
   type: ProjectType;
@@ -119,6 +121,7 @@ export function TopBar({
   locked = false,
   onOpenSettings,
   onSave,
+  saving = false,
   savedToDisk,
   tabBadges,
   type
@@ -188,11 +191,12 @@ export function TopBar({
           variant="contained"
           color="primary"
           onClick={onSave}
-          disabled={locked || (savedToDisk && !dirty)}
+          disabled={locked || saving || (savedToDisk && !dirty)}
           title={savedToDisk ? 'Save the project and generate its policy (⌘S)' : 'Save the project to disk (⌘S)'}
+          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : undefined}
           sx={{ whiteSpace: 'nowrap' }}
         >
-          {savedToDisk ? 'Save' : 'Save As…'}
+          {saving ? 'Saving…' : savedToDisk ? 'Save' : 'Save As…'}
         </Button>
       </Box>
     </Box>

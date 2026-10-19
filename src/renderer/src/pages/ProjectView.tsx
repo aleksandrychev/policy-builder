@@ -275,6 +275,9 @@ function DragPreviewCard({ badge, label }: DragPreview) {
   );
 }
 
+// The status bar's text: a save running, else the last action's message.
+const statusText = (saving: boolean, message: string | null) => (saving ? 'Saving…' : (message ?? 'Ready'));
+
 interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
@@ -287,13 +290,15 @@ interface ProjectViewProps {
   onReload: () => Promise<void>;
   // Resolves with whether the project ended up saved.
   onSave: () => Promise<boolean>;
+  // A save is running.
+  saving: boolean;
 }
 
 // A module constant: a new options object each render would make new sensors, and re-render every draggable.
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave, saving }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -1066,6 +1071,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
           onTabChange={showTab}
           tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
           onSave={onSave}
+          saving={saving}
           onOpenSettings={onOpenSettings}
           onConnectAgent={onConnectAgent}
           locked={locked}
@@ -1334,7 +1340,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         <StatusBar
           left={
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusMessage ?? 'Ready'}</Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusText(saving, statusMessage)}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <ProjectStatusLabel project={project} />
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
