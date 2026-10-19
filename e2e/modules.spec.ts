@@ -9,7 +9,7 @@ import { SAVE_TIMEOUT_MS, expect, test } from './fixtures';
 const NETWORK = process.env.CFPB_NETWORK_TESTS === '1';
 
 const activityBar = (window: Page) => window.getByRole('navigation', { name: 'Side bar views' });
-const searchModules = (window: Page) => window.getByPlaceholder('Search modules…');
+const searchModules = (window: Page) => window.getByPlaceholder('Search modules, promise types…');
 
 async function openModule(window: Page, name: string) {
   // Clicking the open view's icon would close it.

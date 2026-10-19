@@ -74,14 +74,14 @@ describe('the Modules view', () => {
     await renderApp();
     fireEvent.click(within(sideBar()).getByRole('button', { name: 'Modules' }));
     expect(await screen.findByText('delete-files')).toBeInTheDocument();
-    expect(screen.getByText(/All modules \(3\)/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /All modules\s*3/i })).toBeInTheDocument();
     expect(screen.queryByText('library-for-promise-types-in-python')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search modules…'), { target: { value: 'git' } });
+    fireEvent.change(screen.getByPlaceholderText('Search modules, promise types…'), { target: { value: 'git' } });
     expect(screen.getByText('promise-type-git')).toBeInTheDocument();
     expect(screen.queryByText('delete-files')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText('Search modules…'), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText('Search modules, promise types…'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Libraries' }));
     expect(screen.getByText('library-for-promise-types-in-python')).toBeInTheDocument();
   });
@@ -161,7 +161,7 @@ describe('modules from the Blocks palette', () => {
     await renderApp();
     fireEvent.change(screen.getByPlaceholderText('Search blocks…'), { target: { value: 'clamav' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Browse modules…' }));
-    expect(screen.getByPlaceholderText('Search modules…')).toHaveValue('clamav');
+    expect(screen.getByPlaceholderText('Search modules, promise types…')).toHaveValue('clamav');
     expect(screen.getByText('clamav')).toBeInTheDocument();
   });
 
@@ -171,8 +171,9 @@ describe('modules from the Blocks palette', () => {
     expect(store.getState().modules).toEqual([{ name: 'promise-type-git' }]);
 
     fireEvent.click(within(sideBar()).getByRole('button', { name: 'Modules' }));
-    // Its library, which cfbs adds on save, shows under it already.
-    expect(await screen.findByText('added for promise-type-git, on save')).toBeInTheDocument();
+    // Its library, which cfbs adds on save, shows in its card already.
+    const library = await screen.findByRole('button', { name: /required by promise-type-git/ });
+    expect(within(library).getByText('on save')).toBeInTheDocument();
     fireEvent.click(screen.getAllByText('promise-type-git')[0]);
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
     expect(screen.getByText(/Used by Git Checkout/)).toBeInTheDocument();
