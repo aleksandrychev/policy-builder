@@ -20,7 +20,7 @@ import { describeFileCondition } from '../canvas/fileCondition';
 import { GATE_EDGE_PREFIX, type Gate, deriveGates, gateKey } from '../canvas/gates';
 import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
-import { ActivityBar } from '../components/ActivityBar';
+import { ActivityBar, type SideView } from '../components/ActivityBar';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
 import { DeploymentView } from '../components/DeploymentView';
@@ -38,6 +38,7 @@ import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { AgentLock } from '../components/agent/AgentLock';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ModulePageOr } from '../components/modules/ModulePage';
+import { ModulesSummary } from '../components/modules/ModulesSummary';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
 import { buildClassNameOptions } from '../components/properties/classOptions';
@@ -274,6 +275,9 @@ function DragPreviewCard({ badge, label }: DragPreview) {
   );
 }
 
+// The status bar's text: a save running, else the last action's message.
+const statusText = (saving: boolean, message: string | null) => (saving ? 'Saving…' : (message ?? 'Ready'));
+
 interface ProjectViewProps {
   // Unsaved changes since the last save (see project/useProjectSession.ts).
   dirty: boolean;
@@ -286,13 +290,15 @@ interface ProjectViewProps {
   onReload: () => Promise<void>;
   // Resolves with whether the project ended up saved.
   onSave: () => Promise<boolean>;
+  // A save is running.
+  saving: boolean;
 }
 
 // A module constant: a new options object each render would make new sensors, and re-render every draggable.
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
 
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
-export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave }: ProjectViewProps) {
+export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave, saving }: ProjectViewProps) {
   const dispatch = useAppDispatch();
   const project = useAppSelector(selectCurrentProject);
   const files = useAppSelector(selectFiles);
@@ -354,6 +360,11 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const [maximized, setMaximized] = useState(false);
   const sideBar = useSideBar({ activeTab, maximized, setActiveTab, setMaximized });
   const modules = useProjectModules(sideBar.activeView === 'modules', PROJECT_TABS[activeTab]);
+  // Blocks and files work on the canvas: picking them leaves a module's page.
+  const showSideView = (view: SideView | null) => {
+    if (view === 'policy') modules.close();
+    sideBar.show(view);
+  };
   const pythonAdvice = usePythonAdvice(allInstances);
   const dismissedAdvice = useAppSelector(state => state.dismissedAdvice);
   // Another tab, or the canvas's file or a block: the module page closes.
@@ -806,7 +817,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         ungroup: ungroupSelection
       },
       view: {
-        showSideView: sideBar.show,
+        showSideView,
         showTab,
         tidy: () => setTidyConfirmOpen(true),
         toggleMaximized: () => setMaximized(current => !current),
@@ -1060,6 +1071,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
           onTabChange={showTab}
           tabBadges={{ 2: <TestActivityBadge />, 3: <DeployActivityBadge path={project.path} /> }}
           onSave={onSave}
+          saving={saving}
           onOpenSettings={onOpenSettings}
           onConnectAgent={onConnectAgent}
           locked={locked}
@@ -1069,7 +1081,13 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
 
         <Box ref={layoutRowRef} sx={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
           {locked && <AgentLock />}
-          <ActivityBar active={sideBar.activeView} badges={{ modules: modules.needingInput }} onSelect={sideBar.show} />
+          <ActivityBar
+            active={sideBar.activeView}
+            badges={{ modules: { count: modules.needingInput, title: `${modules.needingInput} needing input` } }}
+            onSelect={showSideView}
+            onOpenSettings={onOpenSettings}
+            settingsDisabled={locked}
+          />
           <SideBar
             view={sideBar.activeView}
             widthFraction={layout.leftSidebarFraction}
@@ -1082,21 +1100,24 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                   <BlockPalette onAddBlock={paletteAddBlock} modules={modules.catalog.modules} onBrowseModules={browseModules} onSearch={wantModules} />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
-                <Box sx={{ flex: 1, minHeight: 0 }}>
-                  <PolicyFileExplorer
-                    files={files}
-                    folders={folders}
-                    currentFileId={currentFileId}
-                    blockCounts={blockCounts}
-                    onSelectFile={explorer.onSelectFile}
-                    onAddFile={explorer.onAddFile}
-                    onAddFolder={explorer.onAddFolder}
-                    onRenameFile={explorer.onRenameFile}
-                    onRenameFolder={explorer.onRenameFolder}
-                    onDeleteFile={explorer.onDeleteFile}
-                    onDeleteFolder={explorer.onDeleteFolder}
-                    onMove={explorer.onMove}
-                  />
+                <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <PolicyFileExplorer
+                      files={files}
+                      folders={folders}
+                      currentFileId={currentFileId}
+                      blockCounts={blockCounts}
+                      onSelectFile={explorer.onSelectFile}
+                      onAddFile={explorer.onAddFile}
+                      onAddFolder={explorer.onAddFolder}
+                      onRenameFile={explorer.onRenameFile}
+                      onRenameFolder={explorer.onRenameFolder}
+                      onDeleteFile={explorer.onDeleteFile}
+                      onDeleteFolder={explorer.onDeleteFolder}
+                      onMove={explorer.onMove}
+                    />
+                  </Box>
+                  <ModulesSummary count={modules.projectModules.length} needingInput={modules.needingInput} onClick={() => showSideView('modules')} />
                 </Box>
               </>
             }
@@ -1319,7 +1340,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         <StatusBar
           left={
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusMessage ?? 'Ready'}</Typography>
+              <Typography sx={{ fontSize: 11, color: 'text.muted' }}>{statusText(saving, statusMessage)}</Typography>
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>
               <ProjectStatusLabel project={project} />
               <Typography sx={{ fontSize: 11, color: 'divider' }}>|</Typography>

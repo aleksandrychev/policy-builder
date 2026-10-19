@@ -44,6 +44,8 @@ export function useProjectSession() {
   const project = useAppSelector(selectCurrentProject);
   const [baseline, setBaseline] = useState<ProjectData | null>(null);
   const dirty = useAppSelector(state => baseline !== null && isEdited(state, baseline));
+  // A save to disk is running (adding modules with cfbs can take a while).
+  const [isSaving, setIsSaving] = useState(false);
   const [projectDialog, setProjectDialog] = useState<'new' | 'saveAs' | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [error, setShownError] = useState<string | null>(null);
@@ -163,10 +165,12 @@ export function useProjectSession() {
     }
     const run = write({ ...current, path: current.path }, window.api);
     saving.current = run;
+    setIsSaving(true);
     try {
       return await run;
     } finally {
       saving.current = null;
+      setIsSaving(false);
     }
   };
 
@@ -223,6 +227,7 @@ export function useProjectSession() {
     dirty,
     dismissError: () => setError(null),
     error,
+    isSaving,
     newProject: () => guarded(() => setProjectDialog('new')),
     closeProject: () =>
       guarded(() => {

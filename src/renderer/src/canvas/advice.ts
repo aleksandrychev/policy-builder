@@ -28,9 +28,6 @@ function restartAdvice(block: BlockInstance, edges: BlockEdge[]): string | null 
   return `A ${block.params.action} with no arrow on "repaired" into it runs on every agent run (every 5 minutes). Connect it from what changes the service's config, on repaired only.`;
 }
 
-// Promise modules that don't run with Python.
-const WITHOUT_PYTHON = new Set(['promise-type-docker-compose']);
-
 // The key a project ignores this advice by (dismissedAdvice).
 export const PYTHON_ADVICE_KEY = 'python3';
 
@@ -39,8 +36,7 @@ export const PYTHON_ADVICE =
 
 /** Whether a block's promise type needs Python on the host that no Install Package block in the project brings. */
 export function needsPython(block: BlockInstance, canvas: BlockInstance[]): boolean {
-  const module = requiredModule(block);
-  if (!module || WITHOUT_PYTHON.has(module)) return false;
+  if (!requiredModule(block)) return false;
   const installs = (other: BlockInstance) =>
     other.blockId === 'install-package' && (other.params.package_name ?? '').split('\n').some(name => /^python3\b/.test(name.trim()));
   return !canvas.some(installs);

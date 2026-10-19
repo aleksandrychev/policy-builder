@@ -66,6 +66,13 @@ describe('TopBar', () => {
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
+  it('spins while saving, and takes no second click', () => {
+    renderTopBar({ dirty: true, saving: true });
+    const button = screen.getByRole('button', { name: /Saving…/ });
+    expect(button).toBeDisabled();
+    expect(within(button).getByRole('progressbar')).toBeInTheDocument();
+  });
+
   it('offers Save As for a project not on disk', () => {
     renderTopBar({ savedToDisk: false });
     expect(screen.getByRole('button', { name: 'Save As…' })).toBeEnabled();

@@ -47,9 +47,8 @@ describe('python3 for promise modules', () => {
     expect(blockAdvice(clone, [], [clone], ['python3'])).toEqual([]);
   });
 
-  it('isn’t for promise types without Python, or blocks of CFEngine’s own', () => {
-    expect(needsPython(block('custom-promise', { promise_type: 'docker_compose' }), [])).toBe(false);
-    expect(needsPython(block('custom-promise', { promise_type: 'json' }), [])).toBe(true);
+  it('is for promise-type blocks, not blocks of CFEngine’s own', () => {
+    expect(needsPython(block('http-request', { url: 'https://x.test' }), [])).toBe(true);
     expect(needsPython(block('install-package', { package_name: 'git' }), [])).toBe(false);
   });
 });

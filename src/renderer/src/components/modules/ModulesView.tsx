@@ -16,13 +16,15 @@ import {
   Menu,
   MenuItem,
   TextField,
-  Typography
+  type Theme,
+  Typography,
+  alpha
 } from '@mui/material';
 
 import { type CatalogFilter, type CatalogModule, TAG_CHIPS, filterCatalog, modulesToAdd } from '../../modules/catalog';
 import type { ModuleCatalog } from '../../modules/useModuleCatalog';
 import type { ProjectModule } from '../../store/modulesSlice';
-import { ModuleRow } from './ModuleRow';
+import { DependencyRow, ModuleRow } from './ModuleRow';
 
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
@@ -40,22 +42,68 @@ const unknownModule = (module: ProjectModule): CatalogModule => ({
   version: module.version
 });
 
-function Section({ children, count, title }: { children: ReactNode; count: number; title: string }) {
+// A count next to a title: grey, or green for the project's modules.
+function CountBadge({ count, success }: { count: number; success?: boolean }) {
+  return (
+    <Box
+      component="span"
+      sx={(theme: Theme) => ({
+        px: 0.75,
+        borderRadius: '4px',
+        fontSize: 12,
+        fontWeight: 600,
+        lineHeight: '20px',
+        color: success ? theme.palette.success.dark : 'text.secondary',
+        bgcolor: success ? alpha(theme.palette.success.main, 0.12) : 'action.hover'
+      })}
+    >
+      {count}
+    </Box>
+  );
+}
+
+function Section({ children, count, success, title }: { children: ReactNode; count: number; success?: boolean; title: string }) {
   const [collapsed, setCollapsed] = useState(false);
   return (
     <Box>
       <ButtonBase
         onClick={() => setCollapsed(current => !current)}
         aria-expanded={!collapsed}
-        sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 0.5, px: 1, py: 0.75, borderRadius: '4px', justifyContent: 'flex-start' }}
+        sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 1, px: 0.5, py: 1.25, borderRadius: '4px', justifyContent: 'flex-start' }}
       >
-        <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.muted', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s' }} />
-        <Typography sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'text.primary' }}>
-          {title} ({count})
-        </Typography>
+        <ExpandMoreIcon sx={{ fontSize: 18, color: 'text.muted', transform: collapsed ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s' }} />
+        <Typography sx={{ fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'text.secondary' }}>{title}</Typography>
+        <CountBadge count={count} success={success} />
       </ButtonBase>
       {!collapsed && children}
     </Box>
+  );
+}
+
+// Above the project's modules: those with a question unanswered, a click from the first one's Input tab.
+function NeedsInputHint({ names, onAnswer }: { names: string[]; onAnswer: (name: string) => void }) {
+  if (names.length === 0) return null;
+  const text =
+    names.length === 1 ? `${names[0]} needs input before saving can install it.` : `${names.length} modules need input before saving can install them.`;
+  return (
+    <ButtonBase
+      onClick={() => onAnswer(names[0])}
+      sx={(theme: Theme) => ({
+        display: 'flex',
+        width: '100%',
+        justifyContent: 'flex-start',
+        mb: 1,
+        px: 1.25,
+        py: 0.75,
+        borderRadius: '6px',
+        textAlign: 'left',
+        color: theme.palette.warning.dark,
+        bgcolor: alpha(theme.palette.warning.main, 0.08),
+        '&:hover': { bgcolor: alpha(theme.palette.warning.main, 0.16) }
+      })}
+    >
+      <Typography sx={{ fontSize: 12, fontWeight: 600 }}>{text} Answer →</Typography>
+    </ButtonBase>
   );
 }
 
@@ -95,6 +143,8 @@ export function ModulesView({
 
   const added = useMemo(() => new Set(projectModules.map(module => module.name)), [projectModules]);
   const results = useMemo(() => filterCatalog(catalog.modules, filter, showLibraries), [catalog.modules, filter, showLibraries]);
+  // All the list holds, whatever the filter: libraries only with their chip.
+  const total = useMemo(() => filterCatalog(catalog.modules, { search: '', supportedOnly: false, tag: null }, false).length, [catalog.modules]);
   const filtering = filter.search.trim() !== '' || filter.tag !== null || filter.supportedOnly;
 
   // The project's modules in build order, dependencies under the module they came with.
@@ -123,8 +173,14 @@ export function ModulesView({
       : null;
     const visible = entries.filter(({ entry }) => !kept || kept.has(entry.name));
     const tops = visible.filter(({ module }) => !module.addedBy || !visible.some(other => other.module.name === module.addedBy));
-    return tops.flatMap(top => [top, ...visible.filter(({ module }) => module.addedBy === top.module.name && top.module.addedBy === undefined)]);
+    return tops.map(top => ({
+      ...top,
+      dependencies: top.module.addedBy === undefined ? visible.filter(({ module }) => module.addedBy === top.module.name) : []
+    }));
   }, [projectModules, catalog.byName, filter, filtering]);
+
+  // The project's modules with a question unanswered: cfbs can't install them yet.
+  const waiting = projectModules.filter(module => isNeedingInput(module.name));
 
   const rowProps = (module: CatalogModule) => ({
     module,
@@ -138,12 +194,13 @@ export function ModulesView({
   });
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <Box sx={{ p: 2, pb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-          <Typography sx={{ fontSize: 16, fontWeight: 700, color: 'text.primary' }}>Modules</Typography>
-          <IconButton size="small" aria-label="Module list options" onClick={event => setMenuAnchor(event.currentTarget)} sx={{ p: 0.25 }}>
-            <MoreHorizIcon sx={{ fontSize: 18 }} />
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', bgcolor: 'background.default' }}>
+      <Box sx={{ p: 2, pb: 1.25, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, color: 'text.primary' }}>Modules</Typography>
+          {total > 0 && <CountBadge count={total} />}
+          <IconButton size="small" aria-label="Module list options" onClick={event => setMenuAnchor(event.currentTarget)} sx={{ p: 0.25, ml: 'auto' }}>
+            <MoreHorizIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
             <MenuItem
@@ -167,12 +224,12 @@ export function ModulesView({
         <TextField
           value={filter.search}
           onChange={event => setFilter(current => ({ ...current, search: event.target.value }))}
-          placeholder="Search modules…"
-          variant="standard"
+          placeholder="Search modules, promise types…"
           fullWidth
           size="small"
           slotProps={{
             input: {
+              sx: { fontSize: 13, borderRadius: '6px' },
               startAdornment: (
                 <InputAdornment position="start">
                   <SearchIcon sx={{ fontSize: 16, color: 'text.muted' }} />
@@ -181,7 +238,7 @@ export function ModulesView({
             }
           }}
         />
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1.25 }}>
+        <Box sx={{ display: 'flex', gap: 0.75, mt: 1.5, overflowX: 'auto', scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}>
           {[{ label: 'All', tag: null }, ...TAG_CHIPS].map(({ label, tag }) => (
             <Chip
               key={label}
@@ -191,41 +248,55 @@ export function ModulesView({
               color={filter.tag === tag ? 'primary' : 'default'}
               variant={filter.tag === tag ? 'filled' : 'outlined'}
               onClick={() => setFilter(current => ({ ...current, tag }))}
-              sx={{ height: 22, fontSize: 11 }}
+              sx={{ height: 28, px: 0.5, fontSize: 12, borderRadius: '14px', flexShrink: 0 }}
             />
           ))}
         </Box>
-        <FormControlLabel
-          control={
-            <Checkbox
-              size="small"
-              checked={filter.supportedOnly}
-              onChange={event => setFilter(current => ({ ...current, supportedOnly: event.target.checked }))}
-            />
-          }
-          label={<Typography sx={{ fontSize: 12 }}>Supported only</Typography>}
-          sx={{ mt: 0.5, ml: -0.75 }}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={filter.supportedOnly}
+                onChange={event => setFilter(current => ({ ...current, supportedOnly: event.target.checked }))}
+              />
+            }
+            label={<Typography sx={{ fontSize: 13 }}>Supported only</Typography>}
+            sx={{ ml: -0.75 }}
+          />
+          {catalog.modules.length > 0 && (
+            <Typography sx={{ fontSize: 12, fontFamily: 'monospace', color: 'text.muted' }}>{results.length} available</Typography>
+          )}
+        </Box>
         {catalog.offline && catalog.fetchedAt && (
           <Typography sx={{ fontSize: 11, color: 'text.muted' }}>Offline · list from {shortDate(catalog.fetchedAt)}</Typography>
         )}
       </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1, pb: 1 }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pb: 1.5, pt: 0.5 }}>
         {(projectModules.length > 0 || !filtering) && (
-          <Section title="In this project" count={inProject.length}>
+          <Section title="In this project" count={inProject.reduce((count, top) => count + 1 + top.dependencies.length, 0)} success>
+            <NeedsInputHint names={waiting.map(module => module.name)} onAnswer={onEditInput} />
             {inProject.length === 0 ? (
               <Typography sx={{ fontSize: 12, color: 'text.muted', px: 1.25, py: 0.75 }}>
                 {filtering ? 'None of them match.' : 'No modules yet. Add one from the list below.'}
               </Typography>
             ) : (
-              inProject.map(({ module, entry }) => (
+              inProject.map(({ module, entry, dependencies }) => (
                 <ModuleRow
                   key={module.name}
                   {...rowProps(entry)}
                   inProject
-                  addedFor={module.addedBy && ('pending' in module ? `${module.addedBy}, on save` : module.addedBy)}
+                  addedFor={module.addedBy}
                   needsInput={isNeedingInput(module.name)}
+                  dependencies={dependencies.map(dependency => (
+                    <DependencyRow
+                      key={dependency.module.name}
+                      {...rowProps(dependency.entry)}
+                      addedFor={module.name}
+                      pending={'pending' in dependency.module}
+                    />
+                  ))}
                 />
               ))
             )}
