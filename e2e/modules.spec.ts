@@ -69,6 +69,11 @@ test('browse modules, open their pages, add one and answer its input', async ({ 
     await expect(window.getByPlaceholder('Search blocks…')).toBeVisible();
   });
 
+  await test.step('the modules row under Configurations opens the Modules view', async () => {
+    await window.getByRole('button', { name: /^Modules: 3 in the project/ }).click();
+    await expect(searchModules(window)).toBeVisible();
+  });
+
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 

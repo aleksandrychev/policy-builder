@@ -38,6 +38,7 @@ import { PROJECT_TABS, TopBar } from '../components/TopBar';
 import { AgentLock } from '../components/agent/AgentLock';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ModulePageOr } from '../components/modules/ModulePage';
+import { ModulesSummary } from '../components/modules/ModulesSummary';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
 import { buildClassNameOptions } from '../components/properties/classOptions';
@@ -1093,21 +1094,24 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
                   <BlockPalette onAddBlock={paletteAddBlock} modules={modules.catalog.modules} onBrowseModules={browseModules} onSearch={wantModules} />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
-                <Box sx={{ flex: 1, minHeight: 0 }}>
-                  <PolicyFileExplorer
-                    files={files}
-                    folders={folders}
-                    currentFileId={currentFileId}
-                    blockCounts={blockCounts}
-                    onSelectFile={explorer.onSelectFile}
-                    onAddFile={explorer.onAddFile}
-                    onAddFolder={explorer.onAddFolder}
-                    onRenameFile={explorer.onRenameFile}
-                    onRenameFolder={explorer.onRenameFolder}
-                    onDeleteFile={explorer.onDeleteFile}
-                    onDeleteFolder={explorer.onDeleteFolder}
-                    onMove={explorer.onMove}
-                  />
+                <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <PolicyFileExplorer
+                      files={files}
+                      folders={folders}
+                      currentFileId={currentFileId}
+                      blockCounts={blockCounts}
+                      onSelectFile={explorer.onSelectFile}
+                      onAddFile={explorer.onAddFile}
+                      onAddFolder={explorer.onAddFolder}
+                      onRenameFile={explorer.onRenameFile}
+                      onRenameFolder={explorer.onRenameFolder}
+                      onDeleteFile={explorer.onDeleteFile}
+                      onDeleteFolder={explorer.onDeleteFolder}
+                      onMove={explorer.onMove}
+                    />
+                  </Box>
+                  <ModulesSummary count={modules.projectModules.length} needingInput={modules.needingInput} onClick={() => showSideView('modules')} />
                 </Box>
               </>
             }
