@@ -85,7 +85,8 @@ const rowSx = {
   display: 'flex',
   alignItems: 'center',
   gap: 1,
-  px: 1.25,
+  pl: 0.25,
+  pr: 1.25,
   py: 0.75,
   borderRadius: '4px',
   '&:hover .file-row-actions, &:focus-within .file-row-actions': { opacity: 1 }
@@ -687,7 +688,8 @@ export const PolicyFileExplorer = memo(function PolicyFileExplorer({
           onExpandedItemsChange={(_event, itemIds) => setExpandedItems(itemIds)}
           selectedItems={currentFileId}
           // The rows carry their own 6px; the tree item's padding would double it.
-          sx={{ '& .MuiTreeItem-content': { py: 0 } }}
+          // Their icons line up with the Blocks palette's: the tree's own padding and arrow gap are dropped.
+          sx={{ '& .MuiTreeItem-content': { py: 0, pl: 0, gap: 0 } }}
         >
           {renderChildren(null, tree)}
         </SimpleTreeView>
