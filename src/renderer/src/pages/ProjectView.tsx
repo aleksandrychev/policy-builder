@@ -20,7 +20,7 @@ import { describeFileCondition } from '../canvas/fileCondition';
 import { GATE_EDGE_PREFIX, type Gate, deriveGates, gateKey } from '../canvas/gates';
 import { GRID_SIZE, NODE_WIDTH, type Position, estimateNodeHeight, nextStackPosition } from '../canvas/layout';
 import { tidyPositions } from '../canvas/tidy';
-import { ActivityBar } from '../components/ActivityBar';
+import { ActivityBar, type SideView } from '../components/ActivityBar';
 import { BlockGroupRow } from '../components/BlockGroupRow';
 import { BlockPalette } from '../components/BlockPalette';
 import { DeploymentView } from '../components/DeploymentView';
@@ -354,6 +354,11 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const [maximized, setMaximized] = useState(false);
   const sideBar = useSideBar({ activeTab, maximized, setActiveTab, setMaximized });
   const modules = useProjectModules(sideBar.activeView === 'modules', PROJECT_TABS[activeTab]);
+  // Blocks and files work on the canvas: picking them leaves a module's page.
+  const showSideView = (view: SideView | null) => {
+    if (view === 'policy') modules.close();
+    sideBar.show(view);
+  };
   const pythonAdvice = usePythonAdvice(allInstances);
   const dismissedAdvice = useAppSelector(state => state.dismissedAdvice);
   // Another tab, or the canvas's file or a block: the module page closes.
@@ -806,7 +811,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         ungroup: ungroupSelection
       },
       view: {
-        showSideView: sideBar.show,
+        showSideView,
         showTab,
         tidy: () => setTidyConfirmOpen(true),
         toggleMaximized: () => setMaximized(current => !current),
@@ -1072,7 +1077,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
           <ActivityBar
             active={sideBar.activeView}
             badges={{ modules: modules.needingInput }}
-            onSelect={sideBar.show}
+            onSelect={showSideView}
             onOpenSettings={onOpenSettings}
             settingsDisabled={locked}
           />

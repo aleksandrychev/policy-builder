@@ -63,6 +63,12 @@ test('browse modules, open their pages, add one and answer its input', async ({ 
     await expect(window.getByRole('button', { name: 'Remove' })).toBeDisabled();
   });
 
+  await test.step('Blocks and files leaves the module’s page for the canvas', async () => {
+    await activityBar(window).getByRole('button', { name: 'Blocks and files' }).click();
+    await expect(window.getByRole('heading', { name: 'promise-type-git', exact: true })).toBeHidden();
+    await expect(window.getByPlaceholder('Search blocks…')).toBeVisible();
+  });
+
   expect(consoleErrors, 'console errors during the run').toEqual([]);
 });
 
