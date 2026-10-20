@@ -62,13 +62,19 @@ function describe(param) {
   return cell(parts.filter(Boolean).join(' '));
 }
 
+// A markdown table with every column padded to its widest cell, so the source lines up.
+function table(head, rows) {
+  const widths = head.map((title, column) => Math.max(3, title.length, ...rows.map(row => row[column].length)));
+  const line = cells => `| ${cells.map((text, column) => text.padEnd(widths[column])).join(' | ')} |`;
+  return [line(head), line(widths.map(width => '-'.repeat(width))), ...rows.map(line)];
+}
+
 function settingsTable(params) {
   if (!params.length) return [];
-  return [
-    '| Setting | Required | Description |',
-    '| --- | --- | --- |',
-    ...params.map(param => `| **${cell(param.label)}** | ${param.required ? 'Yes' : 'No'} | ${describe(param)} |`)
-  ];
+  return table(
+    ['Setting', 'Required', 'Description'],
+    params.map(param => [`**${cell(param.label)}**`, param.required ? 'Yes' : 'No', describe(param)])
+  );
 }
 
 // The snapshot's first case: the policy the block generates from the test's example settings.
@@ -109,11 +115,13 @@ function blockSection(descriptor) {
       '',
       `Where the ${descriptor.entries?.noun ?? 'value'} comes from:`,
       '',
-      '| Source | CFEngine | Settings |',
-      '| --- | --- | --- |',
-      ...descriptor.value_sources.map(
-        source =>
-          `| **${cell(source.label)}** | ${source.badge ? `\`${cell(source.badge)}\`` : '—'} | ${cell(source.parameters.map(param => param.label).join(', ')) || '—'} |`
+      ...table(
+        ['Source', 'CFEngine', 'Settings'],
+        descriptor.value_sources.map(source => [
+          `**${cell(source.label)}**`,
+          source.badge ? `\`${cell(source.badge)}\`` : '—',
+          cell(source.parameters.map(param => param.label).join(', ')) || '—'
+        ])
       ),
       ''
     );
