@@ -1,0 +1,63 @@
+{
+  "ansible-playbook": { "label": "Run the site playbook", "params": { "playbook": "/srv/ansible/site.yml", "tags": "web" } },
+  "call-method": { "label": "Run site checks", "params": { "bundle_name": "site_checks" } },
+  "clean-up-old-files": { "label": "Clean up old temp files", "params": { "directory": "/var/tmp", "days": "14" } },
+  "comment-lines": { "label": "Comment out port 8080", "params": { "path": "/etc/nginx/nginx.conf", "pattern": "listen 8080.*" } },
+  "copy-directory": { "label": "Copy the static files", "params": { "destination": "/opt/app/static", "source": "/srv/build/static" } },
+  "copy-file": { "label": "Copy the message of the day", "params": { "destination": "/etc/motd", "source": "/srv/files/motd" } },
+  "create-directory": { "label": "Create the web root", "params": { "path": "/var/www/html", "owner": "www-data", "group": "www-data" } },
+  "create-edit-file": { "label": "Write the app config", "params": { "path": "/etc/app.conf", "content": "name = \"app\"\nport = 8080\n" } },
+  "create-symlink": { "label": "Enable the app site", "params": { "link": "/etc/nginx/sites-enabled/app", "target": "/etc/nginx/sites-available/app" } },
+  "cron-job": { "label": "Back up nightly", "params": { "command": "/usr/local/bin/backup.sh", "hours": "3", "minutes": "30" } },
+  "custom-cfengine": {
+    "label": "Mirror the site",
+    "params": {
+      "promises": "files:\n  \"/var/www/site\"\n    copy_from => mirror(\"/srv/site\"),\n    depth_search => default:recurse(\"inf\");",
+      "definitions": "body copy_from mirror(from)\n{\n  source => \"$(from)\";\n  purge => \"true\";\n}"
+    }
+  },
+  "define-class": {
+    "label": "Roles",
+    "entries": [{ "name": "nginx_installed", "source": "check-file-exists", "params": { "path": "/usr/sbin/nginx" } }]
+  },
+  "define-variable": {
+    "label": "App settings",
+    "entries": [
+      { "name": "app_port", "source": "literal", "params": { "value": "8080" } },
+      { "name": "admins", "source": "list", "params": { "items": "alice\nbob" } }
+    ]
+  },
+  "ensure-lines": { "label": "Add the app to hosts", "params": { "path": "/etc/hosts", "lines": "10.0.0.5 db.local" } },
+  "git-checkout": {
+    "label": "Clone the app",
+    "params": { "destination": "/srv/app", "repository": "https://github.com/cfengine/starter_pack", "version": "main" }
+  },
+  "http-request": {
+    "label": "Download the logo",
+    "params": { "url": "https://cfengine.com/images/cfengine-logo.svg", "file": "/var/www/html/logo.svg" }
+  },
+  "install-package": { "label": "Install nginx", "params": { "package_name": "nginx" } },
+  "manage-service": { "label": "Keep nginx running", "params": { "service_name": "nginx" } },
+  "manage-users": { "label": "Create the deploy user", "params": { "username": "deploy" } },
+  "mount-storage": { "label": "Mount the share", "params": { "mount_point": "/mnt/share", "server": "nas.local", "remote_path": "/exports/share" } },
+  "remove-directory": { "label": "Remove the build cache", "params": { "path": "/tmp/build" } },
+  "remove-file": { "label": "Remove the default site", "params": { "path": "/etc/nginx/sites-enabled/default" } },
+  "remove-lines": { "label": "Remove passwordless sudo", "params": { "path": "/etc/sudoers", "pattern": ".*NOPASSWD.*" } },
+  "remove-package": { "label": "Remove telnet", "params": { "package_name": "telnet" } },
+  "render-template": {
+    "label": "Render the app config",
+    "params": { "destination": "/etc/app.conf", "template_content": "host = {{{vars.sys.fqhost}}}\n" }
+  },
+  "replace-text": { "label": "Use the demo domain", "params": { "path": "/etc/nginx/nginx.conf", "find": "example\\.com", "replace": "demo.local" } },
+  "report-message": { "label": "Report provisioning", "params": { "message": "Provisioned $(sys.fqhost)" } },
+  "rotate-log": { "label": "Rotate the app log", "params": { "path": "/var/log/app.log", "max_size": "50M" } },
+  "run-command": { "label": "Update CA certificates", "params": { "command": "/usr/sbin/update-ca-certificates" } },
+  "set-config-values": { "label": "Harden SSH", "params": { "path": "/etc/ssh/sshd_config", "settings": "PermitRootLogin no\nMaxAuthTries 3" } },
+  "set-permissions": { "label": "Lock down the shadow file", "params": { "path": "/etc/shadow", "mode": "640", "group": "shadow" } },
+  "signal-process": { "label": "Reload nginx", "params": { "process_pattern": "nginx: master.*" } },
+  "systemd-unit": {
+    "label": "Run my app",
+    "params": { "name": "myapp", "exec_start": "/usr/bin/myapp --port 8080", "after": "network-online.target", "unit_description": "My app" }
+  },
+  "watch-file": { "label": "Watch the account files", "params": { "path": "/etc/passwd\n/etc/group" } }
+}

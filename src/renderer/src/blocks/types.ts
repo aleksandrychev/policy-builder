@@ -15,6 +15,11 @@ export interface BodyExpression {
   lib?: 'builder' | 'stdlib';
 }
 
+// A body named by a parameter's value: `name` (default:) or `namespace:name`.
+export interface BodyParamExpression {
+  body_param: string;
+}
+
 export interface ListExpression {
   list: Expression[];
 }
@@ -91,6 +96,7 @@ export type Expression =
   | CasesParamExpression
   | CallExpression
   | BodyExpression
+  | BodyParamExpression
   | ListExpression
   | ListParamExpression
   | ClassRefsExpression
@@ -144,7 +150,7 @@ export interface BlockParameter {
   mustache?: boolean;
   name: string;
   options?: ParameterOption[];
-  // A number parameter with options: the label of the field for any other number.
+  // With options: the label of the field for any other value (a number always takes one).
   other_label?: string;
   path?: 'absolute';
   references?: 'variable';
@@ -181,7 +187,7 @@ export interface BlockEntriesConfig {
 // Either steps + parameters (a plain block) or value_sources is present,
 // never both — enforced by the schema's oneOf, so both stay optional here.
 export interface BlockDescriptor {
-  // What a new arrow drawn from this block waits for (default "kept").
+  // What a new arrow drawn from this block waits for (default: kept or repaired).
   arrow_default_outcome?: BlockOutcome;
   category: string;
   // own_bundle: sequenced (arrows, outcomes); file_vars: the file's shared vars bundle.
@@ -205,6 +211,9 @@ export interface BlockDescriptor {
 }
 
 export const optionValue = (option: ParameterOption): string => (typeof option === 'string' ? option : option.value);
+
+// Options that are suggestions: any number, or any value when there's a field for it.
+export const takesOtherValues = (parameter: BlockParameter): boolean => parameter.type === 'number' || Boolean(parameter.other_label);
 export const optionLabel = (option: ParameterOption): string => (typeof option === 'string' ? option : option.label);
 export const optionHelp = (option: ParameterOption | undefined): string | undefined => (typeof option === 'object' ? option.help : undefined);
 

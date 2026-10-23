@@ -32,9 +32,9 @@ export function toggleOutcome(outcomes: BlockOutcome[], outcome: BlockOutcome): 
 
 export const ALL_OUTCOMES: BlockOutcome[] = OUTCOMES.map(option => option.outcome);
 
-// What a newly drawn arrow waits for: "kept" unless the source block type
-// says otherwise (render-template: "repaired", i.e. "the rendered file
-// changed" — the restart-after-config-change case).
+// What a newly drawn arrow waits for: "after it succeeded" (kept or repaired, as the agent
+// tools default to), unless the source block type says otherwise (render-template: "repaired",
+// i.e. "the rendered file changed" — the restart-after-config-change case).
 export function defaultOutcomesFor(descriptor: BlockDescriptor | undefined): BlockOutcome[] {
-  return [descriptor?.arrow_default_outcome ?? 'kept'];
+  return descriptor?.arrow_default_outcome ? [descriptor.arrow_default_outcome] : ['kept', 'repaired'];
 }

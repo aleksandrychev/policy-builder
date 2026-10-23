@@ -1,5 +1,5 @@
 import { type CaseRow, serializeCases } from '../blocks/cases';
-import { type BlockParameter, optionValue } from '../blocks/types';
+import { type BlockParameter, optionValue, takesOtherValues } from '../blocks/types';
 import { acceptsNumberInput, numberError, pathError } from '../components/properties/inputFilters';
 import { ToolError } from './shared';
 
@@ -51,7 +51,7 @@ export function valueProblem(parameter: BlockParameter, value: string): string |
   if (parameter.type === 'boolean' && value !== 'true' && value !== 'false') return 'is true or false';
   if (parameter.type === 'number' && value !== '') return numberProblem(parameter, value);
   const allowed = parameter.options?.map(optionValue);
-  if (allowed && value !== '' && !allowed.includes(value)) return `is one of ${allowed.join(', ')}`;
+  if (allowed && !takesOtherValues(parameter) && value !== '' && !allowed.includes(value)) return `is one of ${allowed.join(', ')}`;
   if (parameter.allowed_chars && !new RegExp(`^[${parameter.allowed_chars}]*$`).test(value)) {
     return `allows only ${parameter.allowed_chars} (${parameter.help ?? 'letters, numbers and underscores'})`;
   }
@@ -81,6 +81,14 @@ export function checkedParams(parameters: BlockParameter[], raw: RawParams | und
   return params;
 }
 
+const otherValues = (parameter: BlockParameter): string => {
+  const what =
+    parameter.type === 'number'
+      ? `any ${parameter.integer ? 'whole number' : 'number'}${parameter.minimum !== undefined ? ` from ${parameter.minimum}` : ''}`
+      : 'any other value';
+  return `${what} too${parameter.other_label ? ` (${parameter.other_label})` : ''}; options are suggestions`;
+};
+
 export const parameterView = (parameter: BlockParameter) => ({
   name: parameter.name,
   label: parameter.label,
@@ -88,11 +96,8 @@ export const parameterView = (parameter: BlockParameter) => ({
   required: parameter.required,
   default: parameter.default,
   options: parameter.options?.map(optionValue),
-  // A number with suggested values: the options aren't the only ones.
-  otherValues:
-    parameter.options && parameter.type === 'number'
-      ? `any ${parameter.integer ? 'whole number' : 'number'}${parameter.minimum !== undefined ? ` from ${parameter.minimum}` : ''} too${parameter.other_label ? ` (${parameter.other_label})` : ''}; options are suggestions`
-      : undefined,
+  // Suggested values: the options aren't the only ones.
+  otherValues: parameter.options && takesOtherValues(parameter) ? otherValues(parameter) : undefined,
   allowedChars: parameter.allowed_chars,
   absolutePath: parameter.path === 'absolute' || undefined,
   referencesVariable: parameter.references === 'variable' || undefined,

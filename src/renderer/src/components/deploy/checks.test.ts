@@ -45,6 +45,10 @@ describe('savedCheck', () => {
     expect(savedCheck(true)).toMatchObject({ tone: 'warning', status: 'Unsaved edits (pre-flight saves)' });
     expect(savedCheck(false)).toMatchObject({ tone: 'success', status: 'All saved' });
   });
+
+  it('warns about a project that was never saved to a folder', () => {
+    expect(savedCheck(false, false)).toMatchObject({ tone: 'warning', status: 'Not saved to a folder yet' });
+  });
 });
 
 describe('testedCheck', () => {

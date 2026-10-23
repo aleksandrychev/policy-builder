@@ -41,7 +41,10 @@
     "test:coverage": "vitest run --project renderer --project components --project main --project integration --coverage",
     "test:integration": "vitest run --project integration",
     "test:watch": "vitest --project renderer --project main",
-    "test:e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts"
+    "test:e2e": "electron-vite build && playwright test -c e2e/playwright.config.ts",
+    "docs:screenshots": "electron-vite build && playwright test -c e2e/docs/playwright.config.ts",
+    "docs:clips": "electron-vite build && CLIPS=1 playwright test -c e2e/docs/playwright.config.ts clips",
+    "docs:blocks": "node scripts/docs-blocks.mjs ../documentation/content/policy-builder/blocks"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",

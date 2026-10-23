@@ -11,7 +11,7 @@ import { registerDeployHandlers } from './deploy';
 import { registerHubHandlers } from './hub';
 import { registerMcpHandlers } from './mcp';
 import { registerModuleHandlers } from './modules';
-import { clearRecentProjects, getRecentProjects, onRecentsChanged, registerProjectHandlers } from './project';
+import { type Theme, clearRecentProjects, getRecentProjects, getTheme, onRecentsChanged, registerProjectHandlers, setTheme } from './project';
 import { registerTestEnvHandlers } from './testenv';
 
 const APP_TITLE = 'CFEngine Policy Builder';
@@ -164,7 +164,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', enabled: hasProject, click: send('menu:project-settings') },
         { label: 'Connect AI Agent…', click: send('menu:connect-agent') },
         { type: 'separator' },
-        { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
+        { label: 'Try Demo: Nginx Web Server', click: send('menu:try-demo') },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
@@ -208,6 +208,16 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', registerAccelerator: false, enabled: hasProject, click: command('zoomReset') },
         { label: 'Fit to View', accelerator: '1', registerAccelerator: false, enabled: hasProject, click: command('zoomFit') },
         { type: 'separator' },
+        {
+          label: 'Appearance',
+          submenu: (['system', 'light', 'dark'] as const).map(theme => ({
+            label: { system: 'System', light: 'Light', dark: 'Dark' }[theme],
+            type: 'radio' as const,
+            checked: nativeTheme.themeSource === theme,
+            click: () => applyTheme(theme)
+          }))
+        },
+        { type: 'separator' },
         { label: 'Tidy Up Canvas…', enabled: hasProject, click: command('tidy') },
         { label: 'Toggle Maximized Canvas', enabled: hasProject, click: command('maximize') },
         { type: 'separator' },
@@ -236,6 +246,13 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
   return Menu.buildFromTemplate(template);
 }
 
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#21262A' : '#ffffff');
+
+function applyTheme(theme: Theme): void {
+  nativeTheme.themeSource = theme;
+  void setTheme(theme).catch(error => console.error('Saving the appearance failed:', error));
+}
+
 async function refreshMenu(): Promise<void> {
   if (!menuWindow || menuWindow.isDestroyed()) return;
   const window = menuWindow;
@@ -259,7 +276,7 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: APP_TITLE,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#21262A' : '#ffffff',
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -447,7 +464,20 @@ app.whenReady().then(() => {
     await fs.writeFile(layoutSettingsPath(), JSON.stringify(settings, null, 2));
   });
 
-  createWindow();
+  // The saved appearance before the first window, so it opens in the right colours.
+  void getTheme()
+    .catch((): Theme => 'system')
+    .then(theme => {
+      nativeTheme.themeSource = theme;
+      createWindow();
+    });
+  // The page switches, and the colour behind it while it loads or resizes.
+  nativeTheme.on('updated', () =>
+    BrowserWindow.getAllWindows().forEach(window => {
+      window.setBackgroundColor(windowBackground());
+      window.webContents.send('theme:updated', nativeTheme.shouldUseDarkColors);
+    })
+  );
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

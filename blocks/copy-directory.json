@@ -43,14 +43,16 @@
       "label": "Destination directory",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "Where the copy goes, e.g. /opt/app/static."
     },
     {
       "name": "source",
       "label": "Source directory",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "The directory to copy, on the host itself, e.g. /srv/build/static."
     },
     {
       "name": "depth",

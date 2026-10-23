@@ -62,9 +62,13 @@ let versionsRequest: Promise<MasterfilesVersions> | null = null;
 
 class InvalidRequest extends Error {}
 
+export type Theme = 'dark' | 'light' | 'system';
+const THEMES: readonly Theme[] = ['system', 'light', 'dark'];
+
 interface AppSettings {
   lastProjectParent?: string;
   recentProjects?: { name: string; path: string }[];
+  theme?: Theme;
 }
 
 let recentsListener: (() => void) | null = null;
@@ -595,6 +599,14 @@ export function clearRecentProjects(): Promise<void> {
   if (process.platform === 'darwin') app.clearRecentDocuments();
   return updateRecents(() => []);
 }
+
+/** View → Appearance: the system's light or dark, or one of them always. */
+export async function getTheme(): Promise<Theme> {
+  const { theme } = await readSettings();
+  return theme && THEMES.includes(theme) ? theme : 'system';
+}
+
+export const setTheme = (theme: Theme): Promise<void> => writeSettings({ theme });
 
 /** Called whenever the recent-projects list changes (the File menu rebuilds). */
 export function onRecentsChanged(listener: () => void): void {

@@ -166,7 +166,8 @@ test('conditions, arrows and undo/redo', async ({ window, consoleErrors }) => {
 
   const policy = await generatedPolicy(window);
   expect(policy).toContain('classes => default:results("bundle", "start_web")');
-  expect(policy).toContain('if => "default:linux.(start_web_kept|start_web_not_kept)"');
+  // Kept or repaired by default, now not kept too: whatever the outcome, as the one class it reached.
+  expect(policy).toContain('if => "default:linux.start_web_reached"');
   await showCanvas(window);
 
   await test.step('undo takes back the outcome, then the arrow; redo re-applies both', async () => {

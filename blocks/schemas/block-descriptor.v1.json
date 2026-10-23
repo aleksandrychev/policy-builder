@@ -114,7 +114,7 @@
         "repaired",
         "not_kept"
       ],
-      "description": "What a newly drawn arrow from this block waits for (default \"kept\"). Blocks whose success is always \"repaired\" (commands) set that."
+      "description": "What a newly drawn arrow from this block waits for (default: kept or repaired). Blocks whose success is always \"repaired\" (commands) set that."
     },
     "outcome_step": {
       "type": "integer",

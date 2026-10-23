@@ -42,8 +42,8 @@ describe('buildClassNameOptions', () => {
     expect(project).toEqual([
       { name: 'ready', label: 'main-classes label', group: 'Defined in this file' },
       { name: 'tuned', label: 'main-classes label', group: 'Defined in this file' },
-      { name: 'base:hardened', label: 'base-classes label', group: 'Defined in Base · skipped if windows' },
-      { name: 'web:nginx_ok', label: 'web-classes label', group: 'Defined in Web · runs only if linux' }
+      { name: 'base:hardened', label: 'base-classes label', group: 'Defined in Base · guarded by !windows' },
+      { name: 'web:nginx_ok', label: 'web-classes label', group: 'Defined in Web · guarded by linux' }
     ]);
     expect(options.slice(project.length).every(option => option.group === 'Hard classes')).toBe(true);
     expect(options.slice(project.length).map(option => option.name)).toEqual(hardClasses.map(hardClass => hardClass.name));
@@ -81,7 +81,7 @@ describe('buildTemplateTokens', () => {
         name: 'web:nginx_ok',
         mustachePath: 'classes.web:nginx_ok',
         label: 'web-classes label',
-        group: 'Defined in Web · runs only if linux',
+        group: 'Defined in Web · guarded by linux',
         kind: 'class'
       },
       { name: 'ready', mustachePath: 'classes.main:ready', label: 'main-classes label', group: 'Defined in this file', kind: 'class' },
@@ -91,7 +91,7 @@ describe('buildTemplateTokens', () => {
         name: 'base:hardened',
         mustachePath: 'classes.base:hardened',
         label: 'base-classes label',
-        group: 'Defined in Base · skipped if windows',
+        group: 'Defined in Base · guarded by !windows',
         kind: 'class'
       }
     ]);

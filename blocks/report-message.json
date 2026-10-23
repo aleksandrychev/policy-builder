@@ -33,7 +33,8 @@
       "name": "message",
       "label": "Message",
       "type": "text",
-      "required": true
+      "required": true,
+      "help": "The text the agent prints. $(…) inserts a variable, e.g. $(sys.fqhost) for the host's name."
     },
     {
       "name": "report_to_file",

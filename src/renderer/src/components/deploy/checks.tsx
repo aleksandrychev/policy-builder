@@ -8,10 +8,13 @@ import { type BlockAt, ChangeList, FailureAlert, Line, ProblemList, ago, short }
 
 type LastRun = { at: number; content: string; hosts: number; passed: boolean | null } | null;
 
-export const savedCheck = (dirty: boolean): Check =>
-  dirty
-    ? { id: 'saved', label: 'Saved', tone: 'warning', status: 'Unsaved edits (pre-flight saves)' }
-    : { id: 'saved', label: 'Saved', tone: 'success', status: 'All saved' };
+// A project not on disk yet (the demo) isn't "all saved", however few its edits.
+export const savedCheck = (dirty: boolean, onDisk = true): Check =>
+  !onDisk
+    ? { id: 'saved', label: 'Saved', tone: 'warning', status: 'Not saved to a folder yet' }
+    : dirty
+      ? { id: 'saved', label: 'Saved', tone: 'warning', status: 'Unsaved edits (pre-flight saves)' }
+      : { id: 'saved', label: 'Saved', tone: 'success', status: 'All saved' };
 
 // The last Deploy & run on test hosts, and whether it ran these edits.
 export function testedCheck({ content, onOpenTests, run }: { content: string; onOpenTests: () => void; run: LastRun }): Check {

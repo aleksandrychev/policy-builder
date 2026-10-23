@@ -40,9 +40,9 @@ describe('toggleOutcome', () => {
 });
 
 describe('defaultOutcomesFor', () => {
-  it('waits for "kept" unless the block says otherwise', () => {
-    expect(defaultOutcomesFor(undefined)).toEqual(['kept']);
-    expect(defaultOutcomesFor(blockDescriptorsById.get('install-package'))).toEqual(['kept']);
+  it('waits for kept or repaired unless the block says otherwise', () => {
+    expect(defaultOutcomesFor(undefined)).toEqual(['kept', 'repaired']);
+    expect(defaultOutcomesFor(blockDescriptorsById.get('install-package'))).toEqual(['kept', 'repaired']);
     expect(defaultOutcomesFor(blockDescriptorsById.get('render-template'))).toEqual(['repaired']);
   });
 });

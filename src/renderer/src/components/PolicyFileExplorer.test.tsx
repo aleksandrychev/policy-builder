@@ -150,14 +150,14 @@ describe('PolicyFileExplorer', () => {
       store.dispatch(fileConditionModeChanged({ fileId: webId, mode: 'unless' }));
       store.dispatch(fileConditionClassNameChanged({ fileId: webId, className: 'windows' }));
       renderExplorer(store);
-      expect(screen.getByTitle('The whole file skipped if windows')).toHaveTextContent('windows');
-      expect(within(screen.getByRole('treeitem', { name: /Main\.cf/ })).queryByTitle(/The whole file/)).not.toBeInTheDocument();
+      expect(screen.getByTitle('All promises in this file are guarded by !windows')).toHaveTextContent('windows');
+      expect(within(screen.getByRole('treeitem', { name: /Main\.cf/ })).queryByTitle(/All promises in this file/)).not.toBeInTheDocument();
     });
 
     it('shows no marker for a condition without a class yet', () => {
       store.dispatch(fileConditionEnabled({ fileId: webId }));
       renderExplorer(store);
-      expect(screen.queryByTitle(/The whole file/)).not.toBeInTheDocument();
+      expect(screen.queryByTitle(/All promises in this file/)).not.toBeInTheDocument();
     });
   });
 

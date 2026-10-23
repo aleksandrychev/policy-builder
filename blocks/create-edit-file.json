@@ -31,7 +31,8 @@
       "label": "File path",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "The file to create, or keep with this content, e.g. /etc/app.conf."
     },
     {
       "name": "content",

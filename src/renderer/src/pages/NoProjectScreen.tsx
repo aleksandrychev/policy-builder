@@ -157,8 +157,10 @@ export default function NoProjectScreen({ onNewProject, onOpenProject, onTryDemo
               <PlayArrowIcon sx={{ fontSize: 20 }} />
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 700, color: 'text.primary' }}>Try Demo: Web Server Hardening</Typography>
-              <Typography sx={{ fontSize: 12, color: 'text.muted' }}>Provisions and hardens an nginx web server, across 2 files</Typography>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: 'text.primary' }}>Try Demo: Nginx Web Server</Typography>
+              <Typography sx={{ fontSize: 12, color: 'text.muted' }}>
+                Provisions an nginx web server with its landing page, and hardens the host, across 3 files
+              </Typography>
             </Box>
             <ChevronRightIcon sx={{ color: 'text.muted', flexShrink: 0 }} />
           </ButtonBase>

@@ -21,7 +21,8 @@
       "name": "service_name",
       "label": "Service name",
       "type": "string",
-      "required": true
+      "required": true,
+      "help": "The service's name, as the host's service manager knows it, e.g. nginx or ssh."
     },
     {
       "name": "action",

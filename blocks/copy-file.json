@@ -45,7 +45,8 @@
       "label": "Destination path",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "Where the file is copied to, e.g. /etc/motd."
     },
     {
       "name": "source",
