@@ -52,14 +52,25 @@ const descriptors = readdirSync(join(ROOT, 'blocks'))
   .filter(descriptor => descriptor.schema_version === 1);
 
 const cell = text => String(text).replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
-const optionList = options => options.map(option => (typeof option === 'string' ? `\`${option}\`` : `\`${option.value}\` (${option.label})`)).join(', ');
+// An option as the app shows it: its label, bold, so labels with commas stay apart.
+const optionLabel = option => (typeof option === 'string' ? `\`${option}\`` : `**${option.label}**`);
+
+// A default as the app shows it: an option's label, Yes or No, or the value.
+function defaultOf(param) {
+  if (param.default === undefined || param.default === null || param.default === '') return null;
+  const option = param.options?.find(item => (typeof item === 'string' ? item : item.value) === String(param.default));
+  if (option) return optionLabel(option);
+  if (typeof param.default === 'boolean') return param.default ? 'Yes' : 'No';
+  return `\`${param.default}\``;
+}
 
 function describe(param) {
   const parts = [param.help ?? ''];
   if (param.allow_list && !/per line/i.test(param.help ?? '')) parts.push('One per line.');
-  if (param.options?.length) parts.push(`${param.other_label ? 'For example' : 'One of'}: ${optionList(param.options)}.`);
+  if (param.options?.length) parts.push(`${param.other_label ? 'For example' : 'One of'}: ${param.options.map(optionLabel).join(', ')}.`);
   if (param.type === 'number' && param.minimum !== undefined) parts.push(`At least ${param.minimum}.`);
-  if (param.default !== undefined && param.default !== '' && param.default !== null) parts.push(`Default: \`${param.default}\`.`);
+  const fallback = defaultOf(param);
+  if (fallback) parts.push(`Default: ${fallback}.`);
   return cell(parts.filter(Boolean).join(' '));
 }
 
