@@ -164,7 +164,7 @@ function buildApplicationMenu(mainWindow: BrowserWindow, recents: RecentProject[
         { label: 'Project Settings…', accelerator: 'CmdOrCtrl+,', enabled: hasProject, click: send('menu:project-settings') },
         { label: 'Connect AI Agent…', click: send('menu:connect-agent') },
         { type: 'separator' },
-        { label: 'Try Demo: Web Server Hardening', click: send('menu:try-demo') },
+        { label: 'Try Demo: Nginx Web Server', click: send('menu:try-demo') },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
