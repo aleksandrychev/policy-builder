@@ -428,7 +428,8 @@ export function DeploymentView({
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         sx={{ top: { xs: 72, sm: 72 } }}
       >
-        <Alert severity="success" variant="filled" onClose={() => setNotice(null)}>
+        {/* The theme draws a filled alert's close button dark on the green: white, like its text. */}
+        <Alert severity="success" variant="filled" onClose={() => setNotice(null)} sx={{ '& .MuiAlert-action .MuiIconButton-root': { color: 'inherit' } }}>
           {notice}
         </Alert>
       </Snackbar>
