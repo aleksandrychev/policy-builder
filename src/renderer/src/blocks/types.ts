@@ -150,7 +150,7 @@ export interface BlockParameter {
   mustache?: boolean;
   name: string;
   options?: ParameterOption[];
-  // A number parameter with options: the label of the field for any other number.
+  // With options: the label of the field for any other value (a number always takes one).
   other_label?: string;
   path?: 'absolute';
   references?: 'variable';
@@ -211,6 +211,9 @@ export interface BlockDescriptor {
 }
 
 export const optionValue = (option: ParameterOption): string => (typeof option === 'string' ? option : option.value);
+
+// Options that are suggestions: any number, or any value when there's a field for it.
+export const takesOtherValues = (parameter: BlockParameter): boolean => parameter.type === 'number' || Boolean(parameter.other_label);
 export const optionLabel = (option: ParameterOption): string => (typeof option === 'string' ? option : option.label);
 export const optionHelp = (option: ParameterOption | undefined): string | undefined => (typeof option === 'object' ? option.help : undefined);
 
