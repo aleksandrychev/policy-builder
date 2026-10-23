@@ -32,6 +32,9 @@ const SECTIONS: { rows: [keys: string, action: string][]; title: string }[] = [
     title: 'View',
     rows: [
       [`${mod('1')} … ${mod('4')}`, 'Canvas, Generated Policy, Tests & Logs, Deployment'],
+      [mod('B'), 'Show or hide the side bar'],
+      [mod('E', true), 'Blocks and files'],
+      [mod('X', true), 'Modules'],
       [`+  or  ${mod('=')}`, 'Zoom in'],
       [`-  or  ${mod('-')}`, 'Zoom out'],
       [`0  or  ${mod('0')}`, 'Actual size'],
