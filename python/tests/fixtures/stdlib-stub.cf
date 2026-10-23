@@ -119,6 +119,67 @@ bundle agent logrotate(log_files, max_size, rotate_levels)
     "$(log_files) $(max_size) $(rotate_levels)";
 }
 
+# The package managers of Install Package and Remove Package (masterfiles 3.27.1 has them all).
+body package_module apt_get
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module yum
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module dnf
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module dnf_group
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module zypper
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module apk
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module pkg
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module freebsd_ports
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module pkgsrc
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module slackpkg
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module nimclient
+{
+  query_installed_ifelapsed => "60";
+}
+
+body package_module snap
+{
+  query_installed_ifelapsed => "60";
+}
+
 bundle agent rm_rf(name)
 {
   reports:

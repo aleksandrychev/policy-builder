@@ -16,6 +16,12 @@
         "version": {
           "if_set": "version",
           "value": "{{version}}"
+        },
+        "package_module": {
+          "if_set": "package_module",
+          "value": {
+            "body_param": "package_module"
+          }
         }
       }
     }
@@ -36,6 +42,72 @@
       "required": false,
       "default": "",
       "help": "Empty: any installed version will do. A version (e.g. 1.24.0-1) installs exactly that one, latest keeps it at the newest available. Applies to every package listed."
+    },
+    {
+      "name": "package_module",
+      "label": "Package manager",
+      "type": "string",
+      "required": false,
+      "default": "",
+      "options": [
+        {
+          "value": "",
+          "label": "Platform default",
+          "help": "The host's usual package manager, as masterfiles picks it (apt_get on Debian, yum on Red Hat…)."
+        },
+        {
+          "value": "apt_get",
+          "label": "apt_get (Debian, Ubuntu)"
+        },
+        {
+          "value": "yum",
+          "label": "yum (Red Hat, CentOS, Amazon Linux)"
+        },
+        {
+          "value": "dnf",
+          "label": "dnf (Red Hat, Fedora)"
+        },
+        {
+          "value": "dnf_group",
+          "label": "dnf_group (dnf package groups)",
+          "help": "Package groups, e.g. \"Development Tools\"."
+        },
+        {
+          "value": "zypper",
+          "label": "zypper (SUSE)"
+        },
+        {
+          "value": "apk",
+          "label": "apk (Alpine)"
+        },
+        {
+          "value": "pkg",
+          "label": "pkg (FreeBSD)"
+        },
+        {
+          "value": "freebsd_ports",
+          "label": "freebsd_ports (FreeBSD ports)"
+        },
+        {
+          "value": "pkgsrc",
+          "label": "pkgsrc"
+        },
+        {
+          "value": "slackpkg",
+          "label": "slackpkg (Slackware)"
+        },
+        {
+          "value": "nimclient",
+          "label": "nimclient (AIX)"
+        },
+        {
+          "value": "snap",
+          "label": "snap"
+        }
+      ],
+      "other_label": "Custom body name",
+      "allowed_chars": "A-Za-z0-9_:",
+      "help": "The package_module body that installs the packages. Custom…: one of your own, as name (in default:) or namespace:name."
     }
   ]
 }

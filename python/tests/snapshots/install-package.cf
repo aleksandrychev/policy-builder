@@ -2,3 +2,87 @@
   # Case 0
   packages:
     "nginx" policy => "present";
+
+### package_module = 'apt_get'
+  # Case 1
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:apt_get;
+
+### package_module = 'yum'
+  # Case 2
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:yum;
+
+### package_module = 'dnf'
+  # Case 3
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:dnf;
+
+### package_module = 'dnf_group'
+  # Case 4
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:dnf_group;
+
+### package_module = 'zypper'
+  # Case 5
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:zypper;
+
+### package_module = 'apk'
+  # Case 6
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:apk;
+
+### package_module = 'pkg'
+  # Case 7
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:pkg;
+
+### package_module = 'freebsd_ports'
+  # Case 8
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:freebsd_ports;
+
+### package_module = 'pkgsrc'
+  # Case 9
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:pkgsrc;
+
+### package_module = 'slackpkg'
+  # Case 10
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:slackpkg;
+
+### package_module = 'nimclient'
+  # Case 11
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:nimclient;
+
+### package_module = 'snap'
+  # Case 12
+  packages:
+    "nginx"
+      policy => "present",
+      package_module => default:snap;
