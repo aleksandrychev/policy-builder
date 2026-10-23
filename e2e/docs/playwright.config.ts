@@ -8,6 +8,8 @@ export default defineConfig({
   outputDir: '../../test-results/docs',
   timeout: 120_000,
   expect: { timeout: 15_000 },
+  // A missing element fails within half a minute, not at the test's own long timeout.
+  use: { actionTimeout: 30_000 },
   workers: 1,
   reporter: 'list'
 });
