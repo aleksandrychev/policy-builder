@@ -413,6 +413,8 @@ declare global {
       onMenuAction: (callback: (action: MenuAction, argument?: string) => void) => () => void;
       /** Subscribes to the events of streaming test-environment runs; call the returned function to unsubscribe. */
       onTestEnvEvent: (callback: (runId: string, event: TestEnvEvent) => void) => () => void;
+      /** Subscribes to light/dark changes (View → Appearance, or the OS's under System); call the returned function to unsubscribe. */
+      onThemeUpdated: (callback: (dark: boolean) => void) => () => void;
       /** Reads a project's cfbs.json: `path` is its folder or the cfbs.json; without one, a native picker asks (null: cancelled). */
       openProject: (request?: { path?: string }) => Promise<OperationResult<OpenedProject> | null>;
       /** Opens a native folder picker, or null if cancelled. */

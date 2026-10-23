@@ -79,8 +79,10 @@ vi.mock('./testenv', () => ({ registerTestEnvHandlers: () => {} }));
 vi.mock('./project', () => ({
   clearRecentProjects: () => {},
   getRecentProjects: async () => [],
+  getTheme: async () => 'system',
   onRecentsChanged: () => {},
-  registerProjectHandlers: () => {}
+  registerProjectHandlers: () => {},
+  setTheme: async () => {}
 }));
 
 async function launch({ isPackaged }: { isPackaged: boolean }) {

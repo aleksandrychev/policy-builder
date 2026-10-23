@@ -114,6 +114,13 @@ function onMcpToolRequest(callback: (requestId: string, name: string, input: unk
   return () => ipcRenderer.removeListener('mcp:tool-request', listener);
 }
 
+// View → Appearance, or the OS when it's System: whether the window should now be dark.
+function onThemeUpdated(callback: (dark: boolean) => void): () => void {
+  const listener = (_event: unknown, dark: boolean) => callback(dark);
+  ipcRenderer.on('theme:updated', listener);
+  return () => ipcRenderer.removeListener('theme:updated', listener);
+}
+
 function onDeployProgress(callback: (stage: string) => void): () => void {
   const listener = (_event: unknown, stage: string) => callback(stage);
   ipcRenderer.on('deploy:progress', listener);
@@ -134,6 +141,7 @@ const api = {
   mcpToolResult: (requestId: string, result: { content: string; ok: boolean }): Promise<void> => invoke('mcp:tool-result', requestId, result),
   /** Each step of a running Build or SSH deploy as it starts: build, lint, promises, copy, validate, install, update, policy. */
   onDeployProgress,
+  onThemeUpdated,
   testEnvDoctor: (): Promise<DockerStatus> => invoke('testenv:doctor'),
   testEnvImages: (): Promise<{ platforms: BaseImage[] }> => invoke('testenv:images'),
   testEnvStart: (
