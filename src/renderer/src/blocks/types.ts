@@ -181,7 +181,7 @@ export interface BlockEntriesConfig {
 // Either steps + parameters (a plain block) or value_sources is present,
 // never both — enforced by the schema's oneOf, so both stay optional here.
 export interface BlockDescriptor {
-  // What a new arrow drawn from this block waits for (default "kept").
+  // What a new arrow drawn from this block waits for (default: kept or repaired).
   arrow_default_outcome?: BlockOutcome;
   category: string;
   // own_bundle: sequenced (arrows, outcomes); file_vars: the file's shared vars bundle.
