@@ -9,8 +9,17 @@ export function relationToFileCondition(condition: Condition | undefined, fileCo
   return condition.mode === fileCondition.mode ? 'same' : 'contradicts';
 }
 
-// "runs only if linux" / "skipped if windows"; undefined until a class is picked.
+// The class guard the compiler puts on each of the file's promises: `linux`, `!windows`,
+// `!(debian.webserver)`; undefined until a class is picked.
+export function fileGuard(condition: Condition | undefined): string | undefined {
+  const expression = condition?.className?.trim();
+  if (!expression) return undefined;
+  if (condition?.mode === 'if') return expression;
+  return /[|.&!()]/.test(expression) ? `!(${expression})` : `!${expression}`;
+}
+
+// "guarded by linux" / "guarded by !windows".
 export function describeFileCondition(condition: Condition | undefined): string | undefined {
-  if (!condition?.className) return undefined;
-  return `${condition.mode === 'if' ? 'runs only if' : 'skipped if'} ${condition.className}`;
+  const guard = fileGuard(condition);
+  return guard && `guarded by ${guard}`;
 }

@@ -66,7 +66,7 @@ interface TopBarProps {
   blockCount: number;
   // Unsaved changes since the last save.
   dirty: boolean;
-  // "runs only if linux", when the open file is gated.
+  // "guarded by linux", when the open file has a condition.
   fileGate?: string;
   // An AI agent is working: actions are off, switching views still works.
   locked?: boolean;
@@ -167,7 +167,7 @@ export function TopBar({
           {masterfiles && <Typography sx={chipSx}>masterfiles {masterfiles}</Typography>}
           <Typography sx={chipSx}>namespace: {namespace}</Typography>
           {fileGate && (
-            <Typography title="The whole file is gated by this condition" sx={chipSx}>
+            <Typography title="Every promise in this file is guarded by this class expression" sx={chipSx}>
               {fileGate}
             </Typography>
           )}

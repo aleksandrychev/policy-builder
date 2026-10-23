@@ -335,7 +335,7 @@ describe('PropertiesPanel', () => {
         fireEvent.mouseDown(screen.getByPlaceholderText('Search class names…'));
         const listbox = screen.getByRole('listbox');
         expect(within(listbox).getByText('Defined in this file')).toBeInTheDocument();
-        expect(within(listbox).getByText('Defined in Detect · runs only if linux')).toBeInTheDocument();
+        expect(within(listbox).getByText('Defined in Detect · guarded by linux')).toBeInTheDocument();
         expect(within(listbox).getByText('Hard classes')).toBeInTheDocument();
         fireEvent.click(within(listbox).getByText('detect:is_web'));
         expect(blockOf(store, id)?.condition?.className).toBe('detect:is_web');

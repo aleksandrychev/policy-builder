@@ -24,8 +24,9 @@ describe('relationToFileCondition', () => {
 
 describe('describeFileCondition', () => {
   it('reads as plain language', () => {
-    expect(describeFileCondition(condition('if', 'linux'))).toBe('runs only if linux');
-    expect(describeFileCondition(condition('unless', 'windows'))).toBe('skipped if windows');
+    expect(describeFileCondition(condition('if', 'linux'))).toBe('guarded by linux');
+    expect(describeFileCondition(condition('unless', 'windows'))).toBe('guarded by !windows');
+    expect(describeFileCondition(condition('unless', 'debian.webserver'))).toBe('guarded by !(debian.webserver)');
   });
 
   it('is undefined until a class is picked', () => {

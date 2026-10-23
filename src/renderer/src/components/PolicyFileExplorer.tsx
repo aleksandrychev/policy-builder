@@ -216,7 +216,7 @@ function FileRow({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
             <Typography sx={{ fontSize: 11, color: 'text.muted', flexShrink: 0 }}>{blockCount} blocks</Typography>
             {gate && (
-              <Box title={`The whole file ${gate}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0, color: 'text.muted' }}>
+              <Box title={`All promises in this file are ${gate}`} sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0, color: 'text.muted' }}>
                 <FilterAltOutlinedIcon sx={{ fontSize: 12 }} />
                 <Typography sx={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {file.condition?.className}
