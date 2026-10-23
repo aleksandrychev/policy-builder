@@ -30,7 +30,8 @@
       "label": "Mount point",
       "type": "string",
       "required": true,
-      "path": "absolute"
+      "path": "absolute",
+      "help": "Where the share is mounted on the host, e.g. /mnt/share."
     },
     {
       "name": "server",

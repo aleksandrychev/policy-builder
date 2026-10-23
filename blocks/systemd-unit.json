@@ -170,7 +170,8 @@
       "label": "Run as user",
       "type": "string",
       "required": false,
-      "default": ""
+      "default": "",
+      "help": "The user the service runs as. Empty: root."
     },
     {
       "name": "restart",

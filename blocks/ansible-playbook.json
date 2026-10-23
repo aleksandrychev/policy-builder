@@ -52,7 +52,8 @@
       "type": "string",
       "required": false,
       "default": "",
-      "path": "absolute"
+      "path": "absolute",
+      "help": "The inventory file or host list, e.g. /srv/ansible/hosts. Empty: Ansible's default inventory."
     },
     {
       "name": "tags",
