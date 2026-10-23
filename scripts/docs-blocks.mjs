@@ -54,7 +54,7 @@ const descriptors = readdirSync(join(ROOT, 'blocks'))
   .map(name => JSON.parse(readFileSync(join(ROOT, 'blocks', name), 'utf-8')))
   .filter(descriptor => descriptor.schema_version === 1);
 
-const cell = text => String(text).replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
+const cell = text => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n+/g, ' ').trim();
 // An option as the app shows it: its label, bold, so labels with commas stay apart.
 const optionLabel = option => (typeof option === 'string' ? `\`${option}\`` : `**${option.label}**`);
 
