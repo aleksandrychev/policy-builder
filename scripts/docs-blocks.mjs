@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Writes the Block reference of the CFEngine documentation (content/policy-builder/blocks/)
 // from the block descriptors: one page per palette category, and the section's index. The
-// examples are the compiler's snapshots (python/tests/snapshots/), which its tests keep current.
+// examples are scripts/docs-examples.json, compiled by the sidecar's compiler (docs_examples.py).
 //
 //   node scripts/docs-blocks.mjs ../documentation/content/policy-builder/blocks
+import { spawnSync } from 'child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -77,27 +78,32 @@ function settingsTable(params) {
   );
 }
 
-// The snapshot's first case: the policy the block generates from the test's example settings.
-function example(id) {
-  let text;
-  try {
-    text = readFileSync(join(ROOT, 'python/tests/snapshots', `${id}.cf`), 'utf-8');
-  } catch {
-    return null;
-  }
-  const first = text.split(/^### .*$/m)[1] ?? '';
-  const lines = first.split('\n').filter(line => !/^\s*# Case \d+$/.test(line));
-  while (lines.length && !lines[0].trim()) lines.shift();
-  while (lines.length && !lines.at(-1).trim()) lines.pop();
-  const indent = Math.min(...lines.filter(line => line.trim()).map(line => line.match(/^ */)[0].length));
-  return lines.map(line => line.slice(indent)).join('\n');
+// Each block's example policy: scripts/docs-examples.json compiled by the sidecar's compiler.
+function examples() {
+  const run = spawnSync('uv', ['run', '--directory', join(ROOT, 'python'), 'python', join(ROOT, 'scripts/docs_examples.py')], { encoding: 'utf-8' });
+  if (run.status !== 0) throw new Error(`docs_examples.py failed: ${run.stderr}`);
+  return JSON.parse(run.stdout);
+}
+
+// Its lines, out of their bundle's indentation; definitions under the section they belong to.
+function example(id, compiled) {
+  const policy = compiled[id];
+  if (!policy) return null;
+  const lines = policy.split('\n');
+  // The bundles and bodies after it (Custom CFEngine's) keep their own indentation.
+  const own = lines.findIndex(line => /^(bundle|body|#)/.test(line));
+  const main = own === -1 ? lines : lines.slice(0, own);
+  const indent = Math.min(...main.filter(line => line.trim()).map(line => line.match(/^ */)[0].length));
+  const section = { 'define-variable': 'vars:', 'define-class': 'classes:' }[id];
+  const body = [...main.map(line => line.slice(indent)), ...(own === -1 ? [] : lines.slice(own))];
+  return section ? [section, ...body.map(line => (line ? `  ${line}` : line))].join('\n') : body.join('\n');
 }
 
 const promiseTypes = descriptor => [
   ...new Set((descriptor.steps ?? descriptor.value_sources?.flatMap(source => source.steps) ?? []).map(step => step.promise_type))
 ];
 
-function blockSection(descriptor) {
+function blockSection(descriptor, compiled) {
   const lines = [`## ${descriptor.name}`, '', descriptor.description, ''];
   const types = promiseTypes(descriptor);
   if (descriptor.custom) lines.push('**Generates:** the promises and definitions you write.', '');
@@ -126,7 +132,7 @@ function blockSection(descriptor) {
       ''
     );
   }
-  const policy = example(descriptor.id);
+  const policy = example(descriptor.id, compiled);
   if (policy) lines.push('### Example', '', 'The policy it generates, for example:', '', '```cf3', policy, '```', '');
   return lines;
 }
@@ -142,6 +148,7 @@ const header = (title, sorting) => [
 ];
 
 const order = categoryOrder();
+const compiled = examples();
 const categories = [...new Set(descriptors.map(descriptor => descriptor.category))].sort((a, b) => {
   const rank = category => (order.includes(category) ? order.indexOf(category) : order.length);
   return rank(a) - rank(b) || a.localeCompare(b);
@@ -158,7 +165,7 @@ const index = [
 categories.forEach((category, rank) => {
   const [title, intro] = CATEGORIES[category] ?? [`${category} blocks`, ''];
   const blocks = descriptors.filter(descriptor => descriptor.category === category).sort((a, b) => a.name.localeCompare(b.name));
-  const page = [...header(title, (rank + 1) * 10), intro, '', ...blocks.flatMap(blockSection)];
+  const page = [...header(title, (rank + 1) * 10), intro, '', ...blocks.flatMap(block => blockSection(block, compiled))];
   writeFileSync(join(out, `${slug(category)}.markdown`), page.join('\n').replace(/\n+$/, '\n'));
   index.push(`- [${title}][]: ${blocks.map(block => block.name).join(', ')}`);
 });
