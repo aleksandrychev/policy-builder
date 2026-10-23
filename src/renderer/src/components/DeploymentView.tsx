@@ -324,7 +324,7 @@ export function DeploymentView({
   if (!project) return null;
 
   const checks = [
-    savedCheck(dirty),
+    savedCheck(dirty, Boolean(path)),
     validCheck({ blockAt, content, isModule, run, onShowBlock, onReveal: file => void window.api!.revealInProject(path!, file) }),
     testedCheck({ content, onOpenTests, run: testRuntime.lastRun }),
     committedCheck({
