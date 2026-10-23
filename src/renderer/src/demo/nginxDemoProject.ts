@@ -1,14 +1,16 @@
 // Builds the "Provision and harden an nginx web server" demo project
 import { newDefinitionEntry } from '../blocks/definitionEntries';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
+import { NODE_WIDTH, estimateNodeHeight } from '../canvas/layout';
+import { tidyPositions } from '../canvas/tidy';
 import type { AppDispatch } from '../store';
-import { blockAdded } from '../store/canvasSlice';
+import { blockAdded, blocksMoved } from '../store/canvasSlice';
 import type { BlockInstance, DefinitionEntry } from '../store/canvasSlice/types';
-import { derivedNodeMoved } from '../store/derivedNodesSlice';
+import { derivedNodePositionsClearedForFile } from '../store/derivedNodesSlice';
 import { edgeAdded } from '../store/edgesSlice';
 import type { BlockOutcome } from '../store/edgesSlice/types';
 import { fileAdded, fileDescriptionChanged, fileSelected, projectFilesInitialized } from '../store/filesSlice';
-import { groupCreated } from '../store/groupsSlice';
+import { groupCreated, groupFramesFitted } from '../store/groupsSlice';
 import { historyCleared } from '../store/history';
 import { projectCreated } from '../store/projectSlice';
 import { environmentAdded, newEnvironment } from '../store/testEnvironmentsSlice';
@@ -332,6 +334,20 @@ const positionOf = (block: DemoBlock) => POSITIONS[block.label] ?? { x: 0, y: 0 
 // The demo's test environment, the same every session; a project saved from the demo gets its own.
 export const DEMO_ENVIRONMENT_ID = 'demo-web-server';
 
+// One file's blocks in run order, from estimated sizes (nothing is rendered yet), as Tidy up does.
+function tidyDemoFile(dispatch: AppDispatch, fileId: string) {
+  dispatch((_dispatch, getState) => {
+    const state = getState();
+    const blocks = state.canvas.filter(block => block.fileId === fileId);
+    const edges = state.edges.filter(edge => edge.fileId === fileId);
+    const groups = state.groups.filter(group => group.fileId === fileId);
+    const sizeOf = (instance: BlockInstance) => ({ width: NODE_WIDTH, height: estimateNodeHeight(instance, blockDescriptorsById.get(instance.blockId)) });
+    dispatch(blocksMoved({ positions: tidyPositions(blocks, edges, groups, fileId, sizeOf, () => undefined) }));
+    dispatch(derivedNodePositionsClearedForFile({ fileId }));
+    dispatch(groupFramesFitted({ groupIds: groups.map(group => group.id) }));
+  });
+}
+
 export function createNginxDemoProject(dispatch: AppDispatch): void {
   const describe = (fileId: string, description: string) => dispatch(fileDescriptionChanged({ fileId, description }));
   dispatch(projectCreated({ name: 'Nginx Web Server Demo' }));
@@ -415,8 +431,8 @@ export function createNginxDemoProject(dispatch: AppDispatch): void {
     dispatch(groupCreated({ fileId: securityFileId, name, color, instanceIds: blocks.map(block => securityIds[securityColumn.indexOf(block)]) }));
   securityGroup('SSH hardening', 'info', [security.sshdPresent, security.hardenSsh, security.restartSsh]);
   securityGroup('Account protection', 'warning', [security.accountFiles, security.passwordHashes, security.watchAccounts, security.reportAccounts]);
-  // The "webserver_role" condition pill, off to the side of the blocks it gates.
-  dispatch(derivedNodeMoved({ key: `${webserverFileId}|if|common:webserver_role`, position: { x: 60, y: -20 } }));
+  // Laid out as Tidy up would, so the demo opens tidy (and saved-looking: before historyCleared).
+  for (const fileId of [commonFileId, webserverFileId, securityFileId]) tidyDemoFile(dispatch, fileId);
   // One Ubuntu host serving the landing page on http://localhost:8080/. Fixed ids: every demo
   // session finds the same container again (Docker labels carry them) instead of orphaning it.
   const demoEnvironment = newEnvironment('Demo web server', { id: 'demo-web', name: 'web', ports: [{ host: 8080, container: 80 }] });
