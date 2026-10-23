@@ -15,6 +15,11 @@ export interface BodyExpression {
   lib?: 'builder' | 'stdlib';
 }
 
+// A body named by a parameter's value: `name` (default:) or `namespace:name`.
+export interface BodyParamExpression {
+  body_param: string;
+}
+
 export interface ListExpression {
   list: Expression[];
 }
@@ -91,6 +96,7 @@ export type Expression =
   | CasesParamExpression
   | CallExpression
   | BodyExpression
+  | BodyParamExpression
   | ListExpression
   | ListParamExpression
   | ClassRefsExpression

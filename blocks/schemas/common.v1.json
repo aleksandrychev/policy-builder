@@ -106,7 +106,7 @@
         },
         "other_label": {
           "type": "string",
-          "description": "A number parameter with options: also any other number, in a field with this label (e.g. \"Minutes between runs\")."
+          "description": "A parameter with options: also any other value, in a field with this label (e.g. \"Minutes between runs\"). Without it, only a number parameter takes other values."
         },
         "integer": {
           "type": "boolean",
@@ -169,6 +169,19 @@
               "items": {
                 "$ref": "#/$defs/expression"
               }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "body_param"
+          ],
+          "description": "A body reference named by a parameter's value, without arguments: \"name\" compiles as default:name (masterfiles' lib/), \"namespace:name\" as written. Inside if_set when the parameter may be empty.",
+          "properties": {
+            "body_param": {
+              "$ref": "#/$defs/identifier"
             }
           }
         },

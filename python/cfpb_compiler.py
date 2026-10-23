@@ -28,6 +28,8 @@ OUTCOME_SUFFIX = {"kept": "kept", "repaired": "repaired", "not_kept": "not_kept"
 MUSTACHE_TAG = re.compile(r"\{\{(\{?)\s*([#^/&!>]?)\s*(.*?)\s*\}?\}\}", re.S)
 MUSTACHE_VAR = re.compile(r"vars\.((?:[A-Za-z_]\w*:)?[A-Za-z_]\w*)\.([A-Za-z_]\w*)(\..+)?")
 MUSTACHE_CLASS = re.compile(r"classes\.((?:[A-Za-z_]\w*:)?[A-Za-z_]\w*)")
+# A body named by the user: `name` (in default:, where masterfiles' are) or `namespace:name`.
+BODY_NAME = re.compile(r"(?:[A-Za-z_]\w*:)?[A-Za-z_]\w*")
 LINE_LENGTH = 80
 # Where templates go: one directory module, so they ship whatever kind of module uses them.
 TEMPLATES_DIR = "./templates/"
@@ -248,6 +250,11 @@ def compile_value(expr, ctx: Context) -> str:
             name = f"default:{name}"
         args = expr.get("args")
         return f"{name}({', '.join(compile_value(arg, ctx) for arg in args)})" if args else name
+    if "body_param" in expr:
+        name = ctx.params.get(expr["body_param"], "").strip()
+        if not BODY_NAME.fullmatch(name):
+            raise CompileError(f"{expr['body_param']}: {name!r} isn't a body name")
+        return name if ":" in name else f"default:{name}"
     if "list" in expr:
         return list_value([compile_value(item, ctx) for item in expr["list"]], ctx)
     if "list_param" in expr:

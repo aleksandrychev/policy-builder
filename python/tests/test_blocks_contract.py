@@ -90,6 +90,8 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
             problems.append(f"{where}: unknown {lib} body {expr['body']}")
         elif lib == "builder" and len(expr.get("args", [])) != len(known[expr["body"]]["parameters"]):
             problems.append(f"{where}: {expr['body']} takes {len(known[expr['body']]['parameters'])} arguments")
+    if "body_param" in expr:
+        yield expr["body_param"]
     if "list_param" in expr:
         yield expr["list_param"]
     if "array_param" in expr:
