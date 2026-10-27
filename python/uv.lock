@@ -128,6 +128,7 @@ source = { editable = "." }
 dependencies = [
     { name = "cfengine" },
     { name = "docker" },
+    { name = "truststore" },
 ]
 
 [package.dev-dependencies]
@@ -145,6 +146,7 @@ dev = [
 requires-dist = [
     { name = "cfengine", specifier = ">=0.20.0" },
     { name = "docker", specifier = ">=7.1" },
+    { name = "truststore" },
 ]
 
 [package.metadata.requires-dev]
@@ -935,6 +937,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/04/4ca7634e95bd165ed4390595d38bd8ca0fd773b62fdc81fff0133fab39aa/tree_sitter_cfengine-1.1.12-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:1bf058a38376ab0673ec13faa8cbd9e83e062b7cab633cddd4a2ebca59f2598e", size = 23851, upload-time = "2026-05-04T14:20:46.37Z" },
     { url = "https://files.pythonhosted.org/packages/2b/f5/afa98aa454a0cf0ea9215c0f853fdbbb332ee627582b1f979747ed14b850/tree_sitter_cfengine-1.1.12-cp39-abi3-win_amd64.whl", hash = "sha256:f6fc2b06fb9484c6775e21171d162e21dec1645ad3e9be6a389294e108b75f4b", size = 16029, upload-time = "2026-05-04T14:20:47.139Z" },
     { url = "https://files.pythonhosted.org/packages/e0/ba/a2cff11544e136d78a5f2a62edac9ed7fc3e77a51d8c712a61882b606c1a/tree_sitter_cfengine-1.1.12-cp39-abi3-win_arm64.whl", hash = "sha256:1d883df6aaae4882080c247cbc0f2b756f94bf731ca9886d1573931561251dc8", size = 14849, upload-time = "2026-05-04T14:20:47.963Z" },
+]
+
+[[package]]
+name = "truststore"
+version = "0.10.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/9f/c5201d42a484c061e528825fc8e2d565f5abd50a4ced6fb7d29c4ec99b2b/truststore-0.10.5.tar.gz", hash = "sha256:30d36967ccaded5cbb38d602c433f53600036c79d502f4533a49b60a03bbefcd", size = 28091, upload-time = "2026-10-12T22:27:31.808Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/e9/3a7820be2bb0fe53b6bc9c3be26d3d1158004e4c3ab953aa6840b955b1e9/truststore-0.10.5-py3-none-any.whl", hash = "sha256:9aaaedaefaf06d8b206278cf8b5012bc897f485a874503501e12d776df78951c", size = 19017, upload-time = "2026-10-12T22:27:30.377Z" },
 ]
 
 [[package]]

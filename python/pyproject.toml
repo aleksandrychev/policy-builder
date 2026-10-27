@@ -12,6 +12,8 @@ dependencies = [
   "cfengine>=0.20.0",
   # Test environments (cfpb_testenv.py): the official Docker SDK, talking to the Engine socket.
   "docker>=7.1",
+  # Ensure CA bundles are available on all platforms with truststore
+  "truststore",
 ]
 
 [project.scripts]
