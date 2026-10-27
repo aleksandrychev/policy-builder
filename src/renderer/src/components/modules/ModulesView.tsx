@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, type Ref, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
@@ -119,6 +119,7 @@ interface ModulesViewProps {
   onRemove: (name: string) => void;
   onSelect: (name: string) => void;
   projectModules: ProjectModule[];
+  searchRef?: Ref<HTMLInputElement>;
   selectedName: string | null;
   usedBy: (name: string) => string[];
 }
@@ -134,6 +135,7 @@ export function ModulesView({
   onRemove,
   onSelect,
   projectModules,
+  searchRef,
   selectedName,
   usedBy
 }: ModulesViewProps) {
@@ -225,6 +227,7 @@ export function ModulesView({
           value={filter.search}
           onChange={event => setFilter(current => ({ ...current, search: event.target.value }))}
           placeholder="Search modules, promise types…"
+          inputRef={searchRef}
           fullWidth
           size="small"
           slotProps={{

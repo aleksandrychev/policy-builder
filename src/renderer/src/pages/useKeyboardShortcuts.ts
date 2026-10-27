@@ -13,6 +13,8 @@ export interface ShortcutHandlers {
   onCut: () => boolean;
   onDelete: () => boolean;
   onEscape: () => void;
+  // ⌘F: a side bar search (blocks or modules); whether there was one.
+  onFind: () => boolean;
   onGroup: () => void;
   onPaste: () => boolean;
   onRedo: () => void;
@@ -47,7 +49,7 @@ function handleZoomKey(event: KeyboardEvent, zoom: ZoomControls | null, withComm
   zoomAction();
 }
 
-// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, copy/cut/paste (⌘S is handled before the text-field check).
+// ⌘/Ctrl shortcuts: undo/redo, group/ungroup, find, copy/cut/paste (⌘S is handled before the text-field check).
 function handleCommandKey(event: KeyboardEvent, handlers: ShortcutHandlers) {
   const key = event.key.toLowerCase();
   const run = (action: () => unknown) => {
@@ -56,7 +58,8 @@ function handleCommandKey(event: KeyboardEvent, handlers: ShortcutHandlers) {
   };
   if (key === 'z' || key === 'y') return run(key === 'y' || event.shiftKey ? handlers.onRedo : handlers.onUndo);
   if (key === 'g') return run(event.shiftKey ? handlers.onUngroup : handlers.onGroup);
-  const command = { c: handlers.onCopy, x: handlers.onCut, v: handlers.onPaste }[key];
+  if (key === 'f' && event.shiftKey) return;
+  const command = { c: handlers.onCopy, f: handlers.onFind, x: handlers.onCut, v: handlers.onPaste }[key];
   if (command?.()) event.preventDefault();
 }
 

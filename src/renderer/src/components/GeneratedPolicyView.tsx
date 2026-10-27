@@ -4,6 +4,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, type Theme, Typography, alpha, useTheme } from '@mui/material';
 
+import { openSearchPanel } from '@codemirror/search';
 import { RangeSetBuilder } from '@codemirror/state';
 import { Decoration, EditorView } from '@codemirror/view';
 import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
@@ -11,10 +12,12 @@ import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { entryName } from '../blocks/definitionEntries';
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { primaryPromiseType } from '../blocks/resolveBlockShape';
+import { modalOpen } from '../pages/useKeyboardShortcuts';
 import type { CompiledPolicyState } from '../project/useCompiledPolicy';
 import { useAppSelector } from '../store';
 import { cfengineLanguage } from './editor/cfengineLanguage';
 import { type PolicyReference, type PolicyRegion, policyBlocks } from './editor/policyBlocks';
+import { useFindBar } from './editor/useFindBar';
 
 type Palette = Theme['palette'];
 // A bar colour per kind of promise, so a file's structure reads at a glance.
@@ -138,9 +141,11 @@ export function GeneratedPolicyView({
     onFollow(previous.fileId, previous.id);
   };
 
+  const { extension: find, findBar } = useFindBar();
   const extensions = useMemo(
     () => [
       cfengineLanguage,
+      find,
       highlightLines(ranges),
       policyBlocks(regions, references, pick, reference => follow(reference.fileId, reference.id)),
       EditorView.theme({
@@ -150,7 +155,7 @@ export function GeneratedPolicyView({
       })
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the callbacks are new each render; their targets aren't
-    [ranges, regions, references, theme, currentFileId, selectedId]
+    [ranges, regions, references, theme, currentFileId, selectedId, find]
   );
 
   useEffect(() => {
@@ -162,6 +167,12 @@ export function GeneratedPolicyView({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.altKey && event.key === 'ArrowLeft') back();
+      // ⌘F with the code unfocused (the editor's own keymap has it otherwise).
+      const find = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f';
+      if (find && !event.defaultPrevented && view && !view.hasFocus && !modalOpen()) {
+        event.preventDefault();
+        openSearchPanel(view);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -211,12 +222,13 @@ export function GeneratedPolicyView({
             {copied === 'copied' ? 'Copied' : copied === 'failed' ? 'Copy failed' : 'Copy'}
           </Button>
         </Stack>
+        {findBar}
         <Box sx={{ height: '100%', opacity: pending && result ? 0.6 : 1, transition: 'opacity 150ms' }}>
           {text !== undefined ? (
             <CodeMirror
               ref={(instance: ReactCodeMirrorRef | null) => setView(instance?.view ?? null)}
               value={text}
-              editable={false}
+              readOnly
               theme={theme.palette.mode}
               height="100%"
               style={{ height: '100%', fontSize: 13 }}

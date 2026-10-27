@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { type Ref, memo, useMemo, useState } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
@@ -83,6 +83,7 @@ interface BlockPaletteProps {
   onBrowseModules?: (search: string) => void;
   // Typing in the search: the module list loads.
   onSearch?: () => void;
+  searchRef?: Ref<HTMLInputElement>;
 }
 
 // No block matches: modules may, for what no block covers.
@@ -103,7 +104,7 @@ function NoBlocks({ modules = [], onBrowseModules, search }: Pick<BlockPalettePr
   );
 }
 
-export const BlockPalette = memo(function BlockPalette({ modules, onAddBlock, onBrowseModules, onSearch }: BlockPaletteProps) {
+export const BlockPalette = memo(function BlockPalette({ modules, onAddBlock, onBrowseModules, onSearch, searchRef }: BlockPaletteProps) {
   const [search, setSearch] = useState('');
 
   const groups = useMemo(() => {
@@ -127,6 +128,7 @@ export const BlockPalette = memo(function BlockPalette({ modules, onAddBlock, on
             onSearch?.();
           }}
           placeholder="Search blocks…"
+          inputRef={searchRef}
           variant="standard"
           fullWidth
           size="small"

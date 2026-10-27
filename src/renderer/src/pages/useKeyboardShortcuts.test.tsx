@@ -11,6 +11,7 @@ function setUp(overrides: Partial<ShortcutHandlers> = {}) {
     onCut: vi.fn(() => true),
     onDelete: vi.fn(() => true),
     onEscape: vi.fn(),
+    onFind: vi.fn(() => true),
     onGroup: vi.fn(),
     onPaste: vi.fn(() => true),
     onRedo: vi.fn(),
