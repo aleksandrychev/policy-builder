@@ -4,8 +4,9 @@ import { Box, Button, ButtonBase, Divider, Stack, TextField, Typography, useThem
 
 import type { BlockInstance } from '../store/canvasSlice/types';
 import { type BlockGroup, GROUP_COLORS, type GroupColor } from '../store/groupsSlice/types';
+import { inputBgcolor } from './properties/styles';
 
-const inputSx = { '& .MuiInputBase-root': { bgcolor: 'background.input' } };
+const inputSx = { '& .MuiInputBase-root': { bgcolor: inputBgcolor } };
 
 // Properties panel content for a selected group: name, colour, what gates it
 // (its condition and arrows), members, and the ways out (ungroup keeps the

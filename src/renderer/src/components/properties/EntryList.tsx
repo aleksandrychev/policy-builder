@@ -9,6 +9,7 @@ import { entryName, entrySummary } from '../../blocks/definitionEntries';
 import type { BlockDescriptor } from '../../blocks/types';
 import type { DefinitionEntry } from '../../store/canvasSlice/types';
 import { capitalize } from './capitalize';
+import { inputBgcolor } from './styles';
 
 // The overview of a multi-entry block: one row per entry, click to edit it.
 export function EntryList({
@@ -66,7 +67,7 @@ export function EntryList({
                 border: '1px solid',
                 borderColor: duplicate ? 'error.main' : 'divider',
                 borderRadius: '4px',
-                bgcolor: 'background.input',
+                bgcolor: inputBgcolor,
                 pl: 1.25,
                 pr: 0.5,
                 py: 0.75,
