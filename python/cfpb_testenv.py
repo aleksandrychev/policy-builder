@@ -20,6 +20,11 @@ import urllib.request
 from pathlib import Path
 from typing import Iterator
 
+# Ensure that the python we are running has access to good CA certificate store
+import truststore
+
+truststore.inject_into_ssl()
+
 # The platforms CFEngine supports that run in a Linux container: the base image, the CFEngine
 # package platform it takes (release data classexpr) and how packages install. RHEL-compatible
 # ones use AlmaLinux (CentOS 7 for 7, the only free image of it).
