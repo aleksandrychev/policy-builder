@@ -1,12 +1,18 @@
+import type { Theme } from '@mui/material';
+
+// The theme's dark `background.input` is bright enough to wash out the labels on a field's edge:
+// a darker theme shade there.
+export const inputBgcolor = (theme: Theme) => (theme.palette.mode === 'dark' ? 'background.default' : 'background.input');
+
 // Text fields render on top of this panel's own filled background; without
 // an explicit background they're the same shade as the panel and disappear.
 // `background.input` exists in the theme for exactly this, but isn't wired
 // to any global component style, so it's applied per-field here instead of
 // in the (shared, do-not-restyle) theme itself.
-// Labels default to text.secondary, too dim on the input's background in dark mode.
+// Labels default to text.secondary (primary.main focused), too dim on the input's background in dark mode.
 export const inputSx = {
-  '& .MuiInputBase-root': { bgcolor: 'background.input' },
-  '& .MuiInputLabel-root:not(.Mui-focused):not(.Mui-error)': { color: 'text.muted' },
+  '& .MuiInputBase-root': { bgcolor: inputBgcolor },
+  '& .MuiInputLabel-root:not(.Mui-error)': { color: 'text.muted' },
   '& .MuiFormHelperText-root': { fontSize: '12px' }
 };
 
