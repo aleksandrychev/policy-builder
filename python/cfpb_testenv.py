@@ -980,6 +980,8 @@ QUOTED = re.compile(r"'([^']*)'")
 NOT_A_REPAIR = re.compile(r"^(Completed execution|Last \d+ quoted lines)")
 # A failed command names only its promiser (expanded): no "belongs to" line.
 COMMAND_FAILED = re.compile(r"related to promiser '(.*)' -- ")
+# A package module's error names only the package, with no "belongs to" line either.
+PACKAGE_FAILED = re.compile(r"Error (?:installing|removing|updating|upgrading) package '([^']+)'")
 QUOTED_PROMISER = re.compile(r'\s+"((?:\\.|[^"\\])*)"(?:\s|$)')
 VARIABLE = re.compile(r"[$@](?:\([^)]*\)|\{[^}]*\})")
 
@@ -1086,6 +1088,11 @@ def find_problems(lines: list[str], source_map: dict, block_files: dict, policie
             location, context = (None, named.group(1), int(named.group(2))), []
         command = COMMAND_FAILED.search(message) if not location and policies else None
         found = _promiser_at(command.group(1), policies) if command else None
+        package = PACKAGE_FAILED.search(message) if not location and not found and policies else None
+        if package:
+            found = _promiser_at(package.group(1), policies)
+            # The info lines before it are other promises': they didn't cause it.
+            context = [] if found else context
         if found:
             location = (None, found[0], found[1])
         path = (found[0] if found else _where(location[1])) if location else None

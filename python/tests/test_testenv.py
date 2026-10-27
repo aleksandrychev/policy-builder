@@ -194,6 +194,37 @@ def test_a_failed_command_is_traced_by_its_promiser():
     )
 
 
+def test_a_failed_package_is_traced_by_its_name():
+    # A package module's error names only the package, without a "belongs to" line; the info lines
+    # before it are other promises'.
+    lines = [
+        "    info: Created file '/var/www/html/index.html', mode 0644",
+        "   error: Error installing package 'python3'",
+    ]
+    policy = "\n".join(
+        [
+            "bundle agent main",
+            "{",
+            "  # Install python3",
+            "  packages:",
+            '    "python3"',
+            '      policy => "present";',
+            "}",
+        ]
+    )
+    source_map = {"./webserver.cf": {"python-block": [[3, 6]]}}
+
+    [problem] = cfpb_testenv.find_problems(lines, source_map, {"python-block": "file-1"}, {"./webserver.cf": policy})
+
+    assert (problem["block"], problem["fileId"], problem["file"], problem["line"]) == (
+        "python-block",
+        "file-1",
+        "./webserver.cf",
+        5,
+    )
+    assert problem["cause"] == []
+
+
 def test_errors_outside_the_project_keep_their_own_location():
     lines = [
         "    info: Promise belongs to bundle 'cfe_internal_update' in file '/var/cfengine/inputs/update.cf' near line 9",
