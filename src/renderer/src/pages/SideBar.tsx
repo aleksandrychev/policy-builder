@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import { Box } from '@mui/material';
 
@@ -13,12 +13,14 @@ interface SideBarProps {
   onResizeEnd: () => void;
   // The Blocks palette above the Files explorer.
   policy: ReactNode;
+  // The Modules view's search field, for ⌘F.
+  searchModulesRef?: Ref<HTMLInputElement>;
   view: SideView | null;
   widthFraction: number;
 }
 
 /** The side bar right of the activity bar: the open view, and its resize handle. */
-export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFraction }: SideBarProps) {
+export function SideBar({ modules, onResize, onResizeEnd, policy, searchModulesRef, view, widthFraction }: SideBarProps) {
   if (!view) return null;
   return (
     <>
@@ -30,6 +32,7 @@ export function SideBar({ modules, onResize, onResizeEnd, policy, view, widthFra
             canAdd={modules.canAdd}
             catalog={modules.catalog}
             projectModules={modules.projectModules}
+            searchRef={searchModulesRef}
             selectedName={modules.openName}
             isNeedingInput={modules.isNeedingInput}
             onSelect={modules.open}

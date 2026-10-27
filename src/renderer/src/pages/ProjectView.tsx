@@ -826,11 +826,27 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
     })
   );
 
+  // ⌘F: the open Modules view's search, else on the canvas the palette's (opening Blocks if needed).
+  // The Generated Policy tab searches its code.
+  const blockSearchRef = useRef<HTMLInputElement>(null);
+  const moduleSearchRef = useRef<HTMLInputElement>(null);
+  const findInSideBar = () => {
+    if (activeTab === 1) return false;
+    if (sideBar.activeView === 'modules') moduleSearchRef.current?.select();
+    else if (activeTab !== 0) return false;
+    else {
+      if (sideBar.activeView !== 'policy') showSideView('policy');
+      requestAnimationFrame(() => blockSearchRef.current?.select());
+    }
+    return true;
+  };
+
   useKeyboardShortcuts({
     locked,
     canvasActive: activeTab === 0,
     zoomControlsRef,
     onEscape: handleEscape,
+    onFind: findInSideBar,
     onSave,
     onDelete: handleDeleteKey,
     onUndo: () => handleHistoryKey(false),
@@ -1094,10 +1110,17 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
             onResize={handleLeftResize}
             onResizeEnd={commitLayout}
             modules={modules}
+            searchModulesRef={moduleSearchRef}
             policy={
               <>
                 <Box sx={{ height: `${layout.paletteHeightFraction * 100}%`, minHeight: 0, flexShrink: 0 }}>
-                  <BlockPalette onAddBlock={paletteAddBlock} modules={modules.catalog.modules} onBrowseModules={browseModules} onSearch={wantModules} />
+                  <BlockPalette
+                    onAddBlock={paletteAddBlock}
+                    modules={modules.catalog.modules}
+                    onBrowseModules={browseModules}
+                    onSearch={wantModules}
+                    searchRef={blockSearchRef}
+                  />
                 </Box>
                 <ResizeHandle label="Resize block palette" orientation="horizontal" onResize={handlePaletteResize} onResizeEnd={commitLayout} />
                 <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

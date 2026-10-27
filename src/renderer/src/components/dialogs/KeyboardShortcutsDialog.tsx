@@ -33,6 +33,7 @@ const SECTIONS: { rows: [keys: string, action: string][]; title: string }[] = [
     rows: [
       [`${mod('1')} … ${mod('4')}`, 'Canvas, Generated Policy, Tests & Logs, Deployment'],
       [mod('B'), 'Show or hide the side bar'],
+      [mod('F'), 'Search the blocks, modules or generated policy'],
       [mod('E', true), 'Blocks and files'],
       [mod('X', true), 'Modules'],
       [`+  or  ${mod('=')}`, 'Zoom in'],
