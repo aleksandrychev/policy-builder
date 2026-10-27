@@ -17,6 +17,7 @@ import type { CompiledPolicyState } from '../project/useCompiledPolicy';
 import { useAppSelector } from '../store';
 import { cfengineLanguage } from './editor/cfengineLanguage';
 import { type PolicyReference, type PolicyRegion, policyBlocks } from './editor/policyBlocks';
+import { useFindBar } from './editor/useFindBar';
 
 type Palette = Theme['palette'];
 // A bar colour per kind of promise, so a file's structure reads at a glance.
@@ -140,9 +141,11 @@ export function GeneratedPolicyView({
     onFollow(previous.fileId, previous.id);
   };
 
+  const { extension: find, findBar } = useFindBar();
   const extensions = useMemo(
     () => [
       cfengineLanguage,
+      find,
       highlightLines(ranges),
       policyBlocks(regions, references, pick, reference => follow(reference.fileId, reference.id)),
       EditorView.theme({
@@ -152,7 +155,7 @@ export function GeneratedPolicyView({
       })
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the callbacks are new each render; their targets aren't
-    [ranges, regions, references, theme, currentFileId, selectedId]
+    [ranges, regions, references, theme, currentFileId, selectedId, find]
   );
 
   useEffect(() => {
@@ -219,6 +222,7 @@ export function GeneratedPolicyView({
             {copied === 'copied' ? 'Copied' : copied === 'failed' ? 'Copy failed' : 'Copy'}
           </Button>
         </Stack>
+        {findBar}
         <Box sx={{ height: '100%', opacity: pending && result ? 0.6 : 1, transition: 'opacity 150ms' }}>
           {text !== undefined ? (
             <CodeMirror

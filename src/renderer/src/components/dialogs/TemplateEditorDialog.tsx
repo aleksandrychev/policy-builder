@@ -11,6 +11,7 @@ import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { cfengineReferenceLanguage } from '../editor/cfengineReferenceLanguage';
 import { mustacheLanguage } from '../editor/mustacheLanguage';
 import { type TemplateToken, type TemplateTokenSyntax, insertTemplateToken, templateTokenCompletionSource } from '../editor/templateTokens';
+import { useFindBar } from '../editor/useFindBar';
 
 interface TemplateEditorDialogProps {
   // The parameter's help, shown under a Mustache template (its syntax notes).
@@ -170,14 +171,16 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
     }
   };
 
+  const { extension: find, findBar } = useFindBar();
   const extensions = useMemo(() => {
     const tokensByName = new Map(insertableVariables.map(token => [token.name, token]));
     return [
       mustache ? mustacheLanguage : cfengineReferenceLanguage,
       autocompletion({ override: [templateTokenCompletionSource(insertableVariables, syntax)] }),
-      dropTokenExtension(tokensByName, syntax)
+      dropTokenExtension(tokensByName, syntax),
+      find
     ];
-  }, [insertableVariables, mustache, syntax]);
+  }, [insertableVariables, mustache, syntax, find]);
 
   // Backdrop clicks never discard edits; Escape only closes when there's nothing to lose.
   const handleDialogClose = (_event: object, reason: 'backdropClick' | 'escapeKeyDown') => {
@@ -228,6 +231,7 @@ export function TemplateEditorDialog({ open, title, value, variables, mustache, 
             style={{ height: '100%', fontSize: 13 }}
             extensions={extensions}
           />
+          {findBar}
         </Box>
         <Stack sx={{ width: 240, flexShrink: 0, gap: 1, minHeight: 0 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: 'text.muted' }}>{mustache ? 'Variables & classes' : 'Variables'}</Typography>
