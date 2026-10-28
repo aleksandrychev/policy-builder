@@ -54,5 +54,7 @@ linux:
     - deb
     - rpm
   category: Development
+toolsets:
+  appimage: "1.0.3"
 # @todo: publish config for update.electronjs.org auto-updates.
 npmRebuild: false
