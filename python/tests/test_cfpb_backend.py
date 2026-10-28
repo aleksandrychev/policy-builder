@@ -212,7 +212,7 @@ def test_init_rejects_malformed_content(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 @needs_git
-def test_init_falls_back_to_the_cfbs_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_init_falls_back_to_the_policy_builder_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     for variable in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"):
@@ -222,7 +222,7 @@ def test_init_falls_back_to_the_cfbs_git_identity(tmp_path: Path, monkeypatch: p
 
     assert code == 0, stderr
     [author] = _log(project, "%an <%ae>")
-    assert author.startswith("cfbs <cfbs@")
+    assert author == "CFEngine Policy Builder <>"
 
 
 def test_init_refuses_a_non_empty_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -513,3 +513,31 @@ def test_add_build_modules_adds_them_with_cfbs_and_writes_their_answers(tmp_path
     assert json.loads((project / "tiny-module" / "input.json").read_text()) == [{**question, "response": "hi"}]
     with pytest.raises(InitFailed, match="Invalid module name"):
         add_build_modules(str(project), [{"name": "../evil"}])
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_cfbs_commits_with_a_fallback_identity_where_git_has_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # A fresh machine: no user.name or user.email anywhere git looks.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    for variable in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.delenv(variable, raising=False)
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "cfbs.json").write_text('{"name": "p", "type": "policy-set", "git": true, "build": []}')
+    subprocess.run(["git", "init", "--quiet"], cwd=project, check=True)
+    seen = {}
+
+    def cfbs_main():
+        seen.update({key: os.environ.get(key) for key in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_EMAIL")})
+        return 0
+
+    monkeypatch.setattr("cfbs.main.main", cfbs_main)
+
+    cfpb_backend._run_cfbs(str(project), ["add", "example"], "example")
+
+    assert seen["GIT_AUTHOR_NAME"] == "CFEngine Policy Builder"
+    assert seen["GIT_COMMITTER_EMAIL"] == ""
+    # Only while cfbs runs.
+    assert "GIT_AUTHOR_NAME" not in os.environ

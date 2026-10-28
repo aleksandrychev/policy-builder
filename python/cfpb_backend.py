@@ -21,7 +21,6 @@ import os
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 from collections import OrderedDict
@@ -241,15 +240,22 @@ def _git(directory: str, *args: str, echo: bool = True) -> subprocess.CompletedP
     return result
 
 
+def _missing_identity(directory: str) -> dict[str, str]:
+    """The git identity to commit with where none is configured (a fresh machine), for what git
+    lacks, by config key. No email, as the hub's Build API commits (Nova's getGitDataFromRequest)."""
+    if not shutil.which("git"):
+        return {}
+    fallback = {"user.name": "CFEngine Policy Builder", "user.email": ""}
+    return {
+        key: value for key, value in fallback.items() if not _git(directory, "config", key, echo=False).stdout.strip()
+    }
+
+
 def _git_commit_all(directory: str) -> None:
     for args in (("init", "--quiet"), ("add", "--all")):
         if _git(directory, *args).returncode != 0:
             raise InitFailed(f"git {args[0]} failed")
-    # Same fallback identity cfbs uses when git has none configured.
-    identity = []
-    for key, fallback in (("user.name", "cfbs"), ("user.email", f"cfbs@{socket.gethostname()}")):
-        if not _git(directory, "config", key, echo=False).stdout.strip():
-            identity += ["-c", f"{key}={fallback}"]
+    identity = [arg for key, value in _missing_identity(directory).items() for arg in ("-c", f"{key}={value}")]
     if _git(directory, *identity, "commit", "--quiet", "-m", INIT_COMMIT_MESSAGE).returncode != 0:
         raise InitFailed("git commit failed")
 
@@ -317,11 +323,28 @@ def _run_cfbs(directory: str, argv: list[str], what: str) -> None:
     from cfbs.cfbs_config import CFBSConfig
 
     CFBSConfig.instance = None  # process-wide singleton: each run reads cfbs.json afresh
-    with _cfbs_session(directory, ["--non-interactive", *argv]) as tee:
-        try:
-            code = cfbs.main.main()
-        except SystemExit as exit:
-            code = exit.code if isinstance(exit.code, int) else 1
+    # cfbs commits each change in a git project, and git refuses to without an identity: it
+    # left the change staged, so the next save "worked". The same fallback as the first commit.
+    identity = _missing_identity(directory)
+    names = {
+        "user.name": ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"),
+        "user.email": ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"),
+    }
+    environment = {variable: value for key, value in identity.items() for variable in names[key]}
+    saved = {variable: os.environ.get(variable) for variable in environment}
+    os.environ.update(environment)
+    try:
+        with _cfbs_session(directory, ["--non-interactive", *argv]) as tee:
+            try:
+                code = cfbs.main.main()
+            except SystemExit as exit:
+                code = exit.code if isinstance(exit.code, int) else 1
+    finally:
+        for variable, value in saved.items():
+            if value is None:
+                os.environ.pop(variable, None)
+            else:
+                os.environ[variable] = value
     if code == 0:
         return
     output = "".join(tee.chunks)
