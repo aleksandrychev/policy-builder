@@ -26,6 +26,7 @@ import sys
 from collections import OrderedDict
 from typing import Iterator
 
+import truststore
 from cfengine_cli.format import format_policy_fin_fout
 from cfengine_cli.lint import PolicySyntaxError
 
@@ -623,6 +624,9 @@ def _terminated(signum, _frame) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _terminated)
+    # HTTPS (cfbs, cf-remote, test environments) trusts the OS's certificates: a Python's own CA
+    # file can be missing (MacPorts, python.org) and cfbs reports that as a network error.
+    truststore.inject_into_ssl()
     # Windows would otherwise decode stdio with the ANSI code page.
     for stream in (sys.stdin, sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
