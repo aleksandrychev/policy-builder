@@ -191,6 +191,7 @@ const api = {
   gitInit: (path: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:init', path),
   gitCommit: (path: string, message: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:commit', path, message),
   gitSetRemote: (path: string, url: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:set-remote', path, url),
+  gitSetBranch: (path: string, name: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:set-branch', path, name),
   gitPush: (path: string): Promise<OperationResult<{ status: GitStatus }>> => invoke('git:push', path),
   gitSync: (path: string, mode: 'force' | 'rebase'): Promise<OperationResult<{ pulled: boolean; status: GitStatus }>> => invoke('git:sync', path, mode),
 

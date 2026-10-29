@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography } from '@mui/material';
 
-import type { GitStatus } from '../../../../preload/api';
+import type { GitStatus, OperationResult } from '../../../../preload/api';
 import { type Failure, type SshTarget, forgetSshTarget, saveSshTarget, sshTargetOf } from '../../project/deployRuns';
 import { type HubHandle, HubSettings } from './hub';
 import { FailureAlert } from './shared';
@@ -17,12 +17,13 @@ const SSH_HOST = /^(?:[\w.-]+@)?[\w][\w.-]*$/;
 
 export function RemoteSettings({ git, onSaved, path }: { git: GitStatus | null; onSaved: (status: GitStatus) => void; path: string }) {
   const [remote, setRemote] = useState(git?.remote ?? '');
+  const [branch, setBranch] = useState(git?.branch ?? '');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [busy, setBusy] = useState(false);
-  const save = async () => {
+  const save = async (change: () => Promise<OperationResult<{ status: GitStatus }>>) => {
     setBusy(true);
     setFailure(null);
-    const result = await window.api!.gitSetRemote(path, remote.trim());
+    const result = await change();
     setBusy(false);
     if (result.ok) onSaved(result.status);
     else setFailure(result);
@@ -44,11 +45,33 @@ export function RemoteSettings({ git, onSaved, path }: { git: GitStatus | null; 
           variant="contained"
           size="small"
           disabled={busy || !REMOTE_URL.test(remote.trim()) || remote.trim() === git?.remote}
-          onClick={() => void save()}
+          onClick={() => void save(() => window.api!.gitSetRemote(path, remote.trim()))}
         >
           {git?.remote ? 'Change' : 'Set'}
         </Button>
       </Stack>
+      {git?.branch && (
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+          <TextField
+            label="Branch"
+            size="small"
+            placeholder="main"
+            value={branch}
+            onChange={event => setBranch(event.target.value)}
+            helperText="Renames the project’s branch; the next push creates it on origin."
+            sx={{ flex: 1 }}
+            slotProps={{ htmlInput: { style: { fontFamily: 'monospace', fontSize: 13 } } }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            disabled={busy || !branch.trim() || /\s/.test(branch.trim()) || branch.trim() === git.branch}
+            onClick={() => void save(() => window.api!.gitSetBranch(path, branch.trim()))}
+          >
+            Rename
+          </Button>
+        </Stack>
+      )}
       <FailureAlert failure={failure} />
     </Stack>
   );

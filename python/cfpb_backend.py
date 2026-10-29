@@ -252,9 +252,16 @@ def _missing_identity(directory: str) -> dict[str, str]:
 
 
 def _git_commit_all(directory: str) -> None:
-    for args in (("init", "--quiet"), ("add", "--all")):
-        if _git(directory, *args).returncode != 0:
-            raise InitFailed(f"git {args[0]} failed")
+    # main, as GitHub/GitLab and the hub settings default to, unless the user's git picks one.
+    branch = (
+        []
+        if _git(directory, "config", "init.defaultBranch", echo=False).stdout.strip()
+        else ["-c", "init.defaultBranch=main"]
+    )
+    if _git(directory, *branch, "init", "--quiet").returncode != 0:
+        raise InitFailed("git init failed")
+    if _git(directory, "add", "--all").returncode != 0:
+        raise InitFailed("git add failed")
     identity = [arg for key, value in _missing_identity(directory).items() for arg in ("-c", f"{key}={value}")]
     if _git(directory, *identity, "commit", "--quiet", "-m", INIT_COMMIT_MESSAGE).returncode != 0:
         raise InitFailed("git commit failed")

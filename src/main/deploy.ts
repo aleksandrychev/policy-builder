@@ -268,7 +268,9 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     trusted((_event, path: unknown) =>
       attempt(async () => {
         const root = await repoPath(path);
-        const init = await git(root, ['init', '--quiet']);
+        // main, as GitHub/GitLab and the hub settings default to, unless the user's git picks one.
+        const branch = (await git(root, ['config', 'init.defaultBranch'])).stdout.trim() ? [] : ['-c', 'init.defaultBranch=main'];
+        const init = await git(root, [...branch, 'init', '--quiet']);
         if (init.code !== 0) throw commandError('git init failed', init);
         await commitAll(root, 'Initialized the project');
         return { status: await status(root) };
@@ -295,6 +297,24 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
         const known = (await git(root, ['remote', 'get-url', 'origin'])).code === 0;
         const set = await git(root, ['remote', known ? 'set-url' : 'add', 'origin', url.trim()]);
         if (set.code !== 0) throw commandError('Setting the remote failed', set);
+        return { status: await status(root) };
+      })
+    )
+  );
+  // Renames the project's branch: the next push creates it on origin and tracks it.
+  ipcMain.handle(
+    'git:set-branch',
+    trusted((_event, path: unknown, name: unknown) =>
+      attempt(async () => {
+        const root = await repoPath(path);
+        const branch = typeof name === 'string' ? name.trim() : '';
+        const valid = branch.length <= 200 && !branch.startsWith('-') && (await git(root, ['check-ref-format', '--branch', branch])).code === 0;
+        if (!valid) throw new Error('Not a valid branch name');
+        if ((await git(root, ['symbolic-ref', '--short', 'HEAD'])).code !== 0) throw new Error('The project isn’t on a branch (detached HEAD)');
+        const rename = await git(root, ['branch', '-m', branch]);
+        if (rename.code !== 0) throw commandError('Renaming the branch failed', rename);
+        // The old upstream would compare this branch against the remote's old one.
+        await git(root, ['branch', '--unset-upstream']);
         return { status: await status(root) };
       })
     )

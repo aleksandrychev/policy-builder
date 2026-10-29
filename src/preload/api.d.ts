@@ -358,6 +358,8 @@ declare global {
       gitInit: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
       /** Pushes the current branch to origin, with the user's own git credentials; never prompts. */
       gitPush: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
+      /** Renames the current branch (and drops its upstream): the next push creates it on origin. */
+      gitSetBranch: (path: string, name: string) => Promise<OperationResult<{ status: GitStatus }>>;
       /** Sets (or adds) the origin remote. */
       gitSetRemote: (path: string, url: string) => Promise<OperationResult<{ status: GitStatus }>>;
       gitStatus: (path: string) => Promise<OperationResult<{ status: GitStatus }>>;
