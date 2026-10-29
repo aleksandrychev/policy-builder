@@ -43,7 +43,7 @@ beforeEach(async () => {
   await fs.mkdir(state.userData);
   await useVenvSidecar(join(temp, 'resources'));
   origin = join(temp, 'origin.git');
-  git(temp, 'init', '--quiet', '--bare', origin);
+  git(temp, '-c', 'init.defaultBranch=main', 'init', '--quiet', '--bare', origin);
 });
 
 afterEach(async () => {

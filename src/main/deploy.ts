@@ -268,7 +268,9 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
     trusted((_event, path: unknown) =>
       attempt(async () => {
         const root = await repoPath(path);
-        const init = await git(root, ['init', '--quiet']);
+        // main, as GitHub/GitLab and the hub settings default to, unless the user's git picks one.
+        const branch = (await git(root, ['config', 'init.defaultBranch'])).stdout.trim() ? [] : ['-c', 'init.defaultBranch=main'];
+        const init = await git(root, [...branch, 'init', '--quiet']);
         if (init.code !== 0) throw commandError('git init failed', init);
         await commitAll(root, 'Initialized the project');
         return { status: await status(root) };
