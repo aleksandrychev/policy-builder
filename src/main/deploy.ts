@@ -299,6 +299,24 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
       })
     )
   );
+  // Renames the project's branch: the next push creates it on origin and tracks it.
+  ipcMain.handle(
+    'git:set-branch',
+    trusted((_event, path: unknown, name: unknown) =>
+      attempt(async () => {
+        const root = await repoPath(path);
+        const branch = typeof name === 'string' ? name.trim() : '';
+        const valid = branch.length <= 200 && !branch.startsWith('-') && (await git(root, ['check-ref-format', '--branch', branch])).code === 0;
+        if (!valid) throw new Error('Not a valid branch name');
+        if ((await git(root, ['symbolic-ref', '--short', 'HEAD'])).code !== 0) throw new Error('The project isn’t on a branch (detached HEAD)');
+        const rename = await git(root, ['branch', '-m', branch]);
+        if (rename.code !== 0) throw commandError('Renaming the branch failed', rename);
+        // The old upstream would compare this branch against the remote's old one.
+        await git(root, ['branch', '--unset-upstream']);
+        return { status: await status(root) };
+      })
+    )
+  );
   // A push the remote rejected (it has commits we don't): bring theirs in under ours, or overwrite.
   ipcMain.handle(
     'git:sync',
