@@ -1,6 +1,6 @@
 import { Box, Typography, alpha, useTheme } from '@mui/material';
 
-import { Handle, type Node, type NodeProps, NodeResizer, Position, useStore } from '@xyflow/react';
+import { Handle, type Node, type NodeProps, NodeResizer, Position, useViewportStore } from '@xyflow/react';
 
 import { GROUP_TITLE_HEIGHT } from '../canvas/groupFrames';
 import type { BlockGroup } from '../store/groupsSlice/types';
@@ -30,7 +30,7 @@ export function GroupFrameNode({ data }: NodeProps<GroupFrameFlowNode>) {
   const theme = useTheme();
   const color = theme.palette[group.color].main;
   // Same threshold as block cards: zoomed out, the title grows so it stays readable.
-  const compact = useStore(state => state.transform[2] < 0.55);
+  const compact = useViewportStore(state => state.transform[2] < 0.55);
   const handleSx = { width: 14, height: 14, border: `2px solid ${theme.palette.background.default}`, pointerEvents: 'all' as const };
   const condition = group.condition?.className.trim() ? group.condition : undefined;
 

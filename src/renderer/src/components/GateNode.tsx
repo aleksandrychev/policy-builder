@@ -2,7 +2,7 @@ import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import { Box, Divider, IconButton, ListItemText, Menu, MenuItem, Typography, useTheme } from '@mui/material';
 
-import { Handle, type Node, type NodeProps, Position, useStore } from '@xyflow/react';
+import { Handle, type Node, type NodeProps, Position, useViewportStore } from '@xyflow/react';
 
 import type { FileConditionRelation } from '../canvas/fileCondition';
 import { GATE_WIDTH, type Gate } from '../canvas/gates';
@@ -45,7 +45,7 @@ export function GateNode({ data, selected }: NodeProps<GateFlowNode>) {
   const menu = useMenuAnchor();
   const { mode, className } = gate.condition;
   const blocks = gate.instanceIds.length;
-  const compact = useStore(state => state.transform[2] < COMPACT_ZOOM);
+  const compact = useViewportStore(state => state.transform[2] < COMPACT_ZOOM);
 
   return (
     <Box
