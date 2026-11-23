@@ -97,6 +97,17 @@ def _variables() -> dict:
     }
 
 
+def _inputs() -> dict:
+    """A Module Input of every kind (their variables are named after it)."""
+    sources = LIBRARY.descriptors["module-input"]["value_sources"]
+    entries = [
+        _entry(name, "variable_name", name, source["id"], _params(source["parameters"]))
+        for source in sources
+        for name in [source["id"].replace("-", "_")]
+    ]
+    return {"instanceId": "inputs", "blockId": "module-input", "label": "All inputs", "params": {}, "entries": entries}
+
+
 def _classes() -> dict:
     refs = [{"id": "r1", "name": "always_true", "negate": False}, {"id": "r2", "name": "linux", "negate": True}]
     entries = []
@@ -147,14 +158,15 @@ def _actions() -> list[dict]:
 
 
 def _project() -> dict:
-    blocks = [_variables(), _classes(), *_actions()]
+    blocks = [_variables(), _inputs(), _classes(), *_actions()]
     order = [
         block["instanceId"]
         for block in blocks
         if LIBRARY.descriptors[block["blockId"]]["compile_target"] == "own_bundle"
     ]
     return {
-        "files": [{"id": "f", "name": "All", "namespace": "all", "path": "./all.cf", "blocks": blocks, "order": order}]
+        "module_name": "all-blocks",
+        "files": [{"id": "f", "name": "All", "namespace": "all", "path": "./all.cf", "blocks": blocks, "order": order}],
     }
 
 

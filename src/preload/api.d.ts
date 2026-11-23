@@ -268,6 +268,12 @@ export interface GitStatus {
 
 export type OperationResult<T> = ({ ok: true } & T) | { details: string; message: string; ok: false };
 
+/** A saved cfbs.json's own module: its name and `provides` entry. */
+export interface ProvidedCfbsModule {
+  module: Record<string, unknown>;
+  name: string;
+}
+
 /** The CFEngine Build module index: downloaded, or offline the last copy (none: index null). */
 export interface ModuleIndexResult {
   error?: string;
@@ -453,6 +459,8 @@ declare global {
       ) => Promise<string>;
       /** Each host's container as Docker sees it: running, exited, absent… */
       testEnvStatus: (request: TestEnvRequest) => Promise<{ hosts: Record<string, { container?: string; ip?: string | null; state: string }> }>;
+      /** cfbs validate in the saved project, as the module index checks a module (publishing), and the module it provides. */
+      validateCfbsProject: (path: string) => Promise<OperationResult<{ provided: ProvidedCfbsModule | null }>>;
     };
   }
 }

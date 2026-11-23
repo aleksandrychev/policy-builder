@@ -107,7 +107,7 @@ def _walk(expr, *, top_level: bool, in_decorator: bool, problems: list[str], whe
         if not top_level:
             problems.append(f"{where}: template_file is only allowed as a whole attribute value")
         yield expr["template_file"]
-    for key in ("variable", "bundle", "class_expression"):
+    for key in ("variable", "bundle", "class_expression", "module_input", "default"):
         if key in expr:
             yield from PLACEHOLDER.findall(expr[key])
     if "args_param" in expr:
@@ -196,7 +196,8 @@ def _check_descriptor(path: Path, problems: list[str]):
         params = shared + source["parameters"]
         _check_parameters(params, at, problems)
         used = _check_steps(source["steps"], params, at, problems)
-        for name in {param["name"] for param in source["parameters"]} - used:
+        # Module Input's question texts go into cfbs.json's input, not the policy.
+        for name in {param["name"] for param in source["parameters"] if not param.get("cfbs_input")} - used:
             problems.append(f"{at}: parameter {name} is never used")
         _check_summary(source, params, at, problems)
         step = source["steps"][0]

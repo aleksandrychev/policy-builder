@@ -142,6 +142,8 @@ export type ParameterOption = LabelledOption | string;
 export interface BlockParameter {
   allow_list?: boolean;
   allowed_chars?: string;
+  // Module Input: describes the cfbs.json input question, not the policy.
+  cfbs_input?: boolean;
   default?: boolean | number | string;
   help?: string;
   integer?: boolean;
@@ -205,6 +207,8 @@ export interface BlockDescriptor {
   requires_module?: string;
   schema_version: 1;
   steps?: BlockStep[];
+  // The value-source selector before the shared parameters (Module Input's Type).
+  value_source_first?: boolean;
   value_source_label?: string;
   value_sources?: BlockValueSource[];
   version: number;

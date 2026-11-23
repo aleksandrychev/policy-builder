@@ -164,20 +164,68 @@ const builderModules = (project: unknown) => {
   return modules;
 };
 
+// A CFEngine Build module's name, as the index has them; also the folder its input.json is in.
+const INDEX_MODULE = /^[a-z0-9][a-z0-9._-]{0,100}$/i;
+
 // The cfbs steps the builder writes: never `run` (a command), nor a path out of the project.
 const BUILDER_STEP = /^(?:copy|directory|policy_files|bundles)(?: [^\s/~]\S*)+$/;
 const isBuilderStep = (step: unknown) => typeof step === 'string' && BUILDER_STEP.test(step) && !step.split(/[ /\\]/).includes('..');
 
+// A module's input answers into def.json: the one step cfbs builds them with, last.
+const INPUT_STEP = 'input ./input.json def.json';
+const INPUT_NAME = /^[a-z_]+$/;
+const INPUT_NAMESPACE = /^[a-z_][a-z0-9_]+$/;
+const VERSION = /^\d+\.\d+\.\d+(-\d+)?$/;
+const isText = (value: unknown) => typeof value === 'string' && value.trim() !== '' && value.length <= 2000;
+const isOptionalText = (value: unknown) => value === undefined || (typeof value === 'string' && value.length <= 2000);
+
+// A list's field: text only (cfbs's files aren't supported), with a key when the list has several.
+const isInputField = (field: unknown, keyed: boolean) =>
+  isRecord(field) &&
+  field.type === 'string' &&
+  isText(field.label) &&
+  isText(field.question) &&
+  isOptionalText(field.default) &&
+  (keyed ? typeof field.key === 'string' && /^[a-z_][a-z0-9_]*$/.test(field.key) : field.key === undefined);
+
+/** A module's `input`, as cfbs validate checks it (and `cfbs input` needs a question). */
+export function isModuleInput(input: unknown): boolean {
+  if (!Array.isArray(input) || input.length === 0 || input.length > 100) return false;
+  const variables = input.map(question => (isRecord(question) ? question.variable : undefined));
+  if (new Set(variables).size !== variables.length) return false;
+  return input.every(question => {
+    if (!isRecord(question) || typeof question.variable !== 'string' || !INPUT_NAME.test(question.variable)) return false;
+    if (typeof question.namespace !== 'string' || !INPUT_NAMESPACE.test(question.namespace)) return false;
+    if (typeof question.bundle !== 'string' || !INPUT_NAME.test(question.bundle)) return false;
+    if (!isText(question.label) || !isText(question.question)) return false;
+    if (question.type === 'string') return isOptionalText(question.default) && question.subtype === undefined && question.while === undefined;
+    if (question.type !== 'list' || !isText(question.while) || question.default !== undefined) return false;
+    const { subtype } = question;
+    if (!Array.isArray(subtype)) return isInputField(subtype, false);
+    const keys = subtype.map(field => (isRecord(field) ? field.key : undefined));
+    return subtype.length > 0 && new Set(keys).size === keys.length && subtype.every(field => isInputField(field, true));
+  });
+}
+
 /** Refuses the builder's modules (and the module it provides) unless every step is one the builder writes. */
 export function checkedBuilderModules(modules: unknown[], provided: Record<string, unknown>): void {
-  if (!Array.isArray(provided.steps) || !provided.steps.every(isBuilderStep)) throw new InvalidRequest('Invalid provided module');
+  const { input, steps, version } = provided;
+  const hasInput = input !== undefined;
+  // The input step comes with input, as the last step.
+  const own = Array.isArray(steps) && hasInput ? steps.slice(0, -1) : steps;
+  if (!Array.isArray(own) || !own.every(isBuilderStep) || (hasInput && (!isModuleInput(input) || (steps as unknown[]).at(-1) !== INPUT_STEP))) {
+    throw new InvalidRequest('Invalid provided module');
+  }
+  if (version !== undefined && !(typeof version === 'string' && VERSION.test(version))) throw new InvalidRequest('Invalid module version');
+  const { dependencies } = provided;
+  if (dependencies !== undefined && !(Array.isArray(dependencies) && dependencies.every(name => typeof name === 'string' && INDEX_MODULE.test(name)))) {
+    throw new InvalidRequest('Invalid module dependencies');
+  }
   if (!modules.every(module => isRecord(module) && Array.isArray(module.steps) && module.steps.every(isBuilderStep))) {
     throw new InvalidRequest('Invalid policy module');
   }
 }
 
-// A CFEngine Build module's name, as the index has them; also the folder its input.json is in.
-const INDEX_MODULE = /^[a-z0-9][a-z0-9._-]{0,100}$/i;
 export const isBuildModule = (module: unknown) =>
   isRecord(module) &&
   typeof module.name === 'string' &&

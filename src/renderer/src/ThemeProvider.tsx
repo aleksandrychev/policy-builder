@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { CssBaseline, GlobalStyles, ThemeProvider, createTheme } from '@mui/material';
+import { CssBaseline, GlobalStyles, type Theme, type ThemeOptions, ThemeProvider, createTheme } from '@mui/material';
 
 import { dark, light } from '@northern.tech/themes/CFEngine';
 
@@ -8,10 +8,7 @@ import { useColorScheme } from './hooks/useColorScheme';
 
 const outlinedFields = {
   components: {
-    MuiTextField: {
-      defaultProps: { variant: 'outlined' as const },
-      styleOverrides: { root: {} }
-    },
+    MuiTextField: { defaultProps: { variant: 'outlined' as const } },
     MuiFormControl: { defaultProps: { variant: 'outlined' as const } },
     MuiSelect: { defaultProps: { variant: 'outlined' as const } },
     MuiOutlinedInput: {
@@ -30,10 +27,14 @@ const outlinedFields = {
   }
 };
 
-const themes = {
-  light: createTheme(light, outlinedFields),
-  dark: createTheme(dark, outlinedFields)
-};
+// The CFEngine theme sizes text fields for Mission Portal: full width, and a fixed 40px height
+// that helper text overflows onto the next field. Ours size themselves (merging can't drop it).
+function appTheme(base: ThemeOptions): Theme {
+  const theme = createTheme(base, outlinedFields);
+  return { ...theme, components: { ...theme.components, MuiTextField: { ...theme.components?.MuiTextField, styleOverrides: {} } } };
+}
+
+const themes = { light: appTheme(light), dark: appTheme(dark) };
 
 /**
  * Applies the CFEngine MUI theme (from the shared @northern.tech/themes

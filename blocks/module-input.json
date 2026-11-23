@@ -1,0 +1,149 @@
+{
+  "$schema": "./schemas/block-descriptor.v1.json",
+  "schema_version": 1,
+  "id": "module-input",
+  "version": 1,
+  "name": "Module Input",
+  "category": "Variables & Classes",
+  "description": "Asks the policy sets adding this module for a value (cfbs input).",
+  "compile_target": "file_vars",
+  "entries": {
+    "name_param": "variable_name",
+    "noun": "input",
+    "noun_plural": "inputs"
+  },
+  "value_source_label": "Type",
+  "value_source_first": true,
+  "parameters": [
+    {
+      "name": "variable_name",
+      "label": "Variable name",
+      "type": "string",
+      "required": true,
+      "allowed_chars": "a-z_",
+      "help": "Lowercase letters and _ only (cfbs). Once published, renaming it makes everyone using the module answer again."
+    },
+    {
+      "name": "input_label",
+      "label": "Input label",
+      "type": "string",
+      "required": true,
+      "cfbs_input": true,
+      "help": "What people adding the module see, e.g. “Listen port”."
+    },
+    {
+      "name": "question",
+      "label": "Question",
+      "type": "string",
+      "required": true,
+      "cfbs_input": true,
+      "help": "Asked when the module is added, e.g. “Which port should the app listen on?”."
+    }
+  ],
+  "value_sources": [
+    {
+      "id": "input-text",
+      "label": "Text",
+      "summary": "Asks: {{question}}",
+      "badge": "string",
+      "value_type": "string",
+      "literal": true,
+      "help": "One value, e.g. a port or a hostname.",
+      "parameters": [
+        {
+          "name": "default",
+          "label": "Default",
+          "type": "string",
+          "required": false,
+          "help": "Offered as the answer, and used when there's none. Without one, the question must be answered, so adding the module unattended fails."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "string": {
+              "module_input": "{{variable_name}}",
+              "as": "scalar",
+              "default": "{{default}}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-list",
+      "label": "List",
+      "summary": "Asks: {{question}} (a list)",
+      "badge": "slist",
+      "value_type": "slist",
+      "literal": true,
+      "help": "Any number of values, each asked with the question, e.g. users to remove. Without answers, an empty list.",
+      "parameters": [
+        {
+          "name": "while",
+          "label": "Add another?",
+          "type": "string",
+          "required": true,
+          "cfbs_input": true,
+          "default": "Add another?",
+          "help": "Asked after each value."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "slist": {
+              "module_input": "{{variable_name}}",
+              "as": "list"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-table",
+      "label": "Table",
+      "summary": "Asks: {{question}} (a table)",
+      "badge": "data",
+      "value_type": "data",
+      "literal": true,
+      "help": "Rows of named values, e.g. a name and a path per site: $(vars.sites[0][name]). Without answers, no rows.",
+      "parameters": [
+        {
+          "name": "fields",
+          "label": "Fields",
+          "type": "text",
+          "required": true,
+          "cfbs_input": true,
+          "default": "name: Name?",
+          "help": "One per line, key: question (= default), e.g. root: Document root? = /var/www/html. Keys take lowercase letters, digits and _."
+        },
+        {
+          "name": "while",
+          "label": "Add another?",
+          "type": "string",
+          "required": true,
+          "cfbs_input": true,
+          "default": "Add another?",
+          "help": "Asked after each row."
+        }
+      ],
+      "steps": [
+        {
+          "promise_type": "vars",
+          "promiser": "{{variable_name}}",
+          "attributes": {
+            "data": {
+              "module_input": "{{variable_name}}",
+              "as": "data"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

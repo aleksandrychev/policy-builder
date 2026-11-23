@@ -11,6 +11,7 @@ import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType } from '../blocks/resolveBlockShape';
 import type { BlockDescriptor } from '../blocks/types';
 import { type CatalogModule, filterCatalog } from '../modules/catalog';
+import { MODULE_INPUT_BLOCK } from '../modules/ownModuleInput';
 
 // Namespaced so ProjectView's onDragEnd can tell a palette drag (add) apart
 // from a canvas-card drag (reorder), which uses bare instanceIds.
@@ -77,6 +78,8 @@ function CategoryGroup({ category, blocks, onAdd }: { blocks: BlockDescriptor[];
 }
 
 interface BlockPaletteProps {
+  // A module project: its own blocks (Module Input) are offered too.
+  isModule?: boolean;
   // The CFEngine Build modules, to point at those a search no block matches finds (empty until loaded).
   modules?: CatalogModule[];
   onAddBlock: (block: BlockDescriptor) => void;
@@ -104,16 +107,15 @@ function NoBlocks({ modules = [], onBrowseModules, search }: Pick<BlockPalettePr
   );
 }
 
-export const BlockPalette = memo(function BlockPalette({ modules, onAddBlock, onBrowseModules, onSearch, searchRef }: BlockPaletteProps) {
+export const BlockPalette = memo(function BlockPalette({ isModule, modules, onAddBlock, onBrowseModules, onSearch, searchRef }: BlockPaletteProps) {
   const [search, setSearch] = useState('');
 
   const groups = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const filtered = query
-      ? blockDescriptors.filter(block => block.name.toLowerCase().includes(query) || block.description?.toLowerCase().includes(query))
-      : blockDescriptors;
+    const offered = isModule ? blockDescriptors : blockDescriptors.filter(block => block.id !== MODULE_INPUT_BLOCK);
+    const filtered = query ? offered.filter(block => block.name.toLowerCase().includes(query) || block.description?.toLowerCase().includes(query)) : offered;
     return groupBlocksByCategory(filtered);
-  }, [search]);
+  }, [isModule, search]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

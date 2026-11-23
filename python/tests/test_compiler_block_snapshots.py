@@ -179,7 +179,7 @@ def test_every_action_block_has_an_example():
     assert sorted(EXAMPLES) == ACTIONS
 
 
-@pytest.mark.parametrize("name", [*ACTIONS, "define-variable", "define-class", "decorators"])
+@pytest.mark.parametrize("name", [*ACTIONS, "define-variable", "define-class", "module-input", "decorators"])
 def test_compiled_output_matches_its_snapshot(name: str):
     snapshot = SNAPSHOTS / f"{name}.cf"
     actual = _render(name)

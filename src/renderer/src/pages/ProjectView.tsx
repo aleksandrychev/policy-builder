@@ -34,11 +34,12 @@ import type { NewClassDefinition } from '../components/PropertiesPanel';
 import { ResizeHandle } from '../components/ResizeHandle';
 import { StatusBar } from '../components/StatusBar';
 import { TestResultsView } from '../components/TestResultsView';
-import { PROJECT_TABS, TopBar } from '../components/TopBar';
+import { MODULE_TAB, PROJECT_TABS, TopBar } from '../components/TopBar';
 import { AgentLock } from '../components/agent/AgentLock';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { ModulePageOr } from '../components/modules/ModulePage';
 import { ModulesSummary } from '../components/modules/ModulesSummary';
+import { ThisModulePage } from '../components/modules/ThisModulePage';
 import { ConditionSection } from '../components/properties/ConditionSection';
 import { RunsWhenSection } from '../components/properties/RunsWhenSection';
 import { buildClassNameOptions } from '../components/properties/classOptions';
@@ -188,6 +189,7 @@ function OtherTab({
   tab: number;
 } & Parameters<typeof GeneratedPolicyView>[0]) {
   if (tab === 1) return <GeneratedPolicyView {...policy} />;
+  if (tab === MODULE_TAB) return <ThisModulePage dirty={dirty} onSave={onSave} onShowBlock={onShowBlock} />;
   if (tab === 3)
     return <DeploymentView compiled={policy.compiled} dirty={dirty} onOpenTests={onOpenTests} onReload={onReload} onSave={onSave} onShowBlock={onShowBlock} />;
   return <TestResultsView onShowBlock={onShowBlock} />;
@@ -297,6 +299,13 @@ interface ProjectViewProps {
 // A module constant: a new options object each render would make new sensors, and re-render every draggable.
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
 
+// The open tab; the Module tab goes with a module project (stored as a policy set again: the canvas).
+function useActiveTab(isModule: boolean) {
+  const [activeTab, setActiveTab] = useState(0);
+  if (activeTab === MODULE_TAB && !isModule) setActiveTab(0);
+  return [activeTab, setActiveTab] as const;
+}
+
 /** The open project; saving it into cfbs.json is owned by App (project/useProjectSession.ts). */
 export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSettings, onReload, onSave, saving }: ProjectViewProps) {
   const dispatch = useAppDispatch();
@@ -312,7 +321,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
   const allEdges = useAppSelector(selectEdges);
   const edges = useMemo(() => allEdges.filter(edge => edge.fileId === currentFileId), [allEdges, currentFileId]);
   const derivedPositions = useAppSelector(selectDerivedNodePositions);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useActiveTab(project?.type === 'module');
   // Generated Policy shows it; Deployment traces build problems to blocks with its source map.
   const compiled = useCompiledPolicy(activeTab === 1 || activeTab === 3);
   const {
@@ -1115,6 +1124,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
               <>
                 <Box sx={{ height: `${layout.paletteHeightFraction * 100}%`, minHeight: 0, flexShrink: 0 }}>
                   <BlockPalette
+                    isModule={project.type === 'module'}
                     onAddBlock={paletteAddBlock}
                     modules={modules.catalog.modules}
                     onBrowseModules={browseModules}
@@ -1325,6 +1335,7 @@ export default function ProjectView({ dirty, locked, onConnectAgent, onOpenSetti
         >
           <Box sx={{ width: 300, height: 460, display: 'flex', flexDirection: 'column' }}>
             <BlockPalette
+              isModule={project.type === 'module'}
               onAddBlock={descriptor => {
                 addBlockToCanvas(descriptor);
                 setAddBlockAnchor(null);

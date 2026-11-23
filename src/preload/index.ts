@@ -22,6 +22,7 @@ import type {
   OperationResult,
   ProjectContent,
   ProjectStorage,
+  ProvidedCfbsModule,
   RecentProject,
   SavedHub,
   TargetCheck,
@@ -160,6 +161,7 @@ const api = {
 
   /** Deployment: build a saved project's policy set and check it. */
   buildPolicySet: (path: string): Promise<OperationResult<{ build: BuildResult }>> => invoke('deploy:build', path),
+  validateCfbsProject: (path: string): Promise<OperationResult<{ provided: ProvidedCfbsModule | null }>> => invoke('deploy:validate', path),
   /** Deployment over SSH: build and check the saved project, then make it the hub's masterfiles. */
   deployOverSsh: (
     path: string,

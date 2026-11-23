@@ -108,6 +108,10 @@
       "type": "string",
       "description": "Label of the value-source selector (default \"Value source\")."
     },
+    "value_source_first": {
+      "const": true,
+      "description": "The value-source selector comes before the shared parameters (Module Input: its type)."
+    },
     "arrow_default_outcome": {
       "enum": [
         "kept",

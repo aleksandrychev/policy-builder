@@ -1,6 +1,7 @@
 import { blockDescriptorsById } from '../blocks/loadBlocks';
 import { executionOrder, isSequenced } from '../canvas/executionOrder';
 import { attachToFrames } from '../canvas/groupEdges';
+import { cfbsInput, moduleInputs } from '../modules/ownModuleInput';
 import type { RootState } from '../store';
 import type { BlockInstance, Condition } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
@@ -12,6 +13,7 @@ import type { UndoableKey } from '../store/history';
 import type { ModuleInputResponse, ProjectModule } from '../store/modulesSlice';
 import type { ProjectType } from '../store/projectSlice/types';
 import type { TestEnvironment } from '../store/testEnvironmentsSlice/types';
+import { type ThisModuleState, emptyThisModule } from '../store/thisModuleSlice';
 import { moduleNameFor } from './moduleName';
 
 /**
@@ -42,6 +44,8 @@ export interface ProjectMeta {
   // The display name (a module's cfbs.json name has to be its module name).
   name: string;
   schema_version: number;
+  // A module project's fields for the CFEngine Build index.
+  this_module?: { by?: string; version?: string };
   // Stamped by the main process on save (the app's version).
   tool_version?: string;
 }
@@ -81,9 +85,14 @@ export interface PolicyModule {
 
 // The one module a project stored as a cfbs module provides: cfbs.json `provides[<module_name>]`.
 export interface ProvidedModule {
+  // The CFEngine Build modules its blocks need (promise types): cfbs adds them along with it.
+  dependencies?: string[];
   description: string;
+  // The questions `cfbs add` asks; the last step turns the answers into def.json variables.
+  input?: Record<string, unknown>[];
   steps: string[];
   tags: string[];
+  version?: string;
 }
 
 export interface CfbsProjectContent {
@@ -237,14 +246,34 @@ function toModule(name: string, entryBundles: string[]): PolicyModule {
 
 // A module's steps: its files and folders copied into services/cfbs/<module>/, as the
 // policy-set modules lay them out, so templates are found the same way.
-function toProvided(names: Map<string, string[]>, identity: Identity): ProvidedModule {
+function toProvided(names: Map<string, string[]>, identity: Identity, data: ProjectData): ProvidedModule {
   const output = `${OUTPUT_DIR}${identity.moduleName}/`;
   const copies = [...names.keys()].map(name => `copy ${name} ${output}${name.slice(ROOT.length)}`);
+  const input = cfbsInput(moduleInputs(data.canvas, data.files.files), identity.moduleName);
+  // Only the modules the project brought in itself: cfbs adds their own dependencies too.
+  const dependencies = data.modules.filter(module => !module.addedBy).map(module => module.name);
+  const { version } = data.thisModule;
   return {
     description: identity.description || 'Policy built with CFEngine Policy Builder',
     tags: ['policy-builder'],
-    steps: [...copies, `policy_files ${output}`, ...bundlesSteps([...names.values()].flat())]
+    ...(VERSION.test(version) ? { version } : {}),
+    ...(dependencies.length ? { dependencies } : {}),
+    steps: [...copies, `policy_files ${output}`, ...bundlesSteps([...names.values()].flat()), ...(input.length ? [INPUT_STEP] : [])],
+    ...(input.length ? { input } : {})
   };
+}
+
+// cfbs's rule for a module's version, and the step that turns its input answers into def.json variables.
+export const VERSION = /^\d+\.\d+\.\d+(-\d+)?$/;
+export const INPUT_STEP = 'input ./input.json def.json';
+
+// Only what's set: a project without them keeps project.json as it was.
+const thisModuleMeta = ({ by, version }: ThisModuleState): Pick<ProjectMeta, 'this_module'> =>
+  by || version ? { this_module: { ...(by ? { by } : {}), ...(version ? { version } : {}) } } : {};
+
+function readThisModule(meta: ProjectMeta['this_module']): ThisModuleState {
+  const text = (value: unknown) => (typeof value === 'string' ? value : '');
+  return isObject(meta) ? { by: text(meta.by), version: text(meta.version) } : emptyThisModule();
 }
 
 export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjectContent {
@@ -266,10 +295,11 @@ export function toCfbsProject(data: ProjectData, identity: Identity): CfbsProjec
       folders: data.files.folders.map(folder => ({ ...folder, path: paths.get(folder.id)! })),
       files: data.files.files.map(file => toFileMeta(file, pathOf(file), data)),
       current_file_id: data.files.currentFileId,
-      ...(data.dismissedAdvice.length ? { dismissed_advice: data.dismissedAdvice } : {})
+      ...(data.dismissedAdvice.length ? { dismissed_advice: data.dismissedAdvice } : {}),
+      ...thisModuleMeta(data.thisModule)
     },
     modules: [...modules].map(([name, bundles]) => toModule(name, bundles)),
-    provided: toProvided(modules, identity),
+    provided: toProvided(modules, identity, data),
     buildModules: data.modules.map(({ addedBy, input, name }) => ({ name, ...(addedBy ? { addedBy } : {}), ...(input ? { input } : {}) })),
     testEnvironments: data.testEnvironments
   };
@@ -368,7 +398,8 @@ function readBuilderProject(project: ProjectMeta): ProjectData {
     dismissedAdvice: Array.isArray(project.dismissed_advice) ? project.dismissed_advice.filter(key => typeof key === 'string') : [],
     // Read from cfbs.json and their own files; see loadCfbsProject.
     modules: [],
-    testEnvironments: []
+    testEnvironments: [],
+    thisModule: readThisModule(project.this_module)
   };
 }
 
@@ -473,7 +504,17 @@ export function loadCfbsProject(
   const files = filesReducer(undefined, projectFilesInitialized(name, ownPolicyFiles(Array.isArray(json.build) ? json.build : [])));
   return {
     ...identity,
-    data: { canvas: [], derivedNodes: {}, dismissedAdvice: [], edges: [], files, groups: [], modules, testEnvironments: environments },
+    data: {
+      canvas: [],
+      derivedNodes: {},
+      dismissedAdvice: [],
+      edges: [],
+      files,
+      groups: [],
+      modules,
+      testEnvironments: environments,
+      thisModule: emptyThisModule()
+    },
     masterfiles
   };
 }

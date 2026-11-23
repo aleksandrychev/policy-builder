@@ -4,6 +4,7 @@ import type { PolicyFile, PolicyFolder } from '../filesSlice/types';
 import type { BlockGroup } from '../groupsSlice/types';
 import type { ProjectModule } from '../modulesSlice';
 import type { TestEnvironment } from '../testEnvironmentsSlice/types';
+import type { ThisModuleState } from '../thisModuleSlice';
 
 // How the project is stored: a policy set (masterfiles plus this project, built with
 // `cfbs build`), or a module other policy sets add with `cfbs add` (cfbs.json `type`).
@@ -34,4 +35,5 @@ export interface ProjectContentState {
   groups: BlockGroup[];
   modules?: ProjectModule[];
   testEnvironments: TestEnvironment[];
+  thisModule?: ThisModuleState;
 }

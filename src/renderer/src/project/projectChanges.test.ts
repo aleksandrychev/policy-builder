@@ -2,6 +2,7 @@ import type { BlockInstance } from '../store/canvasSlice/types';
 import type { BlockEdge } from '../store/edgesSlice/types';
 import type { PolicyFile } from '../store/filesSlice/types';
 import type { BlockGroup } from '../store/groupsSlice/types';
+import { emptyThisModule } from '../store/thisModuleSlice';
 import type { ProjectData } from './cfbsProject';
 import { type ProjectChange, commitMessage, projectChanges } from './projectChanges';
 
@@ -30,7 +31,8 @@ const project = ({
   modules: [],
   dismissedAdvice: [],
   groups,
-  testEnvironments: []
+  testEnvironments: [],
+  thisModule: emptyThisModule()
 });
 
 describe('projectChanges', () => {

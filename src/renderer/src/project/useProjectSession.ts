@@ -21,7 +21,8 @@ const snapshotOf = (state: RootState): ProjectData => ({
   files: state.files,
   groups: state.groups,
   modules: state.modules,
-  testEnvironments: state.testEnvironments
+  testEnvironments: state.testEnvironments,
+  thisModule: state.thisModule
 });
 
 /** Whether the project changed since `saved`; which file is open doesn't count. */

@@ -96,6 +96,10 @@
           "const": "variable",
           "description": "The value names an existing variable (autocomplete). Use it through a {\"variable\": ...} expression, so the compiler namespace-qualifies it."
         },
+        "cfbs_input": {
+          "const": true,
+          "description": "Module Input: the value describes the question in cfbs.json's input (label, question, list prompts), not the policy."
+        },
         "mustache": {
           "type": "boolean",
           "description": "Only on \"text\": the value is a Mustache template body (its editor inserts {{{vars.<ns>:vars.<name>}}} and {{#classes.<ns>:<name>}})."
@@ -281,6 +285,31 @@
                 "list",
                 "name"
               ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "module_input",
+            "as"
+          ],
+          "description": "Module Input: the answer to the module's input question (cfbs:<bundle>.<variable>, the bundle being the module's name), or without one its default: scalar ifelse(isvariable(...), \"$(...)\", \"default\"), list getvalues(...), data mergedata(...) (both empty without an answer).",
+          "properties": {
+            "module_input": {
+              "$ref": "#/$defs/template"
+            },
+            "as": {
+              "enum": [
+                "scalar",
+                "list",
+                "data"
+              ]
+            },
+            "default": {
+              "$ref": "#/$defs/template",
+              "description": "As scalar: the value without an answer."
             }
           }
         },

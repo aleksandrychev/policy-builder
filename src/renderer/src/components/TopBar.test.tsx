@@ -32,7 +32,8 @@ describe('TopBar', () => {
     renderTopBar();
     const tablist = screen.getByRole('tablist', { name: 'Project views' });
     const tabs = within(tablist).getAllByRole('tab');
-    expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual([...PROJECT_TABS]);
+    // Module only in a module project.
+    expect(tabs.map(tab => tab.getAttribute('aria-label'))).toEqual(PROJECT_TABS.filter(tab => tab !== 'Module'));
   });
 
   it('marks only the active view as selected', () => {

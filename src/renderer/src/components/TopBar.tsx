@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import CodeIcon from '@mui/icons-material/Code';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
@@ -11,13 +12,25 @@ import { Box, Button, ButtonBase, CircularProgress, IconButton, Typography, alph
 import type { ProjectType } from '../store/projectSlice/types';
 import { BlockNodesIcon } from './icons/BlockNodesIcon';
 
-export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results & Logs', 'Deployment'] as const;
-const TAB_ICONS = [AccountTreeOutlinedIcon, CodeIcon, ScienceOutlinedIcon, RocketLaunchOutlinedIcon];
+// The last, Module (its input and publishing), only in a module project.
+export const PROJECT_TABS = ['Canvas', 'Generated Policy (.cf)', 'Test Results & Logs', 'Deployment', 'Module'] as const;
+export const MODULE_TAB = 4;
+const TAB_ICONS = [AccountTreeOutlinedIcon, CodeIcon, ScienceOutlinedIcon, RocketLaunchOutlinedIcon, Inventory2OutlinedIcon];
 // Shorter in the switch, so the project's chips keep their room (full names in titles and the status bar).
-const TAB_SHORT = ['Canvas', 'Generated Policy', 'Tests & Logs', 'Deployment'];
+const TAB_SHORT = ['Canvas', 'Generated Policy', 'Tests & Logs', 'Deployment', 'Module'];
 
 // The views as one segmented control (as n8n's editor does): the active one is a filled segment.
-function ViewSwitch({ active, badges, onChange }: { active: number; badges?: Partial<Record<number, ReactNode>>; onChange: (index: number) => void }) {
+function ViewSwitch({
+  active,
+  badges,
+  isModule,
+  onChange
+}: {
+  active: number;
+  badges?: Partial<Record<number, ReactNode>>;
+  isModule: boolean;
+  onChange: (index: number) => void;
+}) {
   const theme = useTheme();
   return (
     <Box
@@ -25,7 +38,7 @@ function ViewSwitch({ active, badges, onChange }: { active: number; badges?: Par
       aria-label="Project views"
       sx={{ display: 'flex', p: 0.5, gap: 0.5, borderRadius: 2, bgcolor: alpha(theme.palette.text.primary, 0.06), border: '1px solid', borderColor: 'divider' }}
     >
-      {PROJECT_TABS.map((tab, index) => {
+      {PROJECT_TABS.slice(0, isModule ? undefined : MODULE_TAB).map((tab, index) => {
         const Icon = TAB_ICONS[index];
         const selected = index === active;
         return (
@@ -174,7 +187,7 @@ export function TopBar({
         </Box>
       </Box>
 
-      <ViewSwitch active={activeTab} badges={tabBadges} onChange={onTabChange} />
+      <ViewSwitch active={activeTab} badges={tabBadges} isModule={type === 'module'} onChange={onTabChange} />
 
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2, whiteSpace: 'nowrap' }}>
         <Button

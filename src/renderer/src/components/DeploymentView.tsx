@@ -43,7 +43,8 @@ const snapshot = (): ProjectData => {
     groups: state.groups,
     modules: state.modules,
     dismissedAdvice: state.dismissedAdvice,
-    testEnvironments: []
+    testEnvironments: [],
+    thisModule: state.thisModule
   };
 };
 

@@ -325,8 +325,9 @@ def init_command() -> int:
 INDEX_MODULE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,100}$", re.I)
 
 
-def _run_cfbs(directory: str, argv: list[str], what: str) -> None:
-    """cfbs in the project folder; a failure raises with its last error line."""
+def _run_cfbs(directory: str, argv: list[str], what: str, prompts: bool = True) -> None:
+    """cfbs in the project folder; a failure raises with its last error line. `prompts`: the
+    command can ask questions (validate can't, and refuses --non-interactive)."""
     import cfbs.main
     from cfbs.cfbs_config import CFBSConfig
 
@@ -342,7 +343,7 @@ def _run_cfbs(directory: str, argv: list[str], what: str) -> None:
     saved = {variable: os.environ.get(variable) for variable in environment}
     os.environ.update(environment)
     try:
-        with _cfbs_session(directory, ["--non-interactive", *argv]) as tee:
+        with _cfbs_session(directory, ["--non-interactive", *argv] if prompts else argv) as tee:
             try:
                 code = cfbs.main.main()
             except SystemExit as exit:
@@ -490,6 +491,25 @@ def lint_custom_command() -> int:
         print(f"Couldn't check the text: {error}", file=sys.stderr)
         return 1
     print(json.dumps({"problems": problems}))
+    return 0
+
+
+def validate_command() -> int:
+    """Publishing: `cfbs validate` in a saved project, as the module index checks a module."""
+    try:
+        request = json.loads(sys.stdin.read() or "{}")
+        directory = request["directory"]
+        if not isinstance(directory, str) or not os.path.isfile(os.path.join(directory, "cfbs.json")):
+            raise ValueError
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        print('Expected {"directory": <a cfbs project>} on stdin', file=sys.stderr)
+        return 2
+    try:
+        _run_cfbs(directory, ["validate"], "the module index", prompts=False)
+    except InitFailed as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(json.dumps({"valid": True}))
     return 0
 
 
@@ -642,6 +662,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("build", help="build a saved project's policy set and check it")
     commands.add_parser("deploy", help="deploy a built policy set to a hub with cf-remote")
     commands.add_parser("modules", help="add / remove CFEngine Build modules in a project")
+    commands.add_parser("validate", help="cfbs validate a saved project (publishing a module)")
     testenv = commands.add_parser("testenv", help="test environments (Docker hosts)")
     testenv.add_argument(
         "action",
@@ -676,6 +697,7 @@ def main(argv: list[str] | None = None) -> int:
         "build": build_command,
         "deploy": deploy_command,
         "modules": modules_command,
+        "validate": validate_command,
     }
     return commands.get(args.command, format_command)()
 

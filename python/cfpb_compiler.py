@@ -229,6 +229,8 @@ class Context:
     local_classes: set[str] = field(default_factory=set)
     # A Custom CFEngine block's own bundle, which its methods promise calls.
     custom_bundle: str = ""
+    # Where cfbs puts the module's input answers: cfbs:<module_bundle>.<variable>.
+    module_bundle: str = ""
 
     def substitute(self, template: str) -> str:
         return PLACEHOLDER.sub(lambda match: self.params.get(match.group(1), ""), template)
@@ -338,12 +340,37 @@ def compile_value(expr, ctx: Context) -> str:
                 key, value = match.group(1), match.group(2) or ""
                 ctx.locals.append(f"{quote(f'{local}[{key}]')} string => {quote(value)};")
         return quote(f"{ctx.owner}.{local}")
+    if "module_input" in expr:
+        default = ctx.substitute(expr.get("default", ""))
+        return module_input_value(ctx.substitute(expr["module_input"]), expr["as"], default, ctx.module_bundle)
     if "template_file" in expr:
         # Relative to the policy file, so it resolves the same in the project and on hosts.
         name = f"{ctx.block_name}.mustache"
         ctx.files[name] = ctx.params.get(expr["template_file"], "")
         return quote(f"$(this.promise_dirname)/{ctx.to_root}{TEMPLATES_DIR[2:]}{name}")
     raise CompileError(f"Unknown expression: {json.dumps(expr)}")
+
+
+# Where cfbs's input build step puts a module's answers: def.json variables `cfbs:<bundle>.<variable>`.
+MODULE_INPUT_NAMESPACE = "cfbs"
+
+
+def module_bundle(module_name: str) -> str:
+    """The bundle cfbs puts a module's input answers in: its name, as cfbs's bundle rule ([a-z_]+) allows."""
+    return re.sub(r"[^a-z_]", "_", module_name.lower()) or "module"
+
+
+def module_input_value(variable: str, kind: str, default: str, bundle: str) -> str:
+    """The answer to the module's input question, or without one its default: a text's own, an
+    empty list or table (cfbs has no list defaults). Undefined until a policy set answers."""
+    if not re.fullmatch(r"[a-z_]+", variable):
+        raise Skip(f"{variable!r} isn't a valid input name (lowercase letters and _)")
+    name = f"{MODULE_INPUT_NAMESPACE}:{bundle}.{variable}"
+    answered = f"isvariable({quote(name)})"
+    if kind == "scalar":
+        return f'ifelse({answered}, {quote(f"$({name})")}, {quote(default)})'
+    function = "getvalues" if kind == "list" else "mergedata"
+    return f"{function}(ifelse({answered}, {quote(name)}, '[]'))"
 
 
 def computed_array(param: str, ctx: Context) -> str:
@@ -460,10 +487,11 @@ def entry_source(descriptor: dict, entry: dict) -> dict:
 
 
 def missing_required(declared: list[dict], params: dict[str, str]) -> list[str]:
+    # A Module Input's question texts are cfbs.json's, not the policy's: the Module tab asks for them.
     return [
         param.get("label", param["name"])
         for param in declared
-        if param.get("required") and not params[param["name"]].strip()
+        if param.get("required") and not param.get("cfbs_input") and not params[param["name"]].strip()
     ]
 
 
@@ -576,6 +604,8 @@ class FileCompiler:
     file: dict
     # "<ns>:vars.name" -> its CFEngine type, for every variable the project defines.
     types: dict[str, str] = field(default_factory=dict)
+    # Where the module's input answers are (Module Input blocks).
+    module_bundle: str = ""
     # Names taken in the file's namespace; grows as blocks and groups are named.
     taken: set[str] = field(default_factory=lambda: {"main", "vars"})
     bodies: set[str] = field(default_factory=set)
@@ -768,6 +798,7 @@ class FileCompiler:
             self.bodies,
             class_refs=entry.get("classRefs") or [],
             local_classes=self.local_classes,
+            module_bundle=self.module_bundle,
         )
         extra = []
         if entry.get("inventory", {}).get("attributeName", "").strip():
@@ -838,6 +869,7 @@ class FileCompiler:
                 ctx.class_refs,
                 as_argument=bool(decorators),
                 local_classes=ctx.local_classes,
+                module_bundle=ctx.module_bundle,
             ),
         )
         lines = []
@@ -1092,7 +1124,9 @@ class FileCompiler:
                 continue
             [(_kind, value)] = source["steps"][0]["attributes"].items()
             decorators = [d for d in binding.get("decorators") or [] if d.get("decoratorId") in self.library.decorators]
-            ctx = Context(self.vars_name, params, self.bodies, local_classes=self.local_classes)
+            ctx = Context(
+                self.vars_name, params, self.bodies, local_classes=self.local_classes, module_bundle=self.module_bundle
+            )
             lines = self.chain(f"{prefix}{param}", bundle, source, value, decorators, ctx, [], [])
             computed[param] = lines, chain_type(source, decorators, self.library)
         return computed, missing
@@ -1263,9 +1297,10 @@ def compile_files(
     if duplicate:
         raise CompileError(f"Two files share the namespace {duplicate!r}")
     types = variable_types(files, library)
+    bundle = module_bundle(meta.get("module_name") if isinstance(meta.get("module_name"), str) else "")
     result = {}
     for file in files:
-        compiler = FileCompiler(library, file, types)
+        compiler = FileCompiler(library, file, types, bundle)
         policy = compiler.compile()
         templates = {f"{TEMPLATES_DIR}{name}": text for name, text in compiler.companions.items()}
         result[file["path"]] = {file["path"]: policy, **templates}

@@ -391,6 +391,12 @@ export async function syncModules(directory: string, add: string[], remove: stri
   if (result.code !== 0) throw sidecarError(result, INIT_TIMEOUT_MS);
 }
 
+/** `cfbs validate` in a saved project, as the module index checks a module: rejects with cfbs's error. */
+export async function validateCfbsProject(directory: string): Promise<void> {
+  const result = await runSidecar(['validate'], JSON.stringify({ directory }), INIT_TIMEOUT_MS);
+  if (result.code !== 0) throw sidecarError(result, INIT_TIMEOUT_MS);
+}
+
 export async function masterfilesEntry(version: string): Promise<Record<string, unknown>> {
   const result = await runSidecar(['masterfiles'], JSON.stringify({ version }), INIT_TIMEOUT_MS);
   logStderr(result.stderr);

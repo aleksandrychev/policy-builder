@@ -1,0 +1,26 @@
+### source input-text
+    # Case 0
+    "input_text"
+      string => ifelse(
+        isvariable("cfbs:module.input_text"), "$(cfbs:module.input_text)", "x"
+      );
+
+### source input-list
+    # Case 1
+    "input_list"
+      slist => getvalues(
+        ifelse(
+          isvariable("cfbs:module.input_list"), "cfbs:module.input_list", '[]'
+        )
+      );
+
+### source input-table
+    # Case 2
+    "input_table"
+      data => mergedata(
+        ifelse(
+          isvariable("cfbs:module.input_table"),
+          "cfbs:module.input_table",
+          '[]'
+        )
+      );

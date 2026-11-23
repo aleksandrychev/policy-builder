@@ -83,7 +83,7 @@ export function SubjectEditor({
   const isClassCombination = usesClassRefs(selectedValueSource);
   const definesVariables = primaryPromiseType(descriptor) === 'vars';
 
-  return (
+  const sharedParameters = (
     <>
       {(descriptor.parameters ?? []).map(parameter => {
         const field = (
@@ -98,9 +98,11 @@ export function SubjectEditor({
         );
         return <Fragment key={parameter.name}>{paramSlot ? paramSlot(parameter, field) : field}</Fragment>;
       })}
-
       {nameWarning && <Typography sx={{ fontSize: 12, color: 'error.main', mt: -1 }}>{nameWarning}</Typography>}
-
+    </>
+  );
+  const sourcePicker = (
+    <>
       {descriptor.value_sources && (
         <TextField
           select
@@ -130,6 +132,14 @@ export function SubjectEditor({
       )}
 
       {selectedValueSource?.help && <Typography sx={{ fontSize: 12, color: 'text.muted', mt: -1 }}>{selectedValueSource.help}</Typography>}
+    </>
+  );
+
+  return (
+    <>
+      {/* Module Input picks its type first: the rest depends on it. */}
+      {descriptor.value_source_first ? sourcePicker : sharedParameters}
+      {descriptor.value_source_first ? sharedParameters : sourcePicker}
 
       {isClassCombination ? (
         <ClassCombinationEditor

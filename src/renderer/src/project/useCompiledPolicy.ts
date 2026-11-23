@@ -35,11 +35,14 @@ export function useCompiledPolicy(enabled: boolean): CompiledPolicyState {
   const edges = useAppSelector(state => state.edges);
   const files = useAppSelector(state => state.files);
   const groups = useAppSelector(state => state.groups);
+  const thisModule = useAppSelector(state => state.thisModule);
 
   const meta = useMemo(
     () =>
-      project ? toCfbsProject({ canvas, derivedNodes, edges, files, groups, modules: [], dismissedAdvice: [], testEnvironments: [] }, project).project : null,
-    [project, canvas, derivedNodes, edges, files, groups]
+      project
+        ? toCfbsProject({ canvas, derivedNodes, edges, files, groups, modules: [], dismissedAdvice: [], testEnvironments: [], thisModule }, project).project
+        : null,
+    [project, canvas, derivedNodes, edges, files, groups, thisModule]
   );
   // What the compiler is sent.
   const key = useMemo(() => (meta ? JSON.stringify(compiledPart(meta)) : null), [meta]);

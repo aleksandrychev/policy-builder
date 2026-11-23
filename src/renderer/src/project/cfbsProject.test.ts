@@ -163,6 +163,8 @@ describe('cfbsProject', () => {
     expect(provided).toEqual({
       description: 'Nginx baseline',
       tags: ['policy-builder'],
+      // The HTTP Request block's promise type.
+      dependencies: ['promise-type-http'],
       steps: [
         'copy ./common.cf services/cfbs/web-demo/common.cf',
         'copy ./webserver.cf services/cfbs/web-demo/webserver.cf',

@@ -5,7 +5,7 @@ import { homedir, hostname } from 'os';
 import { isAbsolute, join, normalize, relative, sep } from 'path';
 
 import type { GitStatus } from '../preload/api';
-import { buildPolicySet, deployPolicySet } from './backend';
+import { buildPolicySet, deployPolicySet, validateCfbsProject } from './backend';
 import { isKnownProject, testEnvironmentSecretFiles } from './project';
 
 /**
@@ -216,6 +216,20 @@ export function registerDeployHandlers(isTrustedFrame: (frame: WebFrameMain | nu
   ipcMain.handle(
     'deploy:build',
     trusted((event, path: unknown) => attempt(async () => ({ build: await buildPolicySet(projectPath(path), progress(event)) })))
+  );
+  // Publishing a module: cfbs validate, as the module index checks it, and what the saved cfbs.json provides.
+  ipcMain.handle(
+    'deploy:validate',
+    trusted((_event, path: unknown) =>
+      attempt(async () => {
+        const root = projectPath(path);
+        await validateCfbsProject(root);
+        const cfbs = JSON.parse(await fs.readFile(join(root, 'cfbs.json'), 'utf-8')) as { name?: unknown; provides?: Record<string, unknown> };
+        const name = typeof cfbs.name === 'string' ? cfbs.name : '';
+        const provided = cfbs.provides?.[name];
+        return { provided: typeof provided === 'object' && provided !== null ? { name, module: provided as Record<string, unknown> } : null };
+      })
+    )
   );
   ipcMain.handle(
     'deploy:ssh',

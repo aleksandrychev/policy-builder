@@ -14,6 +14,7 @@ import { withHistory } from './history';
 import modulesReducer from './modulesSlice';
 import projectReducer, { projectClosed } from './projectSlice';
 import testEnvironmentsReducer from './testEnvironmentsSlice';
+import thisModuleReducer from './thisModuleSlice';
 
 const contentReducer = combineReducers({
   canvas: canvasReducer,
@@ -25,7 +26,8 @@ const contentReducer = combineReducers({
   groups: groupsReducer,
   modules: modulesReducer,
   project: projectReducer,
-  testEnvironments: testEnvironmentsReducer
+  testEnvironments: testEnvironmentsReducer,
+  thisModule: thisModuleReducer
 });
 
 /**
