@@ -5,7 +5,7 @@ import CodeOutlinedIcon from '@mui/icons-material/CodeOutlined';
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import { Box, IconButton, Typography, useTheme } from '@mui/material';
 
-import { Handle, type Node, type NodeProps, Position, useStore } from '@xyflow/react';
+import { Handle, type Node, type NodeProps, Position, useViewportStore } from '@xyflow/react';
 
 import { PROMISE_TYPE_ICONS } from '../blocks/promiseTypeIcons';
 import { primaryPromiseType } from '../blocks/resolveBlockShape';
@@ -122,7 +122,7 @@ function CustomPreview({ promises }: { promises: string }) {
 export function BlockCard({ data, selected }: NodeProps<BlockFlowNode>) {
   const { instance, descriptor, duplicateKeys, orderNumber, onRemove, highlighted, hasDataInput, failedOn, cutPending = false } = data;
   const theme = useTheme();
-  const compact = useStore(state => state.transform[2] < COMPACT_ZOOM);
+  const compact = useViewportStore(state => state.transform[2] < COMPACT_ZOOM);
   const sequenced = isSequenced(descriptor);
 
   const { TypeIcon, badge, custom } = cardKind(descriptor, instance.blockId);

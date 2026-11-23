@@ -19,12 +19,13 @@ import {
   MarkerType,
   MiniMap,
   type NodeChange,
+  type NodeChangeset,
   Panel,
   ReactFlow,
   type ReactFlowInstance,
   SelectionMode,
   useReactFlow,
-  useStore
+  useViewportStore
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -190,9 +191,9 @@ function CanvasToolbar({
   zoomControlsRef?: MutableRefObject<ZoomControls | null>;
 }) {
   const { zoomIn, zoomOut, fitView, getViewport, setCenter } = useReactFlow();
-  const zoom = useStore(state => state.transform[2]);
-  const paneWidth = useStore(state => state.width);
-  const paneHeight = useStore(state => state.height);
+  const zoom = useViewportStore(state => state.transform[2]);
+  const paneWidth = useViewportStore(state => state.width);
+  const paneHeight = useViewportStore(state => state.height);
   const buttonSx = { p: 0.75 };
   const modeActiveSx = { bgcolor: 'action.selected', color: 'primary.main' };
 
@@ -564,7 +565,8 @@ export function FlowCanvas({
   // Positions and measured sizes live outside React Flow (Redux / the
   // parent), so only those two change kinds matter; selection is driven by
   // the click handlers, and deletion by the app's own key handler.
-  const handleNodesChange = (changes: NodeChange<CanvasNode>[]) => {
+  const handleNodesChange = (changeset: NodeChangeset<CanvasNode>) => {
+    const changes = changeset.toArray();
     const sizes: NodeSizes = {};
     trackBoxSelection(changes);
     for (const change of changes) {
@@ -854,7 +856,9 @@ export function FlowCanvas({
         maxZoom={2}
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
-        colorMode={theme.palette.mode}
+        forceColorMode={theme.palette.mode}
+        // React Flow 13 raises a selected block's arrows over their outcome chips: keep 12's layering.
+        elevateEdgesOnSelect={false}
         // MIT-licensed; the attribution is a courtesy, not a license term.
         proOptions={{ hideAttribution: true }}
       >
