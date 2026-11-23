@@ -857,6 +857,8 @@ export function FlowCanvas({
         fitView
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         forceColorMode={theme.palette.mode}
+        // React Flow 13 raises a selected block's arrows over their outcome chips: keep 12's layering.
+        elevateEdgesOnSelect={false}
         // MIT-licensed; the attribution is a courtesy, not a license term.
         proOptions={{ hideAttribution: true }}
       >
