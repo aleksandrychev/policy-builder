@@ -5,7 +5,46 @@
 [![TypeScript coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=typescript&label=TypeScript%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=typescript)
 [![Python coverage](https://img.shields.io/codecov/c/github/cfengine/policy-builder/main?flag=python&label=Python%20coverage)](https://app.codecov.io/gh/cfengine/policy-builder?flags%5B0%5D=python)
 
-Desktop application for building CFEngine policy.
+Desktop application for building CFEngine policy: put blocks on a canvas, connect them with
+arrows, and Policy Builder writes the policy, tests it on containers and ships it to your hub.
+Installers are on the [Releases](https://github.com/cfengine/policy-builder/releases) page.
+
+![Policy Builder with the demo project open](docs/images/window.png)
+
+## A quick look
+
+**Blocks on a canvas.** Each block is one thing a host should do: install a package, keep a
+service running, render a config from a template. Arrows set the order, conditions limit a block
+to certain hosts, and groups keep related blocks together.
+
+![Blocks, groups, a condition and arrows](docs/images/canvas.png)
+
+**The policy it writes.** Generated Policy shows the exact CFEngine policy, the selected block's
+lines highlighted. A project is a [cfbs](https://github.com/cfengine/cfbs) project.
+
+![The Generated Policy view](docs/images/generated-policy.png)
+
+**Tested on containers.** Run the policy on Docker containers and see each host converge, with
+the agent's output.
+
+![A test run, converged](docs/images/tests-and-logs.png)
+
+**Modules from [CFEngine Build](https://build.cfengine.com).** Browse them, add them to the
+project and answer their input.
+
+![The Modules view](docs/images/modules.png)
+
+**Built with an AI agent.** Policy Builder runs an MCP server, so agents such as Claude Code can
+build the project while you watch, each change one undo step.
+
+![An AI agent at work, with its log open](docs/images/ai-agent.png)
+
+**Shipped to your hub.** Commit and push to the git repository your hub deploys from, or deploy
+over SSH.
+
+![The Deployment view](docs/images/deployment.png)
+
+## Development
 
 **Stack:** 
  - Electron 
